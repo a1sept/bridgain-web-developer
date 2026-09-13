@@ -1,9 +1,12 @@
-.env
-.env.*
-!.env.dev.example
 node_modules/
 dist/
 coverage/
-*.log
-.DS_Store
+.env
+.env.*
+!.env.*.example
 secrets/
+*.pem
+*.key
+*.log
+*.tsbuildinfo
+.DS_Store
