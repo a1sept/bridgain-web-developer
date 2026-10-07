@@ -1,0 +1,313 @@
+.cp-page {
+  min-height: 100dvh;
+  background: #f7f9fc;
+  color: #17233a;
+  font-family:
+    Inter,
+    -apple-system,
+    BlinkMacSystemFont,
+    "Segoe UI",
+    "Apple SD Gothic Neo",
+    sans-serif;
+  line-height: 1.5;
+}
+.cp-page * {
+  box-sizing: border-box;
+}
+.cp-page button,
+.cp-page input,
+.cp-page textarea,
+.cp-page select {
+  font: inherit;
+}
+.cp-header {
+  background: #fff;
+  border-bottom: 1px solid #dfe5ee;
+}
+.cp-header > div {
+  max-width: 1160px;
+  margin: auto;
+  padding: 22px 32px;
+  display: flex;
+  align-items: center;
+  gap: 20px;
+}
+.cp-header strong {
+  font-size: 20px;
+}
+.cp-header button {
+  border: 0;
+  background: transparent;
+  font-size: 28px;
+  width: 40px;
+  height: 40px;
+  cursor: pointer;
+  color: #17233a;
+}
+.cp-header a {
+  margin-left: auto;
+  font-weight: 800;
+  font-size: 24px;
+  color: #26354b;
+  text-decoration: none;
+}
+.cp-header a span {
+  color: #2964ef;
+}
+.cp-main {
+  max-width: 1160px;
+  margin: auto;
+  padding: 44px 32px;
+}
+.cp-eyebrow {
+  font-size: 11px;
+  letter-spacing: 2px;
+  color: #60728c;
+  font-weight: 700;
+}
+.cp-heading h1 {
+  font-size: 30px;
+  letter-spacing: -1px;
+  margin: 10px 0;
+}
+.cp-heading > p {
+  color: #607087;
+  font-size: 16px;
+  margin-bottom: 30px;
+}
+.cp-layout {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 24px;
+  align-items: start;
+}
+.cp-panel {
+  background: #fff;
+  padding: 28px;
+  border: 1px solid #e0e6ef;
+  border-radius: 20px;
+  min-width: 0;
+}
+.cp-panel h2 {
+  font-size: 17px;
+  margin: 0 0 26px;
+}
+.cp-label {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  font-weight: 700;
+  font-size: 15px;
+  margin: 24px 0 10px;
+}
+.cp-label small {
+  font-size: 11px;
+  padding: 2px 8px;
+  border-radius: 5px;
+  background: #edf1f7;
+  color: #61718a;
+}
+.cp-page input,
+.cp-page textarea,
+.cp-page select {
+  display: block;
+  width: 100%;
+  min-width: 0;
+  background: #fff;
+  border: 1px solid #dce4ef;
+  border-radius: 12px;
+  padding: 14px 16px;
+  color: #26354b;
+  font-size: 15px;
+}
+.cp-page textarea {
+  resize: vertical;
+}
+.cp-page input::placeholder,
+.cp-page textarea::placeholder {
+  color: #8e9db3;
+}
+.cp-help {
+  color: #6a7b93;
+  font-size: 12px;
+  margin: 10px 0;
+}
+.cp-lookup {
+  display: flex;
+  border: 1px solid #dce4ef;
+  border-radius: 12px;
+  background: white;
+  overflow: hidden;
+}
+.cp-lookup input {
+  border: 0;
+  border-radius: 0;
+}
+.cp-lookup button {
+  border: 0;
+  background: transparent;
+  color: #2964ef;
+  font-size: 26px;
+  padding: 0 16px;
+  cursor: pointer;
+}
+.cp-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 12px;
+}
+.cp-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  background: #edf4ff;
+  color: #2964ef;
+  border-radius: 9px;
+  padding: 6px 10px;
+  font-size: 13px;
+  font-weight: 600;
+}
+.cp-chip button {
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font-size: 20px;
+  line-height: 1;
+  cursor: pointer;
+}
+.cp-self {
+  background: #f0f3f7;
+  color: #53657f;
+}
+.cp-self small {
+  font-size: 10px;
+  font-weight: 400;
+}
+.cp-invite-group + .cp-invite-group {
+  margin-top: 30px;
+}
+.cp-invite-note {
+  margin-top: 26px;
+}
+.cp-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 24px;
+  margin-top: 28px;
+}
+.cp-footer p {
+  color: #60728c;
+  font-size: 13px;
+}
+.cp-footer > button {
+  min-width: 210px;
+  border: 0;
+  border-radius: 12px;
+  padding: 17px 32px;
+  background: #2964ef;
+  color: #fff;
+  font-weight: 700;
+  font-size: 17px;
+  cursor: pointer;
+  box-shadow: 0 8px 20px #2964ef20;
+}
+.cp-page button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.cp-page :focus-visible {
+  outline: 3px solid #8ab0ff;
+  outline-offset: 3px;
+}
+.cp-error {
+  color: #b23838;
+  font-size: 13px;
+  margin-top: 10px;
+}
+.cp-submit-error {
+  padding: 14px;
+  background: #fff0f0;
+  border-radius: 10px;
+}
+@media (max-width: 700px) {
+  .cp-header > div {
+    padding: 16px 20px;
+    gap: 12px;
+  }
+  .cp-header strong {
+    font-size: 20px;
+  }
+  .cp-header a {
+    display: none;
+  }
+  .cp-main {
+    padding: 28px 20px calc(130px + env(safe-area-inset-bottom, 0px));
+  }
+  .cp-heading h1 {
+    font-size: 25px;
+  }
+  .cp-heading > p {
+    font-size: 15px;
+    margin-bottom: 26px;
+  }
+  .cp-eyebrow {
+    display: none;
+  }
+  .cp-layout {
+    grid-template-columns: 1fr;
+    gap: 8px;
+  }
+  .cp-panel {
+    border: 0;
+    background: transparent;
+    padding: 0;
+    border-radius: 0;
+  }
+  .cp-panel h2 {
+    display: none;
+  }
+  .cp-label {
+    font-size: 16px;
+    margin-top: 24px;
+  }
+  .cp-page input,
+  .cp-page textarea,
+  .cp-page select {
+    font-size: 16px;
+  }
+  .cp-footer {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    background: linear-gradient(transparent, #f7f9fc 18%);
+    padding: 20px 20px calc(20px + env(safe-area-inset-bottom, 0px));
+    margin: 0;
+    z-index: 10;
+  }
+  .cp-footer p {
+    display: none;
+  }
+  .cp-footer > button {
+    width: 100%;
+    padding: 17px;
+    font-size: 18px;
+  }
+  .cp-invite-group + .cp-invite-group {
+    margin-top: 22px;
+  }
+}
+
+.cp-lookup > button { min-width:60px; font-size:14px; }
+.cp-search-results { border:1px solid #dfe7f2; border-radius:12px; padding:8px; margin-top:10px; max-height:300px; overflow-y:auto; background:#fff; }
+.cp-search-results > p { margin:8px; color:#708199; font-size:12px; line-height:1.6; }
+.cp-search-results > button { width:100%; display:flex; align-items:center; gap:10px; padding:12px 8px; border:0; border-radius:8px; background:#fff; text-align:left; color:#2964ef; cursor:pointer; }
+.cp-search-results > button:hover:not(:disabled) { background:#edf4ff; }
+.cp-result-avatar { display:grid; place-items:center; width:34px; height:34px; border-radius:50%; background:#edf4ff; flex-shrink:0; }
+.cp-result-person { flex:1; min-width:0; }
+.cp-result-person strong { display:block; color:#233a59; overflow-wrap:anywhere; }
+.cp-result-person small { display:block; font-size:10px; color:#8190a6; overflow-wrap:anywhere; margin-top:4px; }
+.cp-search-results > button > span:last-child { white-space:nowrap; font-size:12px; }
