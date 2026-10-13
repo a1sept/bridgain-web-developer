@@ -1,0 +1,49 @@
+body {
+  margin: 0;
+  background: #f3f6fb;
+  color: #223047;
+  font: 16px system-ui;
+}
+main {
+  max-width: 520px;
+  margin: 12vh auto;
+  padding: 40px;
+  background: #fff;
+  border-radius: 24px;
+}
+main > span {
+  color: #436bf0;
+  font-size: 30px;
+  font-weight: 800;
+}
+h1 {
+  font-size: 26px;
+  margin-top: 30px;
+}
+p {
+  line-height: 1.7;
+  color: #65748a;
+}
+form {
+  display: grid;
+  gap: 12px;
+  margin-top: 24px;
+}
+input,
+button {
+  font: inherit;
+  padding: 14px;
+  border-radius: 10px;
+  border: 1px solid #d5deec;
+}
+button {
+  background: #436bf0;
+  color: white;
+  cursor: pointer;
+}
+small {
+  color: #738098;
+}
+#error {
+  color: #a43c3c;
+}

@@ -1,3 +1,4 @@
+import AiWorkspace from "./ai/AiWorkspace";
 import ProjectWorkspace from "./ProjectWorkspace";
 import LiveWorkspace from "./LiveWorkspace";
 import { useEffect, useRef, useState, type FormEvent } from "react";
@@ -221,7 +222,9 @@ function Illustration() {
   );
 }
 export default function App() {
-  if (["/preview", "/preview/projects/new"].includes(window.location.pathname)) {
+  if (
+    ["/preview", "/preview/projects/new"].includes(window.location.pathname)
+  ) {
     return (
       <ProjectWorkspace
         role="team"
@@ -358,14 +361,17 @@ function AuthApp() {
     );
   if (user)
     return (
-      <LiveWorkspace
-        user={user}
-        onLogout={async () => {
-          await api("logout", {});
-          setUser(null);
-          navigate("login", "안전하게 로그아웃했어요.");
-        }}
-      />
+      <AiWorkspace key={user.id} userId={user.id}>
+        <LiveWorkspace
+          user={user}
+          onLogout={async () => {
+            await window.bridgainDesktop?.release();
+            await api("logout", {});
+            setUser(null);
+            navigate("login", "안전하게 로그아웃했어요.");
+          }}
+        />
+      </AiWorkspace>
     );
   return (
     <div className="auth-shell">

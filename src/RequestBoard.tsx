@@ -1,3 +1,4 @@
+import { useAi } from "./ai/AiWorkspace";
 import RequestTaskLinks from "./RequestTaskLinks";
 import RequestConversation from "./RequestConversation";
 import { useEffect, useRef, useState, type FormEvent } from "react";
@@ -32,6 +33,20 @@ type Event = {
 };
 type Attachment = { id: string; name: string; size: number; url: string };
 type Detail = {
+  workflow?: {
+    tasks: {
+      id: string;
+      title: string;
+      status: string;
+      resultSummary: string;
+    }[];
+    meetings: {
+      id: string;
+      title: string;
+      decisionStatus: string;
+      scheduledAt: string;
+    }[];
+  };
   request: RequestItem;
   events: Event[];
   attachments: Attachment[];
@@ -115,6 +130,7 @@ export default function RequestBoard({
   onBack,
   onInfo,
   onTasks,
+  onMeetings,
 }: {
   user: User;
   project?: Project;
@@ -122,7 +138,15 @@ export default function RequestBoard({
   onBack: () => void;
   onInfo: () => void;
   onTasks?: (requestId?: string) => void;
+  onMeetings?: (requestId: string) => void;
 }) {
+  const ai = useAi();
+  const [aiRevision, setAiRevision] = useState(0);
+  useEffect(() => {
+    const changed = () => setAiRevision((v) => v + 1);
+    window.addEventListener("bridgain:ai-applied", changed);
+    return () => window.removeEventListener("bridgain:ai-applied", changed);
+  }, []);
   const [path, setPath] = useState(window.location.pathname);
   const base = `/projects/${project?.id}/requests`;
   const suffix = path.slice(base.length).split("/").filter(Boolean);
@@ -203,7 +227,7 @@ export default function RequestBoard({
     return () => {
       active = false;
     };
-  }, [path, project?.id]);
+  }, [path, project?.id, aiRevision]);
   async function run(action: () => Promise<void>) {
     if (lock.current) return;
     lock.current = true;
@@ -566,8 +590,12 @@ export default function RequestBoard({
             <div className="rb-heading">
               <span className="rb-eyebrow">{project.name}</span>
               <div className="rd-status-row">
-                <span className="rb-badge">{stages[detail.request.status]}</span>
-                <span title={detail.request.id}>요청 ID #{detail.request.id.slice(0, 8).toUpperCase()}</span>
+                <span className="rb-badge">
+                  {stages[detail.request.status]}
+                </span>
+                <span title={detail.request.id}>
+                  요청 ID #{detail.request.id.slice(0, 8).toUpperCase()}
+                </span>
               </div>
               <div className="rc-title-row">
                 <h1>{detail.request.title}</h1>
@@ -579,13 +607,22 @@ export default function RequestBoard({
                   aria-pressed={suffix[1] === "conversation"}
                   onClick={() => go(`${base}/${requestId}/conversation`)}
                 >
-                  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                  <svg
+                    width="24"
+                    height="24"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="1.8"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    aria-hidden="true"
+                  >
                     <path d="M21 11.5a8.4 8.4 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.4 8.4 0 0 1-3.8-.9L3 21l1.9-5.7a8.4 8.4 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.4 8.4 0 0 1 3.8-.9h.5a8.5 8.5 0 0 1 8 8v.5Z" />
                     <path d="M8 11h8M8 14h5" />
                   </svg>
                 </button>
               </div>
-
             </div>
             <nav className="rb-tabs" aria-label="요청 상세 메뉴">
               <button
@@ -606,7 +643,66 @@ export default function RequestBoard({
             ) : (
               <div className="rb-detail-grid rb-request-detail">
                 <div>
-                  {onTasks && project && <RequestTaskLinks projectId={project.id} requestId={requestId} onTasks={onTasks}/>}
+                  {project && requestId && (
+                    <button
+                      className="ai-investigate"
+                      type="button"
+                      onClick={() =>
+                        ai.investigate(project, requestId, detail.request.title)
+                      }
+                    >
+                      AI 조사
+                    </button>
+                  )}
+                  {onMeetings && requestId && (
+                    <button type="button" onClick={() => onMeetings(requestId)}>
+                      회의에 연결하기
+                    </button>
+                  )}
+                  {onTasks && project && (
+                    <RequestTaskLinks
+                      projectId={project.id}
+                      requestId={requestId}
+                      onTasks={onTasks}
+                    />
+                  )}
+                  <section className="rb-panel">
+                    <h2>연결된 회의 · 개발 업무</h2>
+                    {detail.workflow?.meetings.map((m) => (
+                      <p key={m.id}>
+                        {m.title} ·{" "}
+                        {m.decisionStatus === "final"
+                          ? "최종안"
+                          : "회의 논의 중"}
+                      </p>
+                    ))}
+                    {detail.workflow?.tasks.map((t) => (
+                      <div key={t.id}>
+                        <strong>{t.title}</strong>
+                        <p>
+                          {
+                            (
+                              {
+                                todo: "할당 대기",
+                                in_progress: "진행 중",
+                                done: "개발 완료",
+                                released: "배포 완료",
+                              } as Record<string, string>
+                            )[t.status]
+                          }
+                        </p>
+                        {t.resultSummary && (
+                          <p style={{ whiteSpace: "pre-wrap" }}>
+                            {t.resultSummary}
+                          </p>
+                        )}
+                      </div>
+                    ))}
+                    {!detail.workflow?.tasks.length &&
+                      !detail.workflow?.meetings.length && (
+                        <p>아직 연결된 회의나 업무가 없습니다.</p>
+                      )}
+                  </section>
                   <h2 className="rd-section-title">요청 내용</h2>
                   <section className="rb-panel">
                     <p className="rb-description">
@@ -683,7 +779,6 @@ export default function RequestBoard({
                       </label>
                     )}
                   </section>
-
                 </div>
                 <aside>
                   <h2 className="rd-section-title">담당 개발팀</h2>
@@ -692,13 +787,22 @@ export default function RequestBoard({
                       <ul className="rd-people">
                         {detail.request.assignees.map((member) => (
                           <li key={member.userId}>
-                            <span className="rd-avatar" aria-hidden="true">{member.displayName.slice(0, 1)}</span>
-                            <div><strong>{member.displayName}</strong><span>요청 담당자</span></div>
+                            <span className="rd-avatar" aria-hidden="true">
+                              {member.displayName.slice(0, 1)}
+                            </span>
+                            <div>
+                              <strong>{member.displayName}</strong>
+                              <span>요청 담당자</span>
+                            </div>
                           </li>
                         ))}
                       </ul>
-                    ) : <p className="rd-empty">아직 담당자가 배정되지 않았어요.</p>}
-                    {detail.canManage && (
+                    ) : (
+                      <p className="rd-empty">
+                        아직 담당자가 배정되지 않았어요.
+                      </p>
+                    )}
+                    {detail.canManage && !detail.workflow?.tasks.length && (
                       <label>
                         진행 단계
                         <select
@@ -777,14 +881,44 @@ export default function RequestBoard({
                   <h2 className="rd-section-title">요청 요약 정보</h2>
                   <section className="rb-panel">
                     <dl className="rd-summary">
-                      <div><dt>요청 유형</dt><dd>{types[detail.request.type]}</dd></div>
-                      <div><dt>생성 일시</dt><dd>{new Date(detail.request.createdAt).toLocaleString("ko-KR", {year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", hour12: false})}</dd></div>
-                      <div><dt>요청자</dt><dd>{detail.request.creatorName}</dd></div>
-                      <div><dt>우선순위</dt><dd>{priorities[detail.request.priority]}</dd></div>
+                      <div>
+                        <dt>요청 유형</dt>
+                        <dd>{types[detail.request.type]}</dd>
+                      </div>
+                      <div>
+                        <dt>생성 일시</dt>
+                        <dd>
+                          {new Date(detail.request.createdAt).toLocaleString(
+                            "ko-KR",
+                            {
+                              year: "numeric",
+                              month: "2-digit",
+                              day: "2-digit",
+                              hour: "2-digit",
+                              minute: "2-digit",
+                              hour12: false,
+                            },
+                          )}
+                        </dd>
+                      </div>
+                      <div>
+                        <dt>요청자</dt>
+                        <dd>{detail.request.creatorName}</dd>
+                      </div>
+                      <div>
+                        <dt>우선순위</dt>
+                        <dd>{priorities[detail.request.priority]}</dd>
+                      </div>
                     </dl>
                   </section>
                 </aside>
-                <div className="rd-help"><span aria-hidden="true">ⓘ</span><p>담당 개발팀에게 질문이나 추가 내용을 전달하려면 상단의 말풍선 아이콘을 눌러주세요.</p></div>
+                <div className="rd-help">
+                  <span aria-hidden="true">ⓘ</span>
+                  <p>
+                    담당 개발팀에게 질문이나 추가 내용을 전달하려면 상단의
+                    말풍선 아이콘을 눌러주세요.
+                  </p>
+                </div>
               </div>
             )}
           </>
@@ -855,15 +989,69 @@ export default function RequestBoard({
                 ))}
               </select>
             </div>
-            <label className="rb-priority-filter">우선순위 <select value={priorityFilter} onChange={e=>setPriorityFilter(e.target.value)}><option value="">전체</option>{Object.entries(priorities).map(([v,t])=><option key={v} value={v}>{t}</option>)}</select></label>
+            <label className="rb-priority-filter">
+              우선순위{" "}
+              <select
+                value={priorityFilter}
+                onChange={(e) => setPriorityFilter(e.target.value)}
+              >
+                <option value="">전체</option>
+                {Object.entries(priorities).map(([v, t]) => (
+                  <option key={v} value={v}>
+                    {t}
+                  </option>
+                ))}
+              </select>
+            </label>
             <div className="rb-developer-table">
-              <table><thead><tr><th>고객 요청</th><th>우선순위</th><th>유형</th><th>요청일</th><th>상태</th><th>요청자</th></tr></thead><tbody>
-                {list.filter(r => r.title.toLowerCase().includes(query.toLowerCase()) && (!filter || r.status === filter) && (!priorityFilter || r.priority === priorityFilter)).map(r => <tr key={r.id}>
-                  <td><button onClick={()=>go(`${base}/${r.id}`)}>{r.title}</button><p>{r.description}</p></td>
-                  <td><span className={r.priority === "urgent" ? "rb-urgent" : ""}>{priorities[r.priority]}</span></td>
-                  <td>{types[r.type]}</td><td>{new Date(r.createdAt).toLocaleDateString("ko-KR")}</td><td><span className="rb-badge">{stages[r.status]}</span></td><td>{r.creatorName}</td>
-                </tr>)}
-              </tbody></table>
+              <table>
+                <thead>
+                  <tr>
+                    <th>고객 요청</th>
+                    <th>우선순위</th>
+                    <th>유형</th>
+                    <th>요청일</th>
+                    <th>상태</th>
+                    <th>요청자</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {list
+                    .filter(
+                      (r) =>
+                        r.title.toLowerCase().includes(query.toLowerCase()) &&
+                        (!filter || r.status === filter) &&
+                        (!priorityFilter || r.priority === priorityFilter),
+                    )
+                    .map((r) => (
+                      <tr key={r.id}>
+                        <td>
+                          <button onClick={() => go(`${base}/${r.id}`)}>
+                            {r.title}
+                          </button>
+                          <p>{r.description}</p>
+                        </td>
+                        <td>
+                          <span
+                            className={
+                              r.priority === "urgent" ? "rb-urgent" : ""
+                            }
+                          >
+                            {priorities[r.priority]}
+                          </span>
+                        </td>
+                        <td>{types[r.type]}</td>
+                        <td>
+                          {new Date(r.createdAt).toLocaleDateString("ko-KR")}
+                        </td>
+                        <td>
+                          <span className="rb-badge">{stages[r.status]}</span>
+                        </td>
+                        <td>{r.creatorName}</td>
+                      </tr>
+                    ))}
+                </tbody>
+              </table>
             </div>
             {!list.length && (
               <div className="rb-empty">
@@ -880,7 +1068,8 @@ export default function RequestBoard({
               !list.some(
                 (r) =>
                   r.title.toLowerCase().includes(query.toLowerCase()) &&
-                  (!filter || r.status === filter) && (!priorityFilter || r.priority === priorityFilter),
+                  (!filter || r.status === filter) &&
+                  (!priorityFilter || r.priority === priorityFilter),
               ) && <p className="rb-empty">검색 조건에 맞는 요청이 없어요.</p>}
           </>
         ) : null}

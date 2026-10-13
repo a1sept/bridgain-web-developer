@@ -1,8 +1,11 @@
 import ProjectTasks from "./ProjectTasks";
 import ProjectResources from "./ProjectResources";
 import ProjectOverview from "./ProjectOverview";
-import DeveloperShell, {type DeveloperView, type ProjectSection} from "./DeveloperShell";
-import DeveloperDashboard, {DeveloperProjectList} from "./DeveloperDashboard";
+import DeveloperShell, {
+  type DeveloperView,
+  type ProjectSection,
+} from "./DeveloperShell";
+import DeveloperDashboard, { DeveloperProjectList } from "./DeveloperDashboard";
 import RequestBoard from "./RequestBoard";
 import CreateProjectPage from "./CreateProjectPage";
 import MobileProjectAction from "./MobileProjectAction";
@@ -24,6 +27,7 @@ type Member = {
   accountType: "client" | "team";
   positions: string[];
   permissionRole?: string;
+  canApproveMerge?: boolean;
   accessRole?: string;
 };
 type Team = {
@@ -131,6 +135,9 @@ function MemberEditor({
 }) {
   const [selected, setSelected] = useState(member.positions || []);
   const [role, setRole] = useState(member.permissionRole || "member");
+  const [canApproveMerge, setCanApproveMerge] = useState(
+    member.canApproveMerge ?? false,
+  );
   const canEdit =
     team.permissionRole === "owner" ||
     (team.permissionRole === "admin" && member.permissionRole === "member");
@@ -142,7 +149,10 @@ function MemberEditor({
         <span className="pw-avatar">{member.displayName.slice(0, 1)}</span>
         <div>
           <strong>{member.displayName}</strong>
-          <p>{roles[member.permissionRole || "member"]}</p>
+          <p>
+            {roles[member.permissionRole || "member"]}
+            {member.canApproveMerge ? " · 병합 승인자" : ""}
+          </p>
         </div>
       </div>
       {canEdit ? (
@@ -166,6 +176,15 @@ function MemberEditor({
               </label>
             ))}
           </fieldset>
+          <label>
+            <input
+              type="checkbox"
+              checked={canApproveMerge}
+              disabled={busy || member.accountType !== "team"}
+              onChange={(e) => setCanApproveMerge(e.target.checked)}
+            />
+            병합 승인자
+          </label>
           {canRole && (
             <select
               aria-label={`${member.displayName} 관리 권한`}
@@ -183,6 +202,7 @@ function MemberEditor({
             onClick={() =>
               onSave(member.userId, {
                 positions: selected,
+                canApproveMerge,
                 ...(canRole ? { permissionRole: role } : {}),
               })
             }
@@ -222,9 +242,28 @@ export default function LiveWorkspace({
       setCreating(window.location.pathname === "/projects/new");
       setRequestPath(window.location.pathname);
       const saved = window.history.state;
-      setView(["dashboard", "projects", "invitations", "teams"].includes(saved?.developerView) ? saved.developerView : "dashboard");
-      setProjectId(typeof saved?.projectId === "string" ? saved.projectId : null);
-      setProjectSection(["overview","tasks","meetings","documents","activity","members"].includes(saved?.projectSection) ? saved.projectSection : "overview");
+      setView(
+        ["dashboard", "projects", "invitations", "teams"].includes(
+          saved?.developerView,
+        )
+          ? saved.developerView
+          : "dashboard",
+      );
+      setProjectId(
+        typeof saved?.projectId === "string" ? saved.projectId : null,
+      );
+      setProjectSection(
+        [
+          "overview",
+          "tasks",
+          "meetings",
+          "documents",
+          "activity",
+          "members",
+        ].includes(saved?.projectSection)
+          ? saved.projectSection
+          : "overview",
+      );
     };
     window.addEventListener("popstate", onPop);
     return () => window.removeEventListener("popstate", onPop);
@@ -238,15 +277,39 @@ export default function LiveWorkspace({
   const [data, setData] = useState<Workspace | null>(null);
   const [inviteDetailId, setInviteDetailId] = useState<string | null>(null);
   const inviteDialog = useRef<HTMLDialogElement>(null);
-  const inviteDetail = data?.invitations.find(i => i.id === inviteDetailId && i.direction === "received");
+  const inviteDetail = data?.invitations.find(
+    (i) => i.id === inviteDetailId && i.direction === "received",
+  );
   useEffect(() => {
-    if (inviteDetail && !inviteDialog.current?.open) inviteDialog.current?.showModal();
+    if (inviteDetail && !inviteDialog.current?.open)
+      inviteDialog.current?.showModal();
     if (!inviteDetail) inviteDialog.current?.close();
   }, [inviteDetail]);
 
-  const [view, setView] = useState<DeveloperView>(() => ["dashboard", "projects", "invitations", "teams"].includes(window.history.state?.developerView) ? window.history.state.developerView : "dashboard");
-  const [projectSection, setProjectSection] = useState<ProjectSection>(() => ["overview","tasks","meetings","documents","activity","members"].includes(window.history.state?.projectSection) ? window.history.state.projectSection : "overview");
-  const [projectId, setProjectId] = useState<string | null>(() => typeof window.history.state?.projectId === "string" ? window.history.state.projectId : null);
+  const [view, setView] = useState<DeveloperView>(() =>
+    ["dashboard", "projects", "invitations", "teams"].includes(
+      window.history.state?.developerView,
+    )
+      ? window.history.state.developerView
+      : "dashboard",
+  );
+  const [projectSection, setProjectSection] = useState<ProjectSection>(() =>
+    [
+      "overview",
+      "tasks",
+      "meetings",
+      "documents",
+      "activity",
+      "members",
+    ].includes(window.history.state?.projectSection)
+      ? window.history.state.projectSection
+      : "overview",
+  );
+  const [projectId, setProjectId] = useState<string | null>(() =>
+    typeof window.history.state?.projectId === "string"
+      ? window.history.state.projectId
+      : null,
+  );
   const [taskRequestId, setTaskRequestId] = useState<string | undefined>();
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
@@ -272,7 +335,7 @@ export default function LiveWorkspace({
   const reload = useCallback(async () => {
     const next = await request<Workspace>("");
     setData(next);
-    setDashboardRefresh(v => v + 1);
+    setDashboardRefresh((v) => v + 1);
   }, []);
   useEffect(() => {
     let active = true;
@@ -345,7 +408,7 @@ export default function LiveWorkspace({
     setProjectId(null);
     setCreating(false);
     setRequestPath("/");
-    window.history.pushState({developerView:next}, "", "/");
+    window.history.pushState({ developerView: next }, "", "/");
   }
   function openProject(id: string, section: ProjectSection = "overview") {
     setTaskRequestId(undefined);
@@ -354,7 +417,11 @@ export default function LiveWorkspace({
     setRequestPath("/");
     setProjectId(id);
     setProjectSection(section);
-    window.history.pushState({developerView:"projects", projectId:id, projectSection:section}, "", "/");
+    window.history.pushState(
+      { developerView: "projects", projectId: id, projectSection: section },
+      "",
+      "/",
+    );
   }
   function openRequest(projectId: string, requestId: string) {
     openRequests(projectId);
@@ -420,24 +487,53 @@ export default function LiveWorkspace({
       true,
     );
   }
+  useEffect(() => {
+    const changed = () => {
+      void reload();
+      setDashboardRefresh((v) => v + 1);
+    };
+    window.addEventListener("bridgain:ai-applied", changed);
+    return () => window.removeEventListener("bridgain:ai-applied", changed);
+  }, [reload]);
   const requestProjectId = requestPath.match(
     /^\/projects\/([^/]+)\/requests(?:\/|$)/,
   )?.[1];
   function shell(children: ReactNode) {
     const selectedId = requestProjectId || projectId || undefined;
-    return <DeveloperShell active={requestProjectId || creating ? "projects" : view}
-      userName={user.displayName} projects={data?.projects || []} selectedId={selectedId}
-      section={requestProjectId ? "requests" : projectSection}
-      pending={received.filter(i=>i.status === "pending").length}
-      onNavigate={navigate} onProject={openProject}
-      onSection={section => { if (!selectedId) return; if (section === "requests") openRequests(selectedId); else openProject(selectedId, section); }}
-      onLogout={()=>void run(onLogout)}>{children}</DeveloperShell>;
+    return (
+      <DeveloperShell
+        active={requestProjectId || creating ? "projects" : view}
+        userName={user.displayName}
+        projects={data?.projects || []}
+        selectedId={selectedId}
+        section={requestProjectId ? "requests" : projectSection}
+        pending={received.filter((i) => i.status === "pending").length}
+        onNavigate={navigate}
+        onProject={openProject}
+        onSection={(section) => {
+          if (!selectedId) return;
+          if (section === "requests") openRequests(selectedId);
+          else openProject(selectedId, section);
+        }}
+        onLogout={() => void run(onLogout)}
+      >
+        {children}
+      </DeveloperShell>
+    );
   }
   if (requestProjectId && data) {
     const requestProject = data.projects.find((p) => p.id === requestProjectId);
     return shell(
       <RequestBoard
-        onTasks={(rid) => { openProject(requestProjectId, "tasks"); setTaskRequestId(rid); }}
+        onMeetings={(rid) => {
+          if (!requestProjectId) return;
+          window.sessionStorage.setItem("bridgain-meeting-request", rid);
+          openProject(requestProjectId, "meetings");
+        }}
+        onTasks={(rid) => {
+          openProject(requestProjectId, "tasks");
+          setTaskRequestId(rid);
+        }}
         user={user}
         project={requestProject}
         projects={data.projects}
@@ -447,7 +543,7 @@ export default function LiveWorkspace({
         onInfo={() => {
           openProject(requestProjectId, "members");
         }}
-      />
+      />,
     );
   }
   if (creating && isTeam && data)
@@ -457,7 +553,13 @@ export default function LiveWorkspace({
         teams={data.teams}
         onBack={leaveCreate}
         onLookup={(id) => request<User>(`/users/${encodeURIComponent(id)}`)}
-        onSearch={async (query, type) => (await request<{users: User[]}>(`/users?q=${encodeURIComponent(query)}&accountType=${type}`)).users}
+        onSearch={async (query, type) =>
+          (
+            await request<{ users: User[] }>(
+              `/users?q=${encodeURIComponent(query)}&accountType=${type}`,
+            )
+          ).users
+        }
         onCreate={async (values) => {
           const created = await request<Project>("/projects", values);
           leaveCreate();
@@ -471,18 +573,22 @@ export default function LiveWorkspace({
               : "프로젝트를 만들었어요.",
           );
         }}
-      />
+      />,
     );
   return shell(
     <div className="pw-shell lw-shell">
       <div className="pw-body">
         <header className="pw-topbar">
           <strong>
-            {view === "dashboard" ? "대시보드" : view === "projects"
-              ? (project ? project.name : "프로젝트")
-              : view === "teams"
-                ? "팀 관리"
-                : "받은 초대"}
+            {view === "dashboard"
+              ? "대시보드"
+              : view === "projects"
+                ? project
+                  ? project.name
+                  : "프로젝트"
+                : view === "teams"
+                  ? "팀 관리"
+                  : "받은 초대"}
           </strong>
           <button
             className="pw-secondary"
@@ -522,142 +628,211 @@ export default function LiveWorkspace({
             </section>
           ) : (
             <>
-              {view === "dashboard" && <DeveloperDashboard refreshKey={dashboardRefresh} userName={user.displayName} projects={data.projects} onOpenProject={openProject} onOpenRequest={openRequest} onCreate={openCreate}/>}
-              {view === "projects" && !project && <DeveloperProjectList projects={data.projects} onOpenProject={openProject} onCreate={openCreate}/>}
-              {view === "projects" && project && projectSection === "overview" && <ProjectOverview project={project} refreshKey={dashboardRefresh} onSection={section => section === "requests" ? openRequests(project.id) : openProject(project.id, section)} onOpenRequest={rid => openRequest(project.id, rid)}/>}
-              {view === "projects" && project && projectSection === "tasks" && <ProjectTasks refreshKey={dashboardRefresh} key={project.id} project={project} initialRequestId={taskRequestId} onOpenRequest={rid => openRequest(project.id, rid)} onChanged={()=>setDashboardRefresh(v=>v+1)}/>}
-              {view === "projects" && project && (projectSection === "meetings" || projectSection === "documents" || projectSection === "activity") && <ProjectResources refreshKey={dashboardRefresh} key={`${project.id}/${projectSection}`} projectId={project.id} section={projectSection} onChanged={()=>setDashboardRefresh(v=>v+1)}/>}
-              {view === "projects" && project && projectSection === "members" && (
-                <>
-                  <button
-                    className="pw-back"
-                    onClick={() => navigate("projects")}
-                  >
-                    ← 프로젝트 목록
-                  </button>
-                  <div className="pw-heading">
-                    <div>
-                      <p className="pw-eyebrow">PROJECT</p>
-                      <h1>{project.name}</h1>
-                      <button
-                        className="pw-text-button"
-                        onClick={() => openRequests(project.id)}
-                      >
-                        요청 목록 보기 →
-                      </button>
-                      <p>{project.description || "등록된 설명이 없어요."}</p>
-                    </div>
-                    {canManage && (
-                      <div className="lw-actions">
+              {view === "dashboard" && (
+                <DeveloperDashboard
+                  refreshKey={dashboardRefresh}
+                  userName={user.displayName}
+                  projects={data.projects}
+                  onOpenProject={openProject}
+                  onOpenRequest={openRequest}
+                  onCreate={openCreate}
+                />
+              )}
+              {view === "projects" && !project && (
+                <DeveloperProjectList
+                  projects={data.projects}
+                  onOpenProject={openProject}
+                  onCreate={openCreate}
+                />
+              )}
+              {view === "projects" &&
+                project &&
+                projectSection === "overview" && (
+                  <ProjectOverview
+                    project={project}
+                    refreshKey={dashboardRefresh}
+                    onSection={(section) =>
+                      section === "requests"
+                        ? openRequests(project.id)
+                        : openProject(project.id, section)
+                    }
+                    onOpenRequest={(rid) => openRequest(project.id, rid)}
+                  />
+                )}
+              {view === "projects" && project && projectSection === "tasks" && (
+                <ProjectTasks
+                  refreshKey={dashboardRefresh}
+                  key={project.id}
+                  project={project}
+                  userId={user.id}
+                  onDocument={(documentId, versionId) => {
+                    window.sessionStorage.setItem(
+                      "bridgain-document-version",
+                      JSON.stringify({ documentId, versionId }),
+                    );
+                    openProject(project.id, "documents");
+                  }}
+                  initialRequestId={taskRequestId}
+                  onOpenRequest={(rid) => openRequest(project.id, rid)}
+                  onChanged={() => setDashboardRefresh((v) => v + 1)}
+                />
+              )}
+              {view === "projects" &&
+                project &&
+                (projectSection === "meetings" ||
+                  projectSection === "documents" ||
+                  projectSection === "activity") && (
+                  <ProjectResources
+                    refreshKey={dashboardRefresh}
+                    key={`${project.id}/${projectSection}`}
+                    projectId={project.id}
+                    members={project.members}
+                    onTask={(tid) => {
+                      window.sessionStorage.setItem("bridgain-task", tid);
+                      openProject(project.id, "tasks");
+                    }}
+                    section={projectSection}
+                    onChanged={() => setDashboardRefresh((v) => v + 1)}
+                  />
+                )}
+              {view === "projects" &&
+                project &&
+                projectSection === "members" && (
+                  <>
+                    <button
+                      className="pw-back"
+                      onClick={() => navigate("projects")}
+                    >
+                      ← 프로젝트 목록
+                    </button>
+                    <div className="pw-heading">
+                      <div>
+                        <p className="pw-eyebrow">PROJECT</p>
+                        <h1>{project.name}</h1>
                         <button
-                          className="pw-secondary"
-                          onClick={() => {
-                            setName(project.name);
-                            setDescription(project.description || "");
-                            setStatus(project.status);
-                            setModalError("");
-                            setModal("edit");
-                          }}
+                          className="pw-text-button"
+                          onClick={() => openRequests(project.id)}
                         >
-                          프로젝트 수정
+                          요청 목록 보기 →
                         </button>
-                        <button
-                          className="pw-primary"
-                          onClick={() =>
-                            openInvite("projects", project.id, project.name)
-                          }
-                        >
-                          참여자 초대
-                        </button>
+                        <p>{project.description || "등록된 설명이 없어요."}</p>
                       </div>
-                    )}
-                  </div>
-                  <div className="pw-detail-grid">
-                    <section className="pw-panel">
-                      <h2>
-                        참여자 <span>{project.members.length}</span>
-                      </h2>
-                      {(["team", "client"] as const).map((type) => (
-                        <div className="pw-member-group" key={type}>
-                          <h3>{type === "team" ? "개발팀" : "의뢰자"}</h3>
-                          {project.members
-                            .filter((m) => m.accountType === type)
-                            .map((m) => (
-                              <div className="pw-member" key={m.userId}>
-                                <span className="pw-avatar">
-                                  {m.displayName.slice(0, 1)}
-                                </span>
-                                <div>
-                                  <strong>
-                                    {m.displayName}
-                                    {m.userId === user.id && <small> 나</small>}
-                                  </strong>
-                                  <p>
-                                    {type === "client"
-                                      ? "의뢰자"
-                                      : (m.positions || [])
-                                          .map((x) => positions[x])
-                                          .join(" · ") || "직무 미지정"}
-                                  </p>
-                                </div>
-                                <span className="pw-member-role">
-                                  {roles[m.accessRole || "contributor"]}
-                                </span>
-                              </div>
-                            ))}
-                          {!project.members.some(
-                            (m) => m.accountType === type,
-                          ) && (
-                            <p className="pw-muted">아직 참여자가 없어요.</p>
-                          )}
+                      {canManage && (
+                        <div className="lw-actions">
+                          <button
+                            className="pw-secondary"
+                            onClick={() => {
+                              setName(project.name);
+                              setDescription(project.description || "");
+                              setStatus(project.status);
+                              setModalError("");
+                              setModal("edit");
+                            }}
+                          >
+                            프로젝트 수정
+                          </button>
+                          <button
+                            className="pw-primary"
+                            onClick={() =>
+                              openInvite("projects", project.id, project.name)
+                            }
+                          >
+                            참여자 초대
+                          </button>
                         </div>
-                      ))}
-                    </section>
-                    <section className="pw-panel">
-                      <h2>프로젝트 정보</h2>
-                      <p>
-                        진행 상태{" "}
-                        <span className="pw-status">
-                          {statuses[project.status]}
-                        </span>
-                      </p>
-                      <p className="pw-muted">{team?.name}</p>
-                    </section>
-                  </div>
-                  {canManage && (
-                    <section className="pw-panel lw-section">
-                      <h2>보낸 초대</h2>
-                      {data.invitations
-                        .filter(
-                          (i) =>
-                            i.direction === "sent" &&
-                            i.projectId === project.id,
-                        )
-                        .map((i) => (
-                          <div className="pw-member" key={i.id}>
-                            <div>
-                              <strong>{i.inviteeName}</strong>
-                              <p>{statuses[i.status]}</p>
-                            </div>
-                            {i.status === "pending" && (
-                              <button
-                                className="pw-secondary"
-                                disabled={busy}
-                                onClick={() => changeInvitation(i.id, "cancel")}
-                              >
-                                초대 취소
-                              </button>
+                      )}
+                    </div>
+                    <div className="pw-detail-grid">
+                      <section className="pw-panel">
+                        <h2>
+                          참여자 <span>{project.members.length}</span>
+                        </h2>
+                        {(["team", "client"] as const).map((type) => (
+                          <div className="pw-member-group" key={type}>
+                            <h3>{type === "team" ? "개발팀" : "의뢰자"}</h3>
+                            {project.members
+                              .filter((m) => m.accountType === type)
+                              .map((m) => (
+                                <div className="pw-member" key={m.userId}>
+                                  <span className="pw-avatar">
+                                    {m.displayName.slice(0, 1)}
+                                  </span>
+                                  <div>
+                                    <strong>
+                                      {m.displayName}
+                                      {m.userId === user.id && (
+                                        <small> 나</small>
+                                      )}
+                                    </strong>
+                                    <p>
+                                      {type === "client"
+                                        ? "의뢰자"
+                                        : (m.positions || [])
+                                            .map((x) => positions[x])
+                                            .join(" · ") || "직무 미지정"}
+                                    </p>
+                                  </div>
+                                  <span className="pw-member-role">
+                                    {roles[m.accessRole || "contributor"]}
+                                  </span>
+                                </div>
+                              ))}
+                            {!project.members.some(
+                              (m) => m.accountType === type,
+                            ) && (
+                              <p className="pw-muted">아직 참여자가 없어요.</p>
                             )}
                           </div>
                         ))}
-                      {!data.invitations.some(
-                        (i) =>
-                          i.direction === "sent" && i.projectId === project.id,
-                      ) && <p className="pw-muted">보낸 초대가 없어요.</p>}
-                    </section>
-                  )}
-                </>
-              )}
+                      </section>
+                      <section className="pw-panel">
+                        <h2>프로젝트 정보</h2>
+                        <p>
+                          진행 상태{" "}
+                          <span className="pw-status">
+                            {statuses[project.status]}
+                          </span>
+                        </p>
+                        <p className="pw-muted">{team?.name}</p>
+                      </section>
+                    </div>
+                    {canManage && (
+                      <section className="pw-panel lw-section">
+                        <h2>보낸 초대</h2>
+                        {data.invitations
+                          .filter(
+                            (i) =>
+                              i.direction === "sent" &&
+                              i.projectId === project.id,
+                          )
+                          .map((i) => (
+                            <div className="pw-member" key={i.id}>
+                              <div>
+                                <strong>{i.inviteeName}</strong>
+                                <p>{statuses[i.status]}</p>
+                              </div>
+                              {i.status === "pending" && (
+                                <button
+                                  className="pw-secondary"
+                                  disabled={busy}
+                                  onClick={() =>
+                                    changeInvitation(i.id, "cancel")
+                                  }
+                                >
+                                  초대 취소
+                                </button>
+                              )}
+                            </div>
+                          ))}
+                        {!data.invitations.some(
+                          (i) =>
+                            i.direction === "sent" &&
+                            i.projectId === project.id,
+                        ) && <p className="pw-muted">보낸 초대가 없어요.</p>}
+                      </section>
+                    )}
+                  </>
+                )}
               {view === "invitations" && (
                 <>
                   <div className="pw-heading">
@@ -677,31 +852,71 @@ export default function LiveWorkspace({
                   </div>
                   <code className="lw-inline-id">{user.id}</code>
                   {received.map((i) => (
-                    <section className={`pw-invitation lw-invite-card ${i.status === "pending" ? "is-pending" : ""}`} key={i.id}>
+                    <section
+                      className={`pw-invitation lw-invite-card ${i.status === "pending" ? "is-pending" : ""}`}
+                      key={i.id}
+                    >
                       <div className="lw-invite-top">
                         <span className="lw-envelope" aria-hidden="true">
-                          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="5" width="18" height="14" rx="3"/><path d="m4 7 8 6 8-6"/></svg>
+                          <svg
+                            width="24"
+                            height="24"
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            strokeWidth="1.6"
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                          >
+                            <rect x="3" y="5" width="18" height="14" rx="3" />
+                            <path d="m4 7 8 6 8-6" />
+                          </svg>
                         </span>
-                        <span className={`lw-invite-status status-${i.status}`}>{statuses[i.status]}</span>
+                        <span className={`lw-invite-status status-${i.status}`}>
+                          {statuses[i.status]}
+                        </span>
                       </div>
                       <div className="pw-invitation-copy">
                         <p className="pw-eyebrow">
                           {i.projectId ? "프로젝트 초대" : "팀 초대"}
                         </p>
-                        <h2>{i.status === "accepted" && i.projectId ? (
-                          <a className="lw-invite-project-link" href={`/projects/${i.projectId}/requests`}
-                            onClick={(event) => {
-                              if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
-                              event.preventDefault();
-                              openRequests(i.projectId!);
-                            }}>
-                            {i.projectName || i.teamName}<span aria-hidden="true"> ↗</span>
-                          </a>
-                        ) : i.status === "pending" ? (
-                          <button type="button" className="lw-invite-open" onClick={() => { setError(""); setInviteDetailId(i.id); }}>
-                            {i.projectName || i.teamName}<span aria-hidden="true"> ›</span>
-                          </button>
-                        ) : i.projectName || i.teamName}</h2>
+                        <h2>
+                          {i.status === "accepted" && i.projectId ? (
+                            <a
+                              className="lw-invite-project-link"
+                              href={`/projects/${i.projectId}/requests`}
+                              onClick={(event) => {
+                                if (
+                                  event.button !== 0 ||
+                                  event.metaKey ||
+                                  event.ctrlKey ||
+                                  event.shiftKey ||
+                                  event.altKey
+                                )
+                                  return;
+                                event.preventDefault();
+                                openRequests(i.projectId!);
+                              }}
+                            >
+                              {i.projectName || i.teamName}
+                              <span aria-hidden="true"> ↗</span>
+                            </a>
+                          ) : i.status === "pending" ? (
+                            <button
+                              type="button"
+                              className="lw-invite-open"
+                              onClick={() => {
+                                setError("");
+                                setInviteDetailId(i.id);
+                              }}
+                            >
+                              {i.projectName || i.teamName}
+                              <span aria-hidden="true"> ›</span>
+                            </button>
+                          ) : (
+                            i.projectName || i.teamName
+                          )}
+                        </h2>
                         <p>{i.inviterName}님이 초대했어요.</p>
                         {isTeam && i.status === "pending" && (
                           <p>
@@ -709,7 +924,11 @@ export default function LiveWorkspace({
                           </p>
                         )}
                       </div>
-                      {i.status === "pending" && <p className="lw-invite-hint">초대 내용 확인하기 <span aria-hidden="true">→</span></p>}
+                      {i.status === "pending" && (
+                        <p className="lw-invite-hint">
+                          초대 내용 확인하기 <span aria-hidden="true">→</span>
+                        </p>
+                      )}
                     </section>
                   ))}
                   {!received.length && (
@@ -729,8 +948,9 @@ export default function LiveWorkspace({
                         각자의 전문성을 한곳에<span>.</span>
                       </h1>
                       <p>
-                        직무는 복수로 지정할 수 있고, 관리 권한과 별도로
-                        적용돼요.
+                        직무와 병합 승인 권한은 관리 역할과 별도로 지정해요.
+                        소유자는 모든 팀원, 관리자는 일반 멤버의 승인 권한을
+                        변경할 수 있어요.
                       </p>
                     </div>
                   </div>
@@ -743,7 +963,7 @@ export default function LiveWorkspace({
                       </div>
                       {t.members.map((m) => (
                         <MemberEditor
-                          key={`${m.userId}:${m.permissionRole}:${(m.positions || []).join(",")}`}
+                          key={`${m.userId}:${m.permissionRole}:${m.canApproveMerge}:${(m.positions || []).join(",")}`}
                           member={m}
                           team={t}
                           busy={busy}
@@ -957,31 +1177,98 @@ export default function LiveWorkspace({
           </fieldset>
         </form>
       </dialog>
-      <dialog ref={inviteDialog} className="lw-invite-detail" aria-labelledby="invite-detail-title"
-        onCancel={(event) => { if (busy) event.preventDefault(); else setInviteDetailId(null); }}
-        onClose={() => setInviteDetailId(null)}>
-        {inviteDetail && <>
-          <header><span>받은 초대</span><button type="button" aria-label="초대 상세 닫기" disabled={busy} onClick={() => setInviteDetailId(null)}>×</button></header>
-          <div className="lw-invite-detail-body">
-            <span className="lw-invite-status">{statuses[inviteDetail.status]}</span>
-            <h2 id="invite-detail-title">{inviteDetail.projectName || inviteDetail.teamName}</h2>
-            <p>{inviteDetail.inviterName}님이 함께할 프로젝트에 초대했어요.</p>
-            <dl>
-              <div><dt>초대한 사람</dt><dd>{inviteDetail.inviterName}</dd></div>
-              <div><dt>참여 역할</dt><dd>{isTeam ? "개발팀 참여자" : "의뢰자"}</dd></div>
-              {inviteDetail.createdAt && <div><dt>초대 일시</dt><dd>{new Date(inviteDetail.createdAt).toLocaleDateString("ko-KR")}</dd></div>}
-            </dl>
-            <h3>프로젝트 소개</h3>
-            <p className="lw-invite-description">{inviteDetail.projectDescription || "등록된 프로젝트 설명이 없어요."}</p>
-            <p className="lw-invite-detail-note">{isTeam ? "수락하면 프로젝트와 소유 개발팀에 함께 참여해요." : "수락하면 프로젝트의 요청 목록을 확인하고 새로운 요청을 작성할 수 있어요."}</p>
-            {error && <p role="alert" className="lw-alert">{error}</p>}
-          </div>
-          {inviteDetail.status === "pending" && <footer>
-            <button type="button" className="pw-secondary" disabled={busy} onClick={() => changeInvitation(inviteDetail.id, "decline")}>거절</button>
-            <button type="button" className="pw-primary" disabled={busy} onClick={() => changeInvitation(inviteDetail.id, "accept")}>{busy ? "처리 중…" : "초대 수락"}</button>
-          </footer>}
-        </>}
+      <dialog
+        ref={inviteDialog}
+        className="lw-invite-detail"
+        aria-labelledby="invite-detail-title"
+        onCancel={(event) => {
+          if (busy) event.preventDefault();
+          else setInviteDetailId(null);
+        }}
+        onClose={() => setInviteDetailId(null)}
+      >
+        {inviteDetail && (
+          <>
+            <header>
+              <span>받은 초대</span>
+              <button
+                type="button"
+                aria-label="초대 상세 닫기"
+                disabled={busy}
+                onClick={() => setInviteDetailId(null)}
+              >
+                ×
+              </button>
+            </header>
+            <div className="lw-invite-detail-body">
+              <span className="lw-invite-status">
+                {statuses[inviteDetail.status]}
+              </span>
+              <h2 id="invite-detail-title">
+                {inviteDetail.projectName || inviteDetail.teamName}
+              </h2>
+              <p>
+                {inviteDetail.inviterName}님이 함께할 프로젝트에 초대했어요.
+              </p>
+              <dl>
+                <div>
+                  <dt>초대한 사람</dt>
+                  <dd>{inviteDetail.inviterName}</dd>
+                </div>
+                <div>
+                  <dt>참여 역할</dt>
+                  <dd>{isTeam ? "개발팀 참여자" : "의뢰자"}</dd>
+                </div>
+                {inviteDetail.createdAt && (
+                  <div>
+                    <dt>초대 일시</dt>
+                    <dd>
+                      {new Date(inviteDetail.createdAt).toLocaleDateString(
+                        "ko-KR",
+                      )}
+                    </dd>
+                  </div>
+                )}
+              </dl>
+              <h3>프로젝트 소개</h3>
+              <p className="lw-invite-description">
+                {inviteDetail.projectDescription ||
+                  "등록된 프로젝트 설명이 없어요."}
+              </p>
+              <p className="lw-invite-detail-note">
+                {isTeam
+                  ? "수락하면 프로젝트와 소유 개발팀에 함께 참여해요."
+                  : "수락하면 프로젝트의 요청 목록을 확인하고 새로운 요청을 작성할 수 있어요."}
+              </p>
+              {error && (
+                <p role="alert" className="lw-alert">
+                  {error}
+                </p>
+              )}
+            </div>
+            {inviteDetail.status === "pending" && (
+              <footer>
+                <button
+                  type="button"
+                  className="pw-secondary"
+                  disabled={busy}
+                  onClick={() => changeInvitation(inviteDetail.id, "decline")}
+                >
+                  거절
+                </button>
+                <button
+                  type="button"
+                  className="pw-primary"
+                  disabled={busy}
+                  onClick={() => changeInvitation(inviteDetail.id, "accept")}
+                >
+                  {busy ? "처리 중…" : "초대 수락"}
+                </button>
+              </footer>
+            )}
+          </>
+        )}
       </dialog>
-    </div>
+    </div>,
   );
 }

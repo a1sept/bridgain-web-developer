@@ -10,7 +10,11 @@
     "dev": "vite",
     "typecheck": "tsc --noEmit",
     "build": "npm run typecheck && vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "desktop": "npm --prefix desktop start",
+    "desktop:check": "node desktop/check.mjs",
+    "desktop:test": "node --test desktop/test/*.test.mjs",
+    "desktop:install": "npm --prefix desktop ci"
   },
   "dependencies": {
     "react": "19.3.0",
