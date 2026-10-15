@@ -1,19 +1,30 @@
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
+import { existsSync, readFileSync } from "node:fs";
+import { parseEnv } from "node:util";
+import { fileURLToPath } from "node:url";
 
-// Server-only settings come from the process (Compose); never load the root env into Vite.
+const rootEnvPath = fileURLToPath(new URL("../../.env.dev", import.meta.url));
+const rootEnv = existsSync(rootEnvPath)
+  ? parseEnv(readFileSync(rootEnvPath, "utf8"))
+  : {};
+const apiTarget = process.env.API_PROXY_TARGET || rootEnv.API_PROXY_TARGET || "http://localhost:15175";
+const proxySecret = process.env.AUTH_PROXY_SECRET || rootEnv.AUTH_PROXY_SECRET || "";
+const allowedHost = process.env.DEV_ALLOWED_HOST || rootEnv.DEV_ALLOWED_HOST;
+const port = Number(process.env.DEVELOPER_PORT || rootEnv.DEVELOPER_PORT || "5173");
+
 export default defineConfig({
   plugins: [react()],
   envPrefix: "VITE_PUBLIC_",
   server: {
-    port: 5173,
+    port,
     strictPort: true,
-    allowedHosts: process.env.DEV_ALLOWED_HOST
-      ? [process.env.DEV_ALLOWED_HOST]
+    allowedHosts: allowedHost
+      ? [allowedHost]
       : [],
     proxy: {
       "/api": {
-        target: process.env.API_PROXY_TARGET || "http://localhost:3000",
+        target: apiTarget,
         changeOrigin: true,
         configure(proxy) {
           proxy.on("proxyReq", (proxyRequest, request) => {
@@ -25,7 +36,7 @@ export default defineConfig({
             proxyRequest.setHeader("x-bridgain-app", "developer");
             proxyRequest.setHeader(
               "x-bridgain-proxy-secret",
-              process.env.AUTH_PROXY_SECRET || "",
+              proxySecret,
             );
           });
         },
