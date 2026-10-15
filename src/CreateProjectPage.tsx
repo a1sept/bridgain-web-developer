@@ -1,5 +1,6 @@
 import { useRef, useState, type FormEvent } from "react";
 import "./create-project-page.css";
+import RepositoryFields from "./RepositoryFields";
 export type CreatePerson = {
   id: string;
   displayName: string;
@@ -10,6 +11,7 @@ export type CreateValues = {
   description: string;
   teamId?: string;
   inviteeIds: string[];
+  repositoryUrls: string[];
 };
 type Props = {
   teams: { id: string; name: string; permissionRole: string }[];
@@ -34,6 +36,7 @@ export default function CreateProjectPage({
   );
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
+  const [repositoryUrls, setRepositoryUrls] = useState<string[]>([]);
   const [teamId, setTeamId] = useState(available[0]?.id || "");
   const [members, setMembers] = useState<CreatePerson[]>([]);
   const [ids, setIds] = useState({ client: "", team: "" });
@@ -86,6 +89,7 @@ export default function CreateProjectPage({
       await onCreate({
         name: name.trim(),
         description: description.trim(),
+        repositoryUrls: repositoryUrls.map(url => url.trim()).filter(Boolean),
         ...(teamId ? { teamId } : {}),
         inviteeIds: members.map((m) => m.id),
       });
@@ -172,6 +176,7 @@ export default function CreateProjectPage({
                 ))}
               </select>
               <p className="cp-help">선택한 팀의 프로젝트로 생성돼요.</p>
+              <RepositoryFields value={repositoryUrls} onChange={setRepositoryUrls} disabled={busy} />
             </section>
             <section className="cp-panel" aria-labelledby="cp-people">
               <h2 id="cp-people">함께할 사람</h2>

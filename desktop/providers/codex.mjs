@@ -3,8 +3,9 @@ import { createInterface } from "node:readline";
 import { subscriptionEnvironment } from "../security.mjs";
 import { tools } from "../tools.mjs";
 export class CodexProvider {
-  constructor({ home, onLogin, onTool, spawnProcess = spawn }) {
+  constructor({ home, sqliteHome, onLogin, onTool, spawnProcess = spawn }) {
     this.home = home;
+    this.sqliteHome = sqliteHome;
     this.onLogin = onLogin;
     this.onTool = onTool;
     this.spawnProcess = spawnProcess;
@@ -32,6 +33,7 @@ export class CodexProvider {
         "stdio://",
         "-c",
         'forced_login_method="chatgpt"',
+        ...(this.sqliteHome ? ["-c", `sqlite_home=${JSON.stringify(this.sqliteHome)}`] : []),
         "--disable",
         "shell_tool",
       ],
@@ -209,13 +211,14 @@ export class CodexProvider {
     await this.start();
     await this.rpc("account/logout");
   }
-  async run({ localSessionId, cwd, prompt, emit, bind }) {
+  async run({ localSessionId, projectId, title, cwd, prompt, emit, bind }) {
     await this.start();
     const params = { cwd, approvalPolicy: "never", sandbox: "read-only" };
     const r = localSessionId
       ? await this.rpc("thread/resume", { threadId: localSessionId, ...params })
       : await this.rpc("thread/start", {
           ...params,
+          ...(projectId ? { projectId } : {}),
           dynamicTools: tools.map((t) => ({
             type: "function",
             name: t.name,
@@ -225,6 +228,9 @@ export class CodexProvider {
         });
     const id = r.thread.id;
     await bind(id);
+    if (projectId && localSessionId)
+      await this.rpc("thread/metadata/update", { threadId: id, projectId });
+    if (title) await this.rpc("thread/name/set", { threadId: id, name: title });
     if (this.turns.has(id)) throw Error("이 세션은 이미 조사 중입니다.");
     return new Promise((resolve, reject) => {
       this.turns.set(id, { resolve, reject, emit, text: "" });

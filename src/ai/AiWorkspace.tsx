@@ -6,8 +6,9 @@ import {
   useRef,
   type ReactNode,
 } from "react";
-import type { DesktopState, AiProviderName } from "../desktop";
+import type { CodexSync, DesktopState, AiProviderName } from "../desktop";
 import { aiApi, type AiSession, type SessionDetail, type AiDraft } from "./api";
+import AiMessageBody from "./AiMessageBody";
 import "./ai.css";
 type Project = { id: string; name: string };
 type Context = {
@@ -16,12 +17,18 @@ type Context = {
   openPanel: () => void;
   investigate: (project: Project, requestId: string, title: string) => void;
   folder?: string;
+  folders: Record<string, string>;
+  refreshFolders: () => Promise<void>;
+  openFolderSettings: (project: Project) => void;
 };
 const AiContext = createContext<Context>({
   setProject: () => {},
   openSettings: () => {},
   openPanel: () => {},
   investigate: () => {},
+  folders: {},
+  refreshFolders: async () => {},
+  openFolderSettings: () => {},
 });
 export const useAi = () => useContext(AiContext);
 const names = { codex: "Codex", claude: "Claude Code" };
@@ -76,6 +83,7 @@ export default function AiWorkspace({
     [loading, setLoading] = useState(false),
     [refresh, setRefresh] = useState(0);
   const [running, setRunning] = useState<string[]>([]),
+    [stopping, setStopping] = useState<string[]>([]),
     [streams, setStreams] = useState<Record<string, string>>({}),
     [pending, setPending] = useState<{
       project: Project;
@@ -87,17 +95,38 @@ export default function AiWorkspace({
   const settingsDialog = useRef<HTMLDialogElement>(null),
     messageEnd = useRef<HTMLDivElement>(null),
     actionLock = useRef(false),
+    stopLocks = useRef(new Set<string>()),
     pendingDetail = useRef(0);
+  const [codexSync, setCodexSync] = useState<CodexSync>();
   const bridge = window.bridgainDesktop;
+  const syncStatus = codexSync ?? desktop?.codexSync;
+  useEffect(() => {
+    const update = (event: Event) => setCodexSync((event as CustomEvent<CodexSync>).detail);
+    window.addEventListener("bridgain:codex-sync", update);
+    return () => window.removeEventListener("bridgain:codex-sync", update);
+  }, []);
   const base = project ? `/projects/${project.id}/ai/sessions` : "";
   const folder = project ? desktop?.folders[project.id] : undefined;
   async function refreshDesktop() {
     if (bridge) {
       const value = await bridge.state();
       setDesktop(value);
+      if (value.codexSync) setCodexSync(value.codexSync);
       setRunning(value.running);
     }
   }
+  function openFolderSettings(target: Project) {
+    setError("");
+    setSettings(false);
+    window.dispatchEvent(new CustomEvent("bridgain:project-settings", { detail: { projectId: target.id } }));
+  }
+  useEffect(() => {
+    let active = true;
+    if (bridge) void bridge.state().then(value => {
+      if (active) { setDesktop(value); setRunning(value.running); }
+    }).catch(() => {});
+    return () => { active = false; };
+  }, [bridge, userId]);
   useEffect(() => {
     if (settings) {
       settingsDialog.current?.showModal();
@@ -122,6 +151,8 @@ export default function AiWorkspace({
         setRunning((r) => (r.includes(id) ? r : [...r, id]));
       }
       if (["completed", "interrupted", "error"].includes(event.type)) {
+        stopLocks.current.delete(id);
+        setStopping((s) => s.filter((x) => x !== id));
         setRunning((r) => r.filter((x) => x !== id));
         setRefresh((x) => x + 1);
         if (event.message) setError(event.message);
@@ -129,6 +160,38 @@ export default function AiWorkspace({
       if (event.type === "tool") setRefresh((x) => x + 1);
     });
   }, [bridge, userId]);
+  async function stopSelected() {
+    const id = selected?.id;
+    if (!bridge || !id || !running.includes(id) || stopLocks.current.has(id)) return;
+    stopLocks.current.add(id);
+    setStopping((s) => [...s, id]);
+    setError("");
+    try {
+      await bridge.stop(id);
+      const state = await bridge.state();
+      setRunning(state.running);
+      if (!state.running.includes(id)) {
+        stopLocks.current.delete(id);
+        setStopping((s) => s.filter((x) => x !== id));
+        setRefresh((value) => value + 1);
+      }
+    } catch (e) {
+      stopLocks.current.delete(id);
+      setStopping((s) => s.filter((x) => x !== id));
+      setError(e instanceof Error ? e.message : "응답을 중지하지 못했어요.");
+    }
+  }
+  useEffect(() => {
+    if (panel !== "open" || !selected || !running.includes(selected.id)) return;
+    function onKeyDown(event: KeyboardEvent) {
+      if (event.key !== "Escape" || event.isComposing || event.keyCode === 229 || event.defaultPrevented) return;
+      if (settings || document.querySelector('dialog[open], [role="dialog"][aria-modal="true"]')) return;
+      event.preventDefault();
+      void stopSelected();
+    }
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [panel, selected?.id, running, bridge, settings]);
   useEffect(() => {
     let active = true;
     setSessions([]);
@@ -216,9 +279,13 @@ export default function AiWorkspace({
       ? sessions.find((s) => s.id === resumeId)
       : undefined;
     const chosen = existing?.provider || provider;
-    if (!state.providers[chosen].connected || !state.folders[project.id]) {
+    if (!state.providers[chosen].connected) {
       setProvider(chosen);
       setSettings(true);
+      return;
+    }
+    if (!state.folders[project.id]) {
+      openFolderSettings(project);
       return;
     }
     let session = existing;
@@ -252,6 +319,11 @@ export default function AiWorkspace({
     if (!selected || !text.trim() || !bridge) return;
     if (running.includes(selected.id))
       throw Error("현재 응답을 기다리거나 중지한 뒤 전송해주세요.");
+    const state = await bridge.state();
+    if (!state.folders[selected.projectId]) {
+      openFolderSettings({ id: selected.projectId, name: project?.name || "현재 프로젝트" });
+      return;
+    }
     const message = text.trim();
     setStreams((s) => ({ ...s, [selected.id]: "" }));
     await bridge.run(selected.projectId, selected.id, message);
@@ -276,6 +348,9 @@ export default function AiWorkspace({
         openPanel,
         investigate,
         folder,
+        folders: desktop?.folders || {},
+        refreshFolders: refreshDesktop,
+        openFolderSettings,
       }}
     >
       <div
@@ -364,6 +439,11 @@ export default function AiWorkspace({
                 ))}
               </select>
             </label>
+            {bridge?.openCodex && selected?.provider === "codex" && (detail?.session.localSessionId || selected.localSessionId) && (
+              <button disabled={busy} onClick={() => void action(() => bridge.openCodex!(selected.id))}>
+                Codex에서 열기
+              </button>
+            )}
             {!pending && (
               <button
                 disabled={!project || busy || loading}
@@ -434,7 +514,7 @@ export default function AiWorkspace({
                       ? names[detail.session.provider]
                       : "안내"}
                 </strong>
-                <div>{m.body}</div>
+                <AiMessageBody body={m.body} />
                 {m.context?.commit && (
                   <small>조사 기준 {m.context.commit.slice(0, 10)}</small>
                 )}
@@ -444,7 +524,7 @@ export default function AiWorkspace({
             {selected && streams[selected.id] && (
               <article className="ai-message ai-assistant">
                 <strong>{names[selected.provider]}</strong>
-                <div>{streams[selected.id]}</div>
+                <AiMessageBody body={streams[selected.id]} streaming={running.includes(selected.id)} />
               </article>
             )}
             {detail?.drafts.map((d) => (
@@ -502,20 +582,21 @@ export default function AiWorkspace({
               {selected && running.includes(selected.id) ? (
                 <button
                   type="button"
-                  onClick={() =>
-                    void action(async () => {
-                      await bridge?.stop(selected.id);
-                    })
-                  }
+                  disabled={stopping.includes(selected.id)}
+                  onClick={() => void stopSelected()}
                 >
-                  실행 중지
+                  {stopping.includes(selected.id) ? "중지 중…" : "실행 중지 · Esc"}
                 </button>
               ) : (
                 <button disabled={!selected || !bridge || busy || !text.trim()}>
                   전송
                 </button>
               )}
-              <small>패널을 닫아도 대화는 유지됩니다.</small>
+              <small>{selected && stopping.includes(selected.id)
+                ? "중지 요청을 보냈어요. 응답이 끝날 때까지 기다려주세요."
+                : selected && running.includes(selected.id)
+                  ? "Esc로 현재 응답을 중지할 수 있어요."
+                  : "패널을 닫아도 대화는 유지됩니다."}</small>
             </div>
           </form>
         </aside>
@@ -545,6 +626,19 @@ export default function AiWorkspace({
           </p>
         ) : (
           <>
+            {bridge.syncProjects && (
+              <section>
+                <h3>Codex 프로젝트 연결</h3>
+                <p>프로젝트 이름을 Codex 엔진에 저장하고, 이 컴퓨터에서 만든 Codex 대화를 연결합니다.</p>
+                {syncStatus?.error ? <p className="ai-error" role="status">{syncStatus.error}</p> : syncStatus && <p role="status">Codex 엔진에 프로젝트 {syncStatus.synced}개 저장됨</p>}
+                <p className="ai-notice">실험적 연결입니다. Codex 앱 버전에 따라 사이드바에 자동 표시되지 않을 수 있습니다. 대화는 ‘Codex에서 열기’로 확인하세요.</p>
+                <button disabled={busy} onClick={() => void action(async () => {
+                  const result = await bridge.syncProjects!();
+                  setCodexSync(result);
+                  await refreshDesktop();
+                })}>프로젝트 연결 다시 확인</button>
+              </section>
+            )}
             {Object.entries(names).map(([id, name]) => {
               const key = id as AiProviderName,
                 connection = desktop?.providers[key];
@@ -598,42 +692,7 @@ export default function AiWorkspace({
             <button disabled={busy} onClick={() => void action(refreshDesktop)}>
               연결 상태 확인
             </button>
-            <section>
-              <h3>프로젝트 로컬 폴더</h3>
-              {project ? (
-                <>
-                  <p>{project.name}</p>
-                  <p>{folder || "연결된 폴더 없음"}</p>
-                  <button
-                    disabled={busy}
-                    onClick={() =>
-                      void action(async () => {
-                        await bridge.chooseFolder(project.id);
-                        await refreshDesktop();
-                      })
-                    }
-                  >
-                    폴더 선택
-                  </button>
-                  {folder && (
-                    <button
-                      disabled={busy}
-                      onClick={() =>
-                        void action(async () => {
-                          await bridge.clearFolder(project.id);
-                          await refreshDesktop();
-                        })
-                      }
-                    >
-                      폴더 연결 해제
-                    </button>
-                  )}
-                </>
-              ) : (
-                <p>프로젝트를 선택한 뒤 폴더를 연결하세요.</p>
-              )}
-            </section>
-            {pending && desktop?.providers[provider].connected && folder && (
+            {pending && desktop?.providers[provider].connected && (
               <button
                 disabled={busy}
                 onClick={() => {

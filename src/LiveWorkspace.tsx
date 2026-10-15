@@ -1,3 +1,4 @@
+import ProjectSettings from "./ProjectSettings";
 import ProjectTasks from "./ProjectTasks";
 import ProjectResources from "./ProjectResources";
 import ProjectOverview from "./ProjectOverview";
@@ -37,6 +38,7 @@ type Team = {
   members: Member[];
 };
 type Project = {
+  repositoryUrls?: string[];
   canManage: boolean;
   id: string;
   teamId: string;
@@ -260,6 +262,7 @@ export default function LiveWorkspace({
           "documents",
           "activity",
           "members",
+          "settings",
         ].includes(saved?.projectSection)
           ? saved.projectSection
           : "overview",
@@ -301,6 +304,7 @@ export default function LiveWorkspace({
       "documents",
       "activity",
       "members",
+      "settings",
     ].includes(window.history.state?.projectSection)
       ? window.history.state.projectSection
       : "overview",
@@ -316,7 +320,7 @@ export default function LiveWorkspace({
   const [busy, setBusy] = useState(false);
   const [loading, setLoading] = useState(true);
   const lock = useRef(false);
-  const [modal, setModal] = useState<"create" | "invite" | "edit" | null>(null);
+  const [modal, setModal] = useState<"create" | "invite" | null>(null);
   const [target, setTarget] = useState<{
     type: "projects" | "teams";
     id: string;
@@ -324,7 +328,6 @@ export default function LiveWorkspace({
   } | null>(null);
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
-  const [status, setStatus] = useState("preparing");
   const [teamId, setTeamId] = useState("");
   const [inviteId, setInviteId] = useState("");
   const [found, setFound] = useState<User | null>(null);
@@ -332,6 +335,22 @@ export default function LiveWorkspace({
   const dialog = useRef<HTMLDialogElement>(null);
   const isTeam = user.accountType === "team";
   const [dashboardRefresh, setDashboardRefresh] = useState(0);
+  const desktopBridge = window.bridgainDesktop;
+  const codexProjectSignature = data && isTeam
+    ? JSON.stringify(data.projects.filter(p => p.canManage).map(p => [p.id, p.name]).sort((a, b) => a[0].localeCompare(b[0])))
+    : undefined;
+  useEffect(() => {
+    if (!desktopBridge?.syncProjects || codexProjectSignature === undefined) return;
+    let active = true;
+    void desktopBridge.syncProjects().catch((error: unknown) => ({
+      synced: 0,
+      error: error instanceof Error ? error.message : "Codex 프로젝트 연결에 실패했어요.",
+    })).then(result => {
+      if (active) window.dispatchEvent(new CustomEvent("bridgain:codex-sync", { detail: result }));
+    });
+    return () => { active = false; };
+  }, [desktopBridge, codexProjectSignature, user.id]);
+
   const reload = useCallback(async () => {
     const next = await request<Workspace>("");
     setData(next);
@@ -468,12 +487,6 @@ export default function LiveWorkspace({
             description: description.trim(),
             ...(teamId ? { teamId } : {}),
           });
-        } else if (modal === "edit" && project) {
-          await request(
-            `/projects/${project.id}`,
-            { name: name.trim(), description: description.trim(), status },
-            "PATCH",
-          );
         } else if (modal === "invite" && target && found) {
           await request(`/${target.type}/${target.id}/invitations`, {
             userId: found.id,
@@ -495,6 +508,14 @@ export default function LiveWorkspace({
     window.addEventListener("bridgain:ai-applied", changed);
     return () => window.removeEventListener("bridgain:ai-applied", changed);
   }, [reload]);
+  useEffect(() => {
+    const openSettings = (event: Event) => {
+      const id = (event as CustomEvent<{ projectId: string }>).detail?.projectId;
+      if (id && data?.projects.some(p => p.id === id)) openProject(id, "settings");
+    };
+    window.addEventListener("bridgain:project-settings", openSettings);
+    return () => window.removeEventListener("bridgain:project-settings", openSettings);
+  }, [data]);
   const requestProjectId = requestPath.match(
     /^\/projects\/([^/]+)\/requests(?:\/|$)/,
   )?.[1];
@@ -578,7 +599,8 @@ export default function LiveWorkspace({
   return shell(
     <div className="pw-shell lw-shell">
       <div className="pw-body">
-        <header className="pw-topbar">
+        {!(view === "projects" && project) && <header className="pw-topbar">
+          <div className="project-page-title">
           <strong>
             {view === "dashboard"
               ? "대시보드"
@@ -590,6 +612,7 @@ export default function LiveWorkspace({
                   ? "팀 관리"
                   : "받은 초대"}
           </strong>
+          </div>
           <button
             className="pw-secondary"
             disabled={busy || loading}
@@ -597,7 +620,7 @@ export default function LiveWorkspace({
           >
             새로고침
           </button>
-        </header>
+        </header>}
         <main className="pw-main">
           {error && (
             <div className="lw-alert" role="alert">
@@ -659,6 +682,13 @@ export default function LiveWorkspace({
                     onOpenRequest={(rid) => openRequest(project.id, rid)}
                   />
                 )}
+              {view === "projects" && project && projectSection === "settings" && (
+                <ProjectSettings key={project.id} project={project} canManage={canManage}
+                  onSave={async values => {
+                    await request(`/projects/${project.id}`, values, "PATCH");
+                    await reload();
+                  }} />
+              )}
               {view === "projects" && project && projectSection === "tasks" && (
                 <ProjectTasks
                   refreshKey={dashboardRefresh}
@@ -721,15 +751,9 @@ export default function LiveWorkspace({
                         <div className="lw-actions">
                           <button
                             className="pw-secondary"
-                            onClick={() => {
-                              setName(project.name);
-                              setDescription(project.description || "");
-                              setStatus(project.status);
-                              setModalError("");
-                              setModal("edit");
-                            }}
+                            onClick={() => openProject(project.id, "settings")}
                           >
-                            프로젝트 수정
+                            프로젝트 설정
                           </button>
                           <button
                             className="pw-primary"
@@ -742,6 +766,13 @@ export default function LiveWorkspace({
                         </div>
                       )}
                     </div>
+                    <section className="pw-panel project-repositories">
+                      <h2>GitHub 저장소</h2>
+                      {project.repositoryUrls?.length ? <ul>{project.repositoryUrls.map(url =>
+                        <li key={url}><a href={url} target="_blank" rel="noreferrer">{url.replace("https://github.com/", "")}</a></li>
+                      )}</ul> : <p>등록된 저장소가 없어요. 프로젝트 설정에서 추가할 수 있어요.</p>}
+                      <p>팀 공통 저장소입니다. 개인 작업 폴더는 데스크톱 앱에서 연결하세요.</p>
+                    </section>
                     <div className="pw-detail-grid">
                       <section className="pw-panel">
                         <h2>
@@ -1011,9 +1042,7 @@ export default function LiveWorkspace({
         aria-label={
           modal === "invite"
             ? "참여자 초대"
-            : modal === "edit"
-              ? "프로젝트 수정"
-              : "프로젝트 만들기"
+            : "프로젝트 만들기"
         }
         onCancel={(e) => {
           if (busy) e.preventDefault();
@@ -1033,9 +1062,7 @@ export default function LiveWorkspace({
           <h2>
             {modal === "invite"
               ? "함께할 사람을 초대해요"
-              : modal === "edit"
-                ? "프로젝트 수정"
-                : "새 프로젝트를 시작해요"}
+              : "새 프로젝트를 시작해요"}
           </h2>
           <fieldset disabled={busy}>
             {modal === "invite" ? (
@@ -1129,21 +1156,6 @@ export default function LiveWorkspace({
                             {t.name}
                           </option>
                         ))}
-                    </select>
-                  </label>
-                )}
-                {modal === "edit" && (
-                  <label>
-                    <span>진행 상태</span>
-                    <select
-                      value={status}
-                      onChange={(e) => setStatus(e.target.value)}
-                    >
-                      {["preparing", "in_progress", "completed"].map((s) => (
-                        <option key={s} value={s}>
-                          {statuses[s]}
-                        </option>
-                      ))}
                     </select>
                   </label>
                 )}

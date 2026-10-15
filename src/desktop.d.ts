@@ -6,7 +6,9 @@ export type Connection = {
   plan?: string | null;
   error?: string;
 };
+export type CodexSync = { synced: number; error?: string };
 export type DesktopState = {
+  codexSync?: CodexSync;
   providers: Record<AiProviderName, Connection>;
   folders: Record<string, string>;
   running: string[];
@@ -29,6 +31,8 @@ export type DesktopEvent = {
 export type DesktopBridge = {
   connectServer: (url: string) => Promise<void>;
   state: () => Promise<DesktopState>;
+  syncProjects?: () => Promise<CodexSync>;
+  openCodex?: (sessionId: string) => Promise<void>;
   connect: (
     provider: AiProviderName,
   ) => Promise<{ verificationUrl?: string; userCode?: string }>;

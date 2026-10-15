@@ -9,6 +9,8 @@ contextBridge.exposeInMainWorld(
   Object.freeze({
     connectServer: (url) => call("connect-server", url),
     state: () => call("state"),
+    syncProjects: () => call("sync-projects"),
+    openCodex: (sessionId) => call("open-codex", sessionId),
     connect: (provider) => call("connect", provider),
     disconnect: (provider) => call("disconnect", provider),
     chooseFolder: (projectId) => call("folder", projectId),

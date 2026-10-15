@@ -10,7 +10,8 @@ export type ProjectSection =
   | "meetings"
   | "documents"
   | "activity"
-  | "members";
+  | "members"
+  | "settings";
 type Props = {
   children: ReactNode;
   active: DeveloperView;
@@ -136,75 +137,48 @@ export default function DeveloperShell(p: Props) {
         <aside className="ds-context">
           <div className="ds-context-heading">
             <small>WORKSPACE</small>
-            <strong>{selected?.name || "프로젝트"}</strong>
+            <strong>프로젝트</strong>
           </div>
-          {selected ? (
-            <>
-              <button
-                className="ds-context-back"
-                onClick={() => act(() => p.onNavigate("projects"))}
-              >
-                ← 모든 프로젝트
+          <button
+            className="ds-context-back"
+            aria-current={!selected ? "page" : undefined}
+            onClick={() => act(() => p.onNavigate("projects"))}
+          >
+            모든 프로젝트 <span>{p.projects.length}</span>
+          </button>
+          <nav aria-label="프로젝트 바로가기">
+            {p.projects.map((project) => (
+              <button key={project.id}
+                aria-current={selected?.id === project.id ? "page" : undefined}
+                onClick={() => act(() => p.onProject(project.id))}>
+                <span aria-hidden="true">▱ </span>{project.name}
               </button>
-              <nav aria-label="프로젝트 메뉴">
-                {(
-                  [
-                    ["overview", "개요"],
-                    ["requests", "고객 요청"],
-                    ["tasks", "업무"],
-                    ["meetings", "회의실"],
-                    ["documents", "문서"],
-                    ["activity", "활동 기록"],
-                    ["members", "참여자 · 프로젝트 관리"],
-                  ] as const
-                ).map(([key, label]) => (
-                  <button
-                    key={key}
-                    aria-current={p.section === key ? "page" : undefined}
-                    onClick={() => act(() => p.onSection(key))}
-                  >
-                    {label}
-                  </button>
-                ))}
-              </nav>
-              <div className="ds-connection">
-                <span>개발 환경 연결</span>
-                <strong>
-                  {ai.folder ? "로컬 폴더 연결됨" : "연결된 폴더 없음"}
-                </strong>
-                <button onClick={ai.openSettings}>프로젝트 폴더 연결</button>
-              </div>
-            </>
-          ) : (
-            <>
-              <button
-                className="ds-context-back"
-                aria-current="page"
-                onClick={() => act(() => p.onNavigate("projects"))}
-              >
-                모든 프로젝트 <span>{p.projects.length}</span>
-              </button>
-              <nav aria-label="프로젝트 바로가기">
-                {p.projects.map((project) => (
-                  <button
-                    key={project.id}
-                    onClick={() => act(() => p.onProject(project.id))}
-                  >
-                    <span aria-hidden="true">▱ </span>
-                    {project.name}
-                  </button>
-                ))}
-              </nav>
-              {!p.projects.length && (
-                <p className="ds-context-empty">
-                  프로젝트를 만들면 여기에 표시돼요.
-                </p>
-              )}
-            </>
-          )}
+            ))}
+          </nav>
+          {!p.projects.length && <p className="ds-context-empty">프로젝트를 만들면 여기에 표시돼요.</p>}
         </aside>
       )}
-      <div className="ds-content">{p.children}</div>
+      <div className="ds-content">
+        {p.active === "projects" && selected && (
+          <nav className="ds-project-tabs" aria-label="프로젝트 메뉴">
+            {([
+              ["overview", "개요"],
+              ["requests", "고객 요청"],
+              ["tasks", "업무"],
+              ["meetings", "회의실"],
+              ["documents", "문서"],
+              ["activity", "활동 기록"],
+              ["members", "참여자 · 프로젝트 관리"],
+              ["settings", "설정"],
+            ] as const).map(([key, label]) => (
+              <button key={key} aria-current={p.section === key ? "page" : undefined}
+                onClick={() => act(() => p.onSection(key))}>{label}</button>
+            ))}
+            <button className="ds-project-refresh" onClick={() => window.location.reload()}>새로고침</button>
+          </nav>
+        )}
+        {p.children}
+      </div>
     </div>
   );
 }

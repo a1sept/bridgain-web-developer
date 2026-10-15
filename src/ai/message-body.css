@@ -1,0 +1,30 @@
+.ai-message > .ai-message-body { line-height: 1.65; overflow-wrap: anywhere; white-space: normal; }
+.ai-message-body > :first-child { margin-top: 0; }
+.ai-message-body > :last-child { margin-bottom: 0; }
+.ai-message-body p { margin: 0.65em 0; white-space: pre-wrap; }
+.ai-message-body h1, .ai-message-body h2, .ai-message-body h3 { line-height: 1.35; margin: 1em 0 0.5em; }
+.ai-message-body h1 { font-size: 1.4em; }
+.ai-message-body h2 { font-size: 1.25em; }
+.ai-message-body h3 { font-size: 1.1em; }
+.ai-message-body ul, .ai-message-body ol { padding-left: 1.5em; }
+.ai-message-body li + li { margin-top: 0.25em; }
+.ai-message-body blockquote { margin: 0.75em 0; padding: 0.25em 0.8em; border-left: 3px solid #a6b9e7; color: #556680; }
+.ai-message-body a { color: #365ed5; text-decoration: underline; }
+.ai-message-body code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0.88em; background: #edf1f7; border-radius: 4px; padding: 0.1em 0.3em; }
+.ai-message-body .ai-code-block { margin: 0.8em 0; border: 1px solid #dce4ef; border-radius: 8px; overflow: hidden; background: #f8faff; }
+.ai-message-body .ai-code-toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; padding: 7px 9px; border-bottom: 1px solid #dce4ef; }
+.ai-code-toolbar > span { flex: 1; color: #65738a; font-size: 12px; }
+.ai-message-body .ai-code-toolbar button, .ai-message-body .ai-diagram-controls button { padding: 3px 7px; font-size: 12px; }
+.ai-message-body pre { overflow: auto; margin: 0; padding: 12px; white-space: pre; max-width: 100%; }
+.ai-message-body pre code { padding: 0; border-radius: 0; background: transparent; white-space: pre; }
+.ai-message-body .ai-diagram-notice { padding: 8px 12px; margin: 0; color: #65738a; font-size: 12px; }
+.ai-diagram-controls { display: flex; justify-content: flex-end; gap: 4px; padding: 7px; }
+.ai-diagram-scroll { overflow: auto; max-height: 600px; background: white; padding: 8px; }
+.ai-diagram-svg { min-width: 150px; }
+.ai-diagram-svg svg { display: block; width: 100%; max-width: none !important; height: auto; }
+.ai-markdown-table-scroll { overflow-x: auto; margin: 0.8em 0; }
+.ai-message-body table { border-collapse: collapse; width: 100%; font-size: 13px; }
+.ai-message-body th, .ai-message-body td { border: 1px solid #dce4ef; padding: 7px 9px; text-align: left; min-width: 80px; }
+.ai-message-body th { background: #edf2fa; }
+.ai-message-body hr { border: 0; border-top: 1px solid #dce4ef; margin: 1em 0; }
+.ai-message-body input[type=checkbox] { margin-right: 6px; }

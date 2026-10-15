@@ -56,6 +56,12 @@ async function api<T>(path: string, body?: object): Promise<T> {
       data?.message || "요청을 처리하지 못했어요.",
       response.status,
     );
+  if ((path === "me" || path === "login") && data?.user?.accountType !== "team")
+    throw new ApiError(
+      "APP_MISMATCH",
+      "개발팀 계정으로 로그인해주세요.",
+      403,
+    );
   return data as T;
 }
 function errorText(error: unknown) {
@@ -222,20 +228,6 @@ function Illustration() {
   );
 }
 export default function App() {
-  if (
-    ["/preview", "/preview/projects/new"].includes(window.location.pathname)
-  ) {
-    return (
-      <ProjectWorkspace
-        role="team"
-        displayName="이민수"
-        userId="TEAM-MINSU"
-        onExit={() => {
-          window.location.href = "/";
-        }}
-      />
-    );
-  }
   return <AuthApp />;
 }
 
@@ -263,6 +255,10 @@ function AuthApp() {
         if (active) setUser(data.user);
       })
       .catch((err) => {
+        if (active && err instanceof ApiError && err.code === "APP_MISMATCH") {
+          setUser(null);
+          setError(errorText(err));
+        }
         if (
           active &&
           !(
@@ -359,7 +355,17 @@ function AuthApp() {
         </main>
       </div>
     );
-  if (user)
+  if (user?.accountType === "team" &&
+    ["/preview", "/preview/projects/new"].includes(window.location.pathname))
+    return (
+      <ProjectWorkspace
+        role="team"
+        displayName={user.displayName}
+        userId={user.id}
+        onExit={() => { window.location.href = "/"; }}
+      />
+    );
+  if (user?.accountType === "team")
     return (
       <AiWorkspace key={user.id} userId={user.id}>
         <LiveWorkspace

@@ -1,6 +1,8 @@
 import { projectTool } from "./project-files.mjs";
 import { mkdir, readFile, writeFile, rename, realpath } from "node:fs/promises";
 import { join } from "node:path";
+import { homedir } from "node:os";
+import { syncCodexProjects } from "./codex-project-sync.mjs";
 import {
   createHash,
   randomBytes,
@@ -21,6 +23,7 @@ export class DesktopRuntime {
     api,
     chooseFolder,
     openAuth,
+    openCodex,
     emit,
     executable = process.execPath,
   }) {
@@ -37,6 +40,9 @@ export class DesktopRuntime {
     this.starting = new Set();
     this.codexBindings = new Map();
     this.saveQueue = Promise.resolve();
+    this.openCodexUrl = openCodex;
+    this.projectSyncs = new Map();
+    this.projectSyncStatus = new Map();
   }
   async load() {
     try {
@@ -89,7 +95,10 @@ export class DesktopRuntime {
     if (name === "codex")
       provider = new CodexProvider({
         home,
-        onLogin: () => this.emit({ type: "connections" }),
+        sqliteHome: join(homedir(), ".codex"),
+        onLogin: () => {
+          void this.syncProjects().finally(() => this.emit({ type: "connections" }));
+        },
         onTool: async (localId, name, args) => {
           const run = this.codexBindings.get(localId);
           if (!run) throw Error("연결된 실행을 찾을 수 없습니다.");
@@ -125,6 +134,7 @@ export class DesktopRuntime {
     return {
       providers,
       folders: owner.settings.folders,
+      codexSync: this.projectSyncStatus.get(owner.key),
       running: [...this.runs.values()]
         .filter((r) => r.owner === owner.key)
         .map((r) => r.id),
@@ -168,6 +178,7 @@ export class DesktopRuntime {
     const folder = await realpath(selected);
     owner.settings.folders[pid] = folder;
     await this.save();
+    await this.syncProjects();
     return folder;
   }
   async clearFolder(pid) {
@@ -180,6 +191,51 @@ export class DesktopRuntime {
       throw Error("조사를 중지한 뒤 프로젝트 연결을 해제해주세요.");
     delete owner.settings.folders[identifier(pid)];
     await this.save();
+    await this.syncProjects();
+  }
+  async syncProjects() {
+    let owner;
+    let ownsSync = false;
+    try {
+      owner = await this.owner();
+      if (!owner.settings.enabled.codex) return { synced: 0 };
+      if (this.projectSyncs.has(owner.key)) {
+        await this.projectSyncs.get(owner.key).catch(() => {});
+        await this.assertOwner(owner.key);
+        return this.syncProjects();
+      }
+      const pending = (async () => {
+        const snapshot = await this.api("/api/workspace");
+        const provider = await this.provider(owner, "codex");
+        await this.assertOwner(owner.key);
+        return syncCodexProjects({
+          provider, owner, projects: snapshot.projects || [],
+          assertOwner: () => this.assertOwner(owner.key), save: () => this.save(),
+        });
+      })();
+      this.projectSyncs.set(owner.key, pending);
+      ownsSync = true;
+      const result = await pending;
+      this.projectSyncStatus.set(owner.key, result);
+      return result;
+    } catch (e) {
+      const result = { synced: 0, error: `Codex 프로젝트 연결 실패: ${e.message}` };
+      if (owner) this.projectSyncStatus.set(owner.key, result);
+      return result;
+    } finally {
+      if (owner && ownsSync) this.projectSyncs.delete(owner.key);
+    }
+  }
+  async openCodex(id) {
+    const owner = await this.owner();
+    const binding = owner.settings.localSessions[identifier(id)];
+    if (!binding) throw Error("이 컴퓨터에서 연결한 Codex 대화가 없습니다.");
+    const detail = await this.api(`/api/workspace/projects/${identifier(binding.pid)}/ai/sessions/${id}`);
+    if (detail.session.provider !== "codex" || detail.session.localSessionId !== binding.localId)
+      throw Error("Codex 대화 연결을 확인할 수 없습니다.");
+    await this.assertOwner(owner.key);
+    if (!this.openCodexUrl) throw Error("Codex 앱을 열 수 없습니다.");
+    await this.openCodexUrl(`codex://threads/${identifier(binding.localId)}`);
   }
   async callTool(run, name, args) {
     await this.assertOwner(run.owner);
@@ -318,6 +374,7 @@ export class DesktopRuntime {
     const name = providerName(detail.session.provider);
     if (!owner.settings.enabled[name])
       throw Error("AI 연결 설정에서 먼저 연결해주세요.");
+    const projectSync = name === "codex" ? await this.syncProjects() : null;
     const cwd = owner.settings.folders[pid];
     if (!cwd) throw Error("현재 프로젝트의 로컬 폴더를 연결해주세요.");
     const provider = await this.provider(owner, name);
@@ -333,6 +390,8 @@ export class DesktopRuntime {
       cwd,
       base,
       localId: detail.session.localSessionId,
+      codexProjectId: projectSync && !projectSync.error
+        ? owner.settings.codexProjects?.[pid]?.projectId : undefined,
       text: "",
       cancelled: false,
     };
@@ -371,6 +430,8 @@ export class DesktopRuntime {
       if (run.cancelled) throw Error("조사를 중지했습니다.");
       const result = await run.provider.run({
         localSessionId: detail.session.localSessionId,
+        projectId: run.codexProjectId,
+        title: detail.session.title,
         cwd,
         prompt: researchPrompt(context, message),
         emit,
@@ -381,7 +442,7 @@ export class DesktopRuntime {
           const owner = await this.owner();
           if (owner.key !== run.owner)
             throw Error("로그인 계정이 변경되었습니다.");
-          owner.settings.localSessions[run.id] = { localId, pid: run.pid };
+          owner.settings.localSessions[run.id] = { localId, pid: run.pid, provider: run.providerName };
           await this.save();
           await this.api(
             run.base,

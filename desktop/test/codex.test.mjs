@@ -37,6 +37,8 @@ test("Codex initializes, starts a read-only thread, streams text and completes a
   const bound = new Promise((resolve) => (started = resolve));
   const turn = provider.run({
     cwd: "/project",
+    projectId: "linked-project",
+    title: "프로젝트 조사",
     prompt: "research",
     emit: (e) => events.push(e),
     bind: async () => started(),
@@ -59,6 +61,9 @@ test("Codex initializes, starts a read-only thread, streams text and completes a
   assert.equal(events[0].text, "result");
   const start = writes.find((m) => m.method === "thread/start");
   assert.equal(start.params.sandbox, "read-only");
+  assert.equal(start.params.projectId, "linked-project");
+  assert.deepEqual(writes.find((m) => m.method === "thread/name/set").params,
+    { threadId: "thread", name: "프로젝트 조사" });
   assert.ok(
     start.params.dynamicTools.some(
       (t) => t.name === "save_draft" && t.type === "function",
