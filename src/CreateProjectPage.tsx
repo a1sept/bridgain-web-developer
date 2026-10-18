@@ -1,6 +1,6 @@
 import { useRef, useState, type FormEvent } from "react";
 import "./create-project-page.css";
-import RepositoryFields from "./RepositoryFields";
+import RepositoryFields, { type RepositoryRelation } from "./RepositoryFields";
 export type CreatePerson = {
   id: string;
   displayName: string;
@@ -12,13 +12,17 @@ export type CreateValues = {
   teamId?: string;
   inviteeIds: string[];
   repositoryUrls: string[];
+  repositoryRelations: RepositoryRelation[];
 };
 type Props = {
   teams: { id: string; name: string; permissionRole: string }[];
   user: CreatePerson;
   onBack: () => void;
   onLookup: (id: string) => Promise<CreatePerson>;
-  onSearch?: (query: string, type: "client" | "team") => Promise<CreatePerson[]>;
+  onSearch?: (
+    query: string,
+    type: "client" | "team",
+  ) => Promise<CreatePerson[]>;
   onCreate: (values: CreateValues) => Promise<void>;
   preview?: boolean;
 };
@@ -36,6 +40,9 @@ export default function CreateProjectPage({
   );
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
+  const [repositoryRelations, setRepositoryRelations] = useState<
+    RepositoryRelation[]
+  >([]);
   const [repositoryUrls, setRepositoryUrls] = useState<string[]>([]);
   const [teamId, setTeamId] = useState(available[0]?.id || "");
   const [members, setMembers] = useState<CreatePerson[]>([]);
@@ -45,39 +52,62 @@ export default function CreateProjectPage({
   const [busy, setBusy] = useState(false);
   const [searching, setSearching] = useState<"client" | "team" | null>(null);
   const locked = useRef(false);
-  const [results, setResults] = useState<{client: CreatePerson[]; team: CreatePerson[]}>({client: [], team: []});
-  const [searched, setSearched] = useState({client: false, team: false});
+  const [results, setResults] = useState<{
+    client: CreatePerson[];
+    team: CreatePerson[];
+  }>({ client: [], team: [] });
+  const [searched, setSearched] = useState({ client: false, team: false });
   async function add(type: "client" | "team") {
     if (locked.current) return;
     const query = ids[type].trim();
     if (query.length < 2) {
-      setLookupError(v => ({...v, [type]: "이름·닉네임은 두 글자 이상 입력해주세요."}));
+      setLookupError((v) => ({
+        ...v,
+        [type]: "이름·닉네임은 두 글자 이상 입력해주세요.",
+      }));
       return;
     }
     locked.current = true;
     setSearching(type);
-    setResults(v => ({...v, [type]: []}));
-    setSearched(v => ({...v, [type]: false}));
-    setLookupError(v => ({...v, [type]: ""}));
+    setResults((v) => ({ ...v, [type]: [] }));
+    setSearched((v) => ({ ...v, [type]: false }));
+    setLookupError((v) => ({ ...v, [type]: "" }));
     try {
-      const people = onSearch ? await onSearch(query, type) : [await onLookup(query)];
-      setResults(v => ({...v, [type]: people.filter(p => p.accountType === type && p.id !== user.id)}));
-      setSearched(v => ({...v, [type]: true}));
+      const people = onSearch
+        ? await onSearch(query, type)
+        : [await onLookup(query)];
+      setResults((v) => ({
+        ...v,
+        [type]: people.filter(
+          (p) => p.accountType === type && p.id !== user.id,
+        ),
+      }));
+      setSearched((v) => ({ ...v, [type]: true }));
     } catch (e) {
-      setLookupError(v => ({...v, [type]: e instanceof Error ? e.message : "검색하지 못했어요. 다시 시도해주세요."}));
+      setLookupError((v) => ({
+        ...v,
+        [type]:
+          e instanceof Error
+            ? e.message
+            : "검색하지 못했어요. 다시 시도해주세요.",
+      }));
     } finally {
       locked.current = false;
       setSearching(null);
     }
   }
   function selectPerson(person: CreatePerson) {
-    if (busy || locked.current || members.some(m => m.id === person.id)) return;
+    if (busy || locked.current || members.some((m) => m.id === person.id))
+      return;
     if (members.length >= 20) {
-      setLookupError(v => ({...v, [person.accountType]: "한 번에 최대 20명까지 초대할 수 있어요."}));
+      setLookupError((v) => ({
+        ...v,
+        [person.accountType]: "한 번에 최대 20명까지 초대할 수 있어요.",
+      }));
       return;
     }
-    setMembers(v => [...v, person]);
-    setLookupError(v => ({...v, [person.accountType]: ""}));
+    setMembers((v) => [...v, person]);
+    setLookupError((v) => ({ ...v, [person.accountType]: "" }));
   }
   async function submit(e: FormEvent) {
     e.preventDefault();
@@ -89,7 +119,8 @@ export default function CreateProjectPage({
       await onCreate({
         name: name.trim(),
         description: description.trim(),
-        repositoryUrls: repositoryUrls.map(url => url.trim()).filter(Boolean),
+        repositoryRelations,
+        repositoryUrls: repositoryUrls.map((url) => url.trim()).filter(Boolean),
         ...(teamId ? { teamId } : {}),
         inviteeIds: members.map((m) => m.id),
       });
@@ -176,7 +207,13 @@ export default function CreateProjectPage({
                 ))}
               </select>
               <p className="cp-help">선택한 팀의 프로젝트로 생성돼요.</p>
-              <RepositoryFields value={repositoryUrls} onChange={setRepositoryUrls} disabled={busy} />
+              <RepositoryFields
+                relations={repositoryRelations}
+                onRelationsChange={setRepositoryRelations}
+                value={repositoryUrls}
+                onChange={setRepositoryUrls}
+                disabled={busy}
+              />
             </section>
             <section className="cp-panel" aria-labelledby="cp-people">
               <h2 id="cp-people">함께할 사람</h2>
@@ -201,9 +238,9 @@ export default function CreateProjectPage({
                       maxLength={100}
                       onChange={(e) => {
                         setIds((v) => ({ ...v, [type]: e.target.value }));
-                        setResults(v => ({...v, [type]: []}));
-                        setSearched(v => ({...v, [type]: false}));
-                        setLookupError(v => ({...v, [type]: ""}));
+                        setResults((v) => ({ ...v, [type]: [] }));
+                        setSearched((v) => ({ ...v, [type]: false }));
+                        setLookupError((v) => ({ ...v, [type]: "" }));
                       }}
                       onKeyDown={(e) => {
                         if (e.key === "Enter") {
@@ -215,9 +252,7 @@ export default function CreateProjectPage({
                     <button
                       type="button"
                       aria-label={
-                        type === "client"
-                          ? "의뢰자 검색"
-                          : "개발팀 멤버 검색"
+                        type === "client" ? "의뢰자 검색" : "개발팀 멤버 검색"
                       }
                       disabled={busy || searching !== null || !ids[type].trim()}
                       onClick={() => void add(type)}
@@ -231,17 +266,50 @@ export default function CreateProjectPage({
                     </p>
                   )}
                   {searched[type] && (
-                    <div className="cp-search-results" aria-label={type === "client" ? "의뢰자 검색 결과" : "개발팀 검색 결과"}>
-                      <p role="status">{results[type].length ? `검색 결과 ${results[type].length}명 · 초대할 사람을 선택하세요` : "일치하는 회원이 없어요. 이름이나 ID를 확인해주세요."}</p>
-                      {results[type].map(person => {
-                        const selected = members.some(m => m.id === person.id);
-                        return <button key={person.id} type="button" disabled={busy || selected} onClick={() => selectPerson(person)}>
-                          <span className="cp-result-avatar" aria-hidden="true">{person.displayName.slice(0, 1)}</span>
-                          <span className="cp-result-person"><strong>{person.displayName}</strong><small>ID {person.id}</small></span>
-                          <span>{selected ? "추가됨" : "＋ 추가"}</span>
-                        </button>;
+                    <div
+                      className="cp-search-results"
+                      aria-label={
+                        type === "client"
+                          ? "의뢰자 검색 결과"
+                          : "개발팀 검색 결과"
+                      }
+                    >
+                      <p role="status">
+                        {results[type].length
+                          ? `검색 결과 ${results[type].length}명 · 초대할 사람을 선택하세요`
+                          : "일치하는 회원이 없어요. 이름이나 ID를 확인해주세요."}
+                      </p>
+                      {results[type].map((person) => {
+                        const selected = members.some(
+                          (m) => m.id === person.id,
+                        );
+                        return (
+                          <button
+                            key={person.id}
+                            type="button"
+                            disabled={busy || selected}
+                            onClick={() => selectPerson(person)}
+                          >
+                            <span
+                              className="cp-result-avatar"
+                              aria-hidden="true"
+                            >
+                              {person.displayName.slice(0, 1)}
+                            </span>
+                            <span className="cp-result-person">
+                              <strong>{person.displayName}</strong>
+                              <small>ID {person.id}</small>
+                            </span>
+                            <span>{selected ? "추가됨" : "＋ 추가"}</span>
+                          </button>
+                        );
                       })}
-                      {results[type].length === 20 && <p>최대 20명까지 표시돼요. 이름을 더 입력해 검색 범위를 좁혀주세요.</p>}
+                      {results[type].length === 20 && (
+                        <p>
+                          최대 20명까지 표시돼요. 이름을 더 입력해 검색 범위를
+                          좁혀주세요.
+                        </p>
+                      )}
                     </div>
                   )}
                   <div className="cp-chips">
@@ -271,8 +339,8 @@ export default function CreateProjectPage({
                 </div>
               ))}
               <p className="cp-help cp-invite-note">
-                가입한 사용자의 이름·닉네임 또는 ID로 검색해 추가할 수 있어요. 프로젝트 생성 시 초대가
-                전달되며, 상대방이 수락하면 참여합니다.
+                가입한 사용자의 이름·닉네임 또는 ID로 검색해 추가할 수 있어요.
+                프로젝트 생성 시 초대가 전달되며, 상대방이 수락하면 참여합니다.
               </p>
             </section>
           </div>

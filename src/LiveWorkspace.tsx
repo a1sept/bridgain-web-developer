@@ -1,3 +1,4 @@
+import type { RepositoryRelation } from "./RepositoryFields";
 import ProjectSettings from "./ProjectSettings";
 import ProjectTasks from "./ProjectTasks";
 import ProjectResources from "./ProjectResources";
@@ -39,6 +40,7 @@ type Team = {
 };
 type Project = {
   repositoryUrls?: string[];
+  repositoryRelations?: RepositoryRelation[];
   canManage: boolean;
   id: string;
   teamId: string;
