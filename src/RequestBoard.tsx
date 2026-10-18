@@ -931,7 +931,7 @@ export default function RequestBoard({
                 <p>요청을 모으고 진행 상황을 함께 확인하세요.</p>
               </div>
               <div className="rb-heading-actions">
-                <button onClick={onInfo}>참여자 · 프로젝트 정보</button>
+                <button onClick={onInfo}>참여자 관리</button>
                 {
                   <button
                     className="rb-primary"

@@ -752,12 +752,6 @@ export default function LiveWorkspace({
                       {canManage && (
                         <div className="lw-actions">
                           <button
-                            className="pw-secondary"
-                            onClick={() => openProject(project.id, "settings")}
-                          >
-                            프로젝트 설정
-                          </button>
-                          <button
                             className="pw-primary"
                             onClick={() =>
                               openInvite("projects", project.id, project.name)
@@ -768,13 +762,6 @@ export default function LiveWorkspace({
                         </div>
                       )}
                     </div>
-                    <section className="pw-panel project-repositories">
-                      <h2>GitHub 저장소</h2>
-                      {project.repositoryUrls?.length ? <ul>{project.repositoryUrls.map(url =>
-                        <li key={url}><a href={url} target="_blank" rel="noreferrer">{url.replace("https://github.com/", "")}</a></li>
-                      )}</ul> : <p>등록된 저장소가 없어요. 프로젝트 설정에서 추가할 수 있어요.</p>}
-                      <p>팀 공통 저장소입니다. 개인 작업 폴더는 데스크톱 앱에서 연결하세요.</p>
-                    </section>
                     <div className="pw-detail-grid">
                       <section className="pw-panel">
                         <h2>

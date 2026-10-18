@@ -168,7 +168,7 @@ export default function DeveloperShell(p: Props) {
               ["meetings", "회의실"],
               ["documents", "문서"],
               ["activity", "활동 기록"],
-              ["members", "참여자 · 프로젝트 관리"],
+              ["members", "참여자 관리"],
               ["settings", "설정"],
             ] as const).map(([key, label]) => (
               <button key={key} aria-current={p.section === key ? "page" : undefined}
