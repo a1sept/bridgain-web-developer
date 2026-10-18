@@ -7,7 +7,11 @@ type Member = {
   accountType: string;
   canApproveMerge?: boolean;
 };
-type RequestLink = { id: string; title: string };
+type RequestLink = {
+  id: string;
+  title: string;
+  origin?: "customer" | "development";
+};
 export type ProjectTask = {
   id: string;
   version: string;
@@ -162,8 +166,12 @@ export default function ProjectTasks({
   onChanged,
   userId,
   onDocument,
+  onCreateRequest,
+  onApprovals,
 }: {
   project: { id: string; name: string; members: Member[]; canManage?: boolean };
+  onCreateRequest?: () => void;
+  onApprovals?: () => void;
   userId?: string;
   onDocument?: (documentId: string, versionId: string) => void;
   refreshKey?: number;
@@ -216,6 +224,16 @@ export default function ProjectTasks({
   const [resultError, setResultError] = useState("");
   const savedDraft = useRef("");
   const reviewSnapshot = useRef<string | null>(null);
+  const taskOrigin = (task: ProjectTask) => {
+    const origins = task.requests.map(
+      (link) => requests.find((r) => r.id === link.id)?.origin || link.origin,
+    );
+    return origins.length && origins.every((origin) => origin === "development")
+      ? "개발 요청"
+      : origins.length && origins.every((origin) => origin === "customer")
+        ? "고객 요청"
+        : "요청";
+  };
   const selectedTask = tasks.find((t) => t.id === editing);
   const dirty = JSON.stringify(draft) !== savedDraft.current;
   const isAssignee = selectedTask?.assignees.some((m) => m.userId === userId);
@@ -250,23 +268,6 @@ export default function ProjectTasks({
       active = false;
     };
   }, [base, revision, refreshKey]);
-  useEffect(() => {
-    const key = `${project.id}:${initialRequestId}`;
-    if (
-      !loading &&
-      !loadError &&
-      initialRequestId &&
-      initialized.current !== key
-    ) {
-      initialized.current = key;
-      const source = requests.find((item) => item.id === initialRequestId);
-      if (source) {
-        setDraft({ ...fresh(), title: source.title, requestIds: [source.id] });
-        setEditing(null);
-        setError("");
-      }
-    }
-  }, [loading, loadError, initialRequestId, project.id, requests]);
   useEffect(() => {
     if (editing !== undefined) dialog.current?.showModal();
     else dialog.current?.close();
@@ -415,6 +416,10 @@ export default function ProjectTasks({
         : task.assignees.some((member) => member.userId === assignee)),
   );
   function open(task?: ProjectTask) {
+    if (!task) {
+      onCreateRequest?.();
+      return;
+    }
     setError("");
     const nextDraft = task
       ? {
@@ -462,7 +467,7 @@ export default function ProjectTasks({
   }
   async function save(event: FormEvent) {
     event.preventDefault();
-    if (saveLock.current || !draft.title.trim()) return;
+    if (saveLock.current || !draft.title.trim() || !isAssignee) return;
     saveLock.current = true;
     setSaving(true);
     setError("");
@@ -511,7 +516,7 @@ export default function ProjectTasks({
               className={`pt-origin ${task.requests.length ? "linked" : ""}`}
             >
               {task.requests.length
-                ? `고객 요청 · ${task.requests.length}`
+                ? `${taskOrigin(task)} · ${task.requests.length}`
                 : "내부 업무"}
             </span>
             <span className={`pt-priority ${task.priority}`}>
@@ -558,16 +563,19 @@ export default function ProjectTasks({
         <div>
           <p>PROJECT TASKS</p>
           <h1>업무</h1>
-          <span>고객 요청을 작업으로 연결하고 팀과 함께 진행하세요.</span>
+          <span>승인된 요청의 업무를 팀과 함께 진행하세요.</span>
         </div>
         <button
           className="pt-primary"
-          onClick={() => open()}
+          onClick={onCreateRequest}
           disabled={loading || !!loadError}
         >
-          ＋ 새 업무
+          ＋ 개발 요청
         </button>
       </header>
+      {onApprovals && (
+        <button onClick={onApprovals}>프로젝트 승인함 보기 →</button>
+      )}
       {notice && (
         <p className="pt-notice" role="status">
           {notice}
@@ -668,7 +676,7 @@ export default function ProjectTasks({
                 <span>
                   <small>
                     {task.requests.length
-                      ? `고객 요청 ${task.requests.length}개 연결`
+                      ? `${taskOrigin(task)} ${task.requests.length}개 연결`
                       : "내부 업무"}
                   </small>
                   <strong>{task.title}</strong>
@@ -686,7 +694,8 @@ export default function ProjectTasks({
             ))}
             {!visible.length && (
               <p className="pt-empty">
-                표시할 업무가 없어요. 새 업무를 만들어보세요.
+                표시할 업무가 없어요. 요청을 등록하고 회의 또는 긴급 승인 절차를
+                진행해주세요.
               </p>
             )}
           </div>
@@ -734,18 +743,17 @@ export default function ProjectTasks({
                   최신 업무 다시 불러오기
                 </button>
               )}
-              {initialRequestId && !editing && (
-                <p className="pt-help">
-                  요청을 새 업무로 나눌 수 있어요. 기존 업무에 연결하려면 이
-                  창을 닫고 해당 업무의 ‘연결된 고객 요청’을 선택하세요.
-                </p>
-              )}
+              <p className="pt-help">
+                승인된 범위·담당자는 변경할 수 없어요. 추가 변경은 새 요청으로
+                등록해주세요.
+              </p>
               <label>
                 업무 제목
                 <input
                   autoFocus
                   required
                   maxLength={160}
+                  readOnly={!!editing}
                   value={draft.title}
                   onChange={(event) =>
                     setDraft({ ...draft, title: event.target.value })
@@ -758,6 +766,7 @@ export default function ProjectTasks({
                 <textarea
                   rows={4}
                   maxLength={10000}
+                  readOnly={!!editing}
                   value={draft.description}
                   onChange={(event) =>
                     setDraft({ ...draft, description: event.target.value })
@@ -769,6 +778,7 @@ export default function ProjectTasks({
                 <label>
                   상태
                   <select
+                    disabled={saving || !isAssignee}
                     value={draft.status}
                     onChange={(event) =>
                       setDraft({
@@ -795,6 +805,7 @@ export default function ProjectTasks({
                 <label>
                   우선순위
                   <select
+                    disabled={!!editing || saving}
                     value={draft.priority}
                     onChange={(event) =>
                       setDraft({
@@ -814,6 +825,7 @@ export default function ProjectTasks({
                   기한
                   <input
                     type="date"
+                    readOnly={!!editing}
                     value={draft.dueDate}
                     onChange={(event) =>
                       setDraft({ ...draft, dueDate: event.target.value })
@@ -821,7 +833,7 @@ export default function ProjectTasks({
                   />
                 </label>
               </div>
-              <fieldset disabled={saving}>
+              <fieldset disabled={saving || !isAssignee}>
                 <legend>Git · 개발 진행</legend>
                 <p className="pt-help">
                   작업 브랜치를 저장하면 진행 중으로 전환합니다. 병합·배포는
@@ -859,6 +871,7 @@ export default function ProjectTasks({
                     checked={draft.mergeApprovalRequired}
                     disabled={
                       !project.canManage ||
+                      !isAssignee ||
                       ["done", "released"].includes(selectedTask?.status || "")
                     }
                     onChange={(e) =>
@@ -881,6 +894,7 @@ export default function ProjectTasks({
                         value={draft.mergeReviewerId}
                         disabled={
                           !project.canManage ||
+                          !isAssignee ||
                           ["done", "released"].includes(
                             selectedTask?.status || "",
                           )
@@ -1045,7 +1059,7 @@ export default function ProjectTasks({
                   </section>
                 )}
               </fieldset>
-              <fieldset disabled={saving}>
+              <fieldset disabled={saving || !isAssignee}>
                 <legend>개발 결과 · 승인 시점 내용</legend>
                 {selectedTask?.mergeApprovalRequired &&
                   ["done", "released"].includes(selectedTask.status) && (
@@ -1123,7 +1137,7 @@ export default function ProjectTasks({
                       <fieldset disabled={saving}>
                         <p className="pt-help">
                           완료·배포 상태와 기존 승인을 유지하면서 설명을
-                          추가해요. 실제 코드 변경은 새 업무 또는 재개된
+                          추가해요. 실제 코드 변경은 새 요청을 등록하고 승인받은
                           업무에서 진행하세요.
                         </p>
                         {(
@@ -1201,20 +1215,14 @@ export default function ProjectTasks({
                 </section>
               )}
               <fieldset>
-                <legend>
-                  담당자 <small>여러 명 선택 가능</small>
-                </legend>
+                <legend>승인된 담당자</legend>
                 <div className="pt-options">
                   {members.map((member) => (
                     <label key={member.userId}>
                       <input
                         type="checkbox"
                         checked={draft.assigneeIds.includes(member.userId)}
-                        disabled={
-                          saving ||
-                          (!draft.assigneeIds.includes(member.userId) &&
-                            draft.assigneeIds.length >= 50)
-                        }
+                        disabled={!!editing || saving}
                         onChange={() =>
                           setDraft({
                             ...draft,
@@ -1232,35 +1240,28 @@ export default function ProjectTasks({
                 </div>
               </fieldset>
               <fieldset>
-                <legend>
-                  연결된 고객 요청 <small>선택</small>
-                </legend>
+                <legend>승인된 연결 요청</legend>
                 <div className="pt-options pt-request-options">
-                  {requests.map((item) => (
-                    <label key={item.id}>
-                      <input
-                        type="checkbox"
-                        checked={draft.requestIds.includes(item.id)}
-                        disabled={
-                          saving ||
-                          (!draft.requestIds.includes(item.id) &&
-                            draft.requestIds.length >= 50)
-                        }
-                        onChange={() =>
-                          setDraft({
-                            ...draft,
-                            requestIds: toggle(draft.requestIds, item.id),
-                          })
-                        }
-                      />
-                      <span>{item.title}</span>
-                    </label>
-                  ))}
-                  {!requests.length && (
-                    <p>
-                      등록된 고객 요청이 없어요. 내부 업무로 만들 수 있어요.
-                    </p>
-                  )}
+                  {requests
+                    .filter((item) => draft.requestIds.includes(item.id))
+                    .map((item) => (
+                      <label key={item.id}>
+                        <input
+                          type="checkbox"
+                          checked={draft.requestIds.includes(item.id)}
+                          disabled
+
+                          onChange={() =>
+                            setDraft({
+                              ...draft,
+                              requestIds: toggle(draft.requestIds, item.id),
+                            })
+                          }
+                        />
+                        <span>{item.title}</span>
+                      </label>
+                    ))}
+                  {!requests.length && <p>연결된 요청이 없어요.</p>}
                 </div>
               </fieldset>
               {!!editing && draft.requestIds.length > 0 && (
@@ -1290,7 +1291,7 @@ export default function ProjectTasks({
               <button
                 type="submit"
                 className="pt-primary"
-                disabled={saving || !draft.title.trim()}
+                disabled={saving || !draft.title.trim() || !isAssignee}
               >
                 {saving ? "저장 중…" : editing ? "변경 저장" : "업무 만들기"}
               </button>

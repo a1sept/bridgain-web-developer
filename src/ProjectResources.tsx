@@ -1,3 +1,9 @@
+import {
+  ApproverPicker,
+  workflowApi,
+  type Approver,
+  type Approval,
+} from "./Approvals";
 import { useEffect, useState, useRef, type FormEvent } from "react";
 import "./project-resources.css";
 export type ResourceSection = "meetings" | "documents" | "activity";
@@ -19,7 +25,7 @@ type Meeting = {
   location: string;
   notes: string;
   status: string;
-  decisionStatus: "draft" | "final";
+  decisionStatus: "draft" | "pending" | "final";
   requests: Plan[];
 };
 type Version = {
@@ -51,7 +57,14 @@ type Event = {
   createdAt: string;
 };
 type Task = { id: string; title: string };
-type Request = { id: string; title: string };
+type Request = {
+  id: string;
+  title: string;
+  origin?: string;
+  meetingId?: string | null;
+  meetingTitle?: string;
+  taskId?: string | null;
+};
 type Member = { userId: string; displayName: string; accountType: string };
 const categories: Record<string, string> = {
   plan: "기획 / 요구사항",
@@ -103,8 +116,10 @@ export default function ProjectResources({
   onChanged,
   members = [],
   onTask,
+  onApprovals,
 }: {
   projectId: string;
+  onApprovals?: () => void;
   section: ResourceSection;
   refreshKey?: number;
   onChanged: () => void;
@@ -129,12 +144,16 @@ export default function ProjectResources({
     [duration, setDuration] = useState(60),
     [location, setLocation] = useState(""),
     [status, setStatus] = useState("scheduled"),
-    [decision, setDecision] = useState<"draft" | "final">("draft"),
+    [decision, setDecision] = useState<"draft" | "pending" | "final">("draft"),
     [plans, setPlans] = useState<Plan[]>([]),
     [summary, setSummary] = useState(""),
     [taskId, setTaskId] = useState("");
   const [query, setQuery] = useState(""),
     [filter, setFilter] = useState("");
+  const [approvers, setApprovers] = useState<Approver[]>([]);
+  const [selectedApprovers, setSelectedApprovers] = useState<string[]>([]);
+  const [approvalItems, setApprovalItems] = useState<Approval[]>([]);
+  const [transfers, setTransfers] = useState<Record<string, string>>({});
   const saveLock = useRef(false);
   const base = `/projects/${projectId}`;
   useEffect(() => {
@@ -174,7 +193,20 @@ export default function ProjectResources({
       active = false;
     };
   }, [base, section, reload, refreshKey]);
+  useEffect(() => {
+    if (section !== "meetings") return;
+    workflowApi<{ approvers: Approver[]; approvals: Approval[] }>(
+      `${base}/approvals`,
+    )
+      .then((d) => {
+        setApprovers(d.approvers);
+        setApprovalItems(d.approvals);
+      })
+      .catch((e) => setError(e.message));
+  }, [base, section, reload, refreshKey]);
   function edit(item?: Meeting | Document) {
+    setTransfers({});
+    setSelectedApprovers([]);
     setError("");
     setEditing(item?.id || "new");
     setTitle(item?.title || "");
@@ -230,7 +262,20 @@ export default function ProjectResources({
       const rid = window.sessionStorage.getItem("bridgain-meeting-request");
       if (rid && requests.some((r) => r.id === rid)) {
         window.sessionStorage.removeItem("bridgain-meeting-request");
+        const request = requests.find((r) => r.id === rid)!;
+        if (request.taskId) {
+          setError("이미 업무화된 요청입니다.");
+          return;
+        }
+        if (
+          request.meetingId &&
+          !window.confirm(
+            `이 요청은 '${request.meetingTitle || request.meetingId}' 회의에 연결되어 있습니다. 기존 회의에서 제외하고 새 회의로 이동할까요?`,
+          )
+        )
+          return;
         edit();
+        if (request.meetingId) setTransfers({ [rid]: request.meetingId });
         setPlans([
           {
             requestId: rid,
@@ -245,9 +290,13 @@ export default function ProjectResources({
       }
     }
   }, [loading, section, documents, requests]);
-  const locked =
+  const pendingApproval = approvalItems.find(
+    (a) => a.meetingId === editing && a.status === "pending",
+  );
+  const finalized =
     section === "meetings" &&
     meetings.find((m) => m.id === editing)?.decisionStatus === "final";
+  const locked = finalized || !!pendingApproval;
   async function completeMeeting() {
     if (saveLock.current || !editing) return;
     saveLock.current = true;
@@ -287,7 +336,7 @@ export default function ProjectResources({
     setBusy(true);
     setError("");
     try {
-      await api(
+      const saved = await api<{ meeting?: Meeting }>(
         `${base}/${section}${editing === "new" ? "" : `/${editing}`}`,
         section === "meetings"
           ? {
@@ -297,7 +346,8 @@ export default function ProjectResources({
               location,
               notes: content,
               status,
-              decisionStatus: decision,
+              decisionStatus: "draft",
+              transferFromMeetingIds: transfers,
               requests: plans,
             }
           : {
@@ -310,6 +360,20 @@ export default function ProjectResources({
             },
         editing === "new" ? "POST" : "PATCH",
       );
+      if (section === "meetings" && decision === "pending") {
+        const meetingId = editing === "new" ? saved.meeting?.id : editing;
+        if (!meetingId)
+          throw Error(
+            "회의를 저장했지만 승인 요청 ID를 확인하지 못했어요. 목록에서 회의를 다시 열어주세요.",
+          );
+        setEditing(meetingId);
+        await workflowApi(`${base}/approvals`, {
+          source: "meeting",
+          meetingId,
+          approverIds: selectedApprovers,
+        });
+        window.dispatchEvent(new Event("bridgain:approvals-changed"));
+      }
       setEditing(null);
       setReload((v) => v + 1);
       onChanged();
@@ -335,7 +399,7 @@ export default function ProjectResources({
           <h1>{label}</h1>
           <p>
             {section === "meetings"
-              ? "고객 요청을 논의하고 최종안에서 개발 업무로 할당하세요."
+              ? "고객 요청과 개발 요청을 논의하고, 필수 승인자 전원의 승인 후 업무로 전환하세요."
               : section === "documents"
                 ? "최신 설계와 업무별 변경 이력을 관리하세요."
                 : "프로젝트의 최근 변경 내역이에요."}
@@ -351,6 +415,12 @@ export default function ProjectResources({
           </button>
         )}
       </header>
+      {section === "meetings" && onApprovals && (
+        <button onClick={onApprovals}>
+          프로젝트 승인함 · 대기{" "}
+          {approvalItems.filter((a) => a.status === "pending").length}건 →
+        </button>
+      )}
       {error && (
         <p className="pr-error" role="alert">
           {error}{" "}
@@ -363,7 +433,13 @@ export default function ProjectResources({
         <>
           <form className="pr-editor" onSubmit={save}>
             <h2>{section === "meetings" ? "회의 정보" : "문서 작성"}</h2>
-            {locked && (
+            {pendingApproval && (
+              <p>
+                승인 대기 중입니다. 수정하려면 승인함에서 승인 요청을
+                취소해주세요.
+              </p>
+            )}
+            {finalized && (
               <p>
                 확정된 최종안입니다. 연결된 요청별 업무가 생성되었으며, 변경
                 사항은 후속 회의에서 논의하세요.
@@ -424,33 +500,40 @@ export default function ProjectResources({
                       결정 상태
                       <select
                         value={decision}
-                        onChange={(e) => {
-                          const next = e.target.value as "draft" | "final";
-                          setDecision(next);
-                          if (next === "draft")
-                            setPlans((p) =>
-                              p.map((x) => ({
-                                ...x,
-                                assigneeIds: [],
-                                priority: "normal",
-                              })),
-                            );
-                        }}
+                        onChange={(e) =>
+                          setDecision(e.target.value as "draft" | "pending")
+                        }
                       >
                         <option value="draft">작성 중</option>
-                        <option value="final">
-                          최종안 · 저장 시 업무 생성
-                        </option>
+                        <option value="pending">저장 후 승인 요청</option>
+                        {finalized && <option value="final">승인 완료</option>}
                       </select>
                     </label>
                   </div>
-                  <h3>연결할 고객 요청</h3>
+                  <h3>연결할 요청</h3>
                   {requests.map((r) => (
                     <label key={r.id}>
                       <input
                         type="checkbox"
                         checked={plans.some((p) => p.requestId === r.id)}
-                        onChange={(e) =>
+                        disabled={!!r.taskId}
+                        onChange={(e) => {
+                          if (
+                            e.target.checked &&
+                            r.meetingId &&
+                            r.meetingId !== editing
+                          ) {
+                            if (
+                              !window.confirm(
+                                `이 요청은 '${r.meetingTitle || r.meetingId}' 회의에 연결되어 있습니다. 기존 회의에서 제외하고 이 회의로 이동할까요? 승인 대기 중인 회의에서는 먼저 승인을 취소해야 합니다.`,
+                              )
+                            )
+                              return;
+                            setTransfers((current) => ({
+                              ...current,
+                              [r.id]: r.meetingId!,
+                            }));
+                          }
                           setPlans((p) =>
                             e.target.checked
                               ? [
@@ -466,13 +549,14 @@ export default function ProjectResources({
                                   },
                                 ]
                               : p.filter((x) => x.requestId !== r.id),
-                          )
-                        }
+                          );
+                        }}
                       />
-                      {r.title}
+                      [{r.origin === "development" ? "개발" : "고객"}] {r.title}
+                      {r.taskId && " · 업무화 완료"}
                     </label>
                   ))}
-                  {!requests.length && <p>연결할 고객 요청이 없어요.</p>}
+                  {!requests.length && <p>연결할 요청이 없어요.</p>}
                   {plans.map((p) => (
                     <section className="pr-editor" key={p.requestId}>
                       <h3>
@@ -492,7 +576,7 @@ export default function ProjectResources({
                           <textarea
                             maxLength={10000}
                             required={
-                              key === "planning" && decision === "final"
+                              key === "planning" && decision === "pending"
                             }
                             value={p[key]}
                             onChange={(e) =>
@@ -501,8 +585,8 @@ export default function ProjectResources({
                           />
                         </label>
                       ))}
-                      <fieldset disabled={decision !== "final"}>
-                        <legend>최종안 업무 할당</legend>
+                      <fieldset>
+                        <legend>승인 후 생성할 업무 담당자</legend>
                         <label>
                           우선순위
                           <select
@@ -619,6 +703,13 @@ export default function ProjectResources({
                 />
               </label>
             </fieldset>
+            {section === "meetings" && decision === "pending" && !locked && (
+              <ApproverPicker
+                items={approvers}
+                value={selectedApprovers}
+                onChange={setSelectedApprovers}
+              />
+            )}
             <footer>
               <button
                 type="button"
@@ -627,7 +718,7 @@ export default function ProjectResources({
               >
                 {locked ? "닫기" : "취소"}
               </button>
-              {locked && status !== "completed" && (
+              {finalized && status !== "completed" && (
                 <button
                   type="button"
                   disabled={busy}
@@ -637,11 +728,20 @@ export default function ProjectResources({
                 </button>
               )}
               {!locked && (
-                <button className="pr-primary" disabled={busy || !title.trim()}>
+                <button
+                  className="pr-primary"
+                  disabled={
+                    busy ||
+                    !title.trim() ||
+                    (section === "meetings" &&
+                      decision === "pending" &&
+                      (!selectedApprovers.length || !plans.length))
+                  }
+                >
                   {busy
                     ? "저장 중…"
-                    : section === "meetings" && decision === "final"
-                      ? "최종안 확정 · 업무 생성"
+                    : section === "meetings" && decision === "pending"
+                      ? "저장 후 승인 요청"
                       : "저장하기"}
                 </button>
               )}

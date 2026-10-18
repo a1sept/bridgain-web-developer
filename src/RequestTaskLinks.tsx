@@ -65,7 +65,7 @@ export default function RequestTaskLinks({
                 {
                   (
                     {
-                      todo: "할 일",
+                      todo: "진행 전",
                       in_progress: "진행 중",
                       done: "개발 완료",
                       released: "배포 완료",
@@ -78,15 +78,12 @@ export default function RequestTaskLinks({
         </ul>
       ) : (
         <p className="rb-muted">
-          아직 연결된 업무가 없어요. 요청을 작업 단위로 나누어 배정해보세요.
+          아직 연결된 업무가 없어요. 회의에서 검토한 후 승인을 요청해주세요.
         </p>
       )}
-      <button type="button" onClick={() => onTasks(requestId)}>
-        ＋ 이 요청으로 업무 만들기
-      </button>
-      <button type="button" onClick={() => onTasks()} style={{ marginLeft: 8 }}>
-        기존 업무에서 연결
-      </button>
+      <p className="rb-muted">
+        회의 또는 긴급 승인에서 필수 승인자 전원이 승인하면 업무가 생성됩니다.
+      </p>
     </section>
   );
 }

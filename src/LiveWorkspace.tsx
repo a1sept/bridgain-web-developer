@@ -1,3 +1,4 @@
+import Approvals, { workflowApi, type Approval } from "./Approvals";
 import type { RepositoryRelation } from "./RepositoryFields";
 import ProjectSettings from "./ProjectSettings";
 import ProjectTasks from "./ProjectTasks";
@@ -30,6 +31,7 @@ type Member = {
   positions: string[];
   permissionRole?: string;
   canApproveMerge?: boolean;
+  canApproveTasks?: boolean;
   accessRole?: string;
 };
 type Team = {
@@ -247,7 +249,7 @@ export default function LiveWorkspace({
       setRequestPath(window.location.pathname);
       const saved = window.history.state;
       setView(
-        ["dashboard", "projects", "invitations", "teams"].includes(
+        ["dashboard", "projects", "invitations", "teams", "approvals"].includes(
           saved?.developerView,
         )
           ? saved.developerView
@@ -260,6 +262,7 @@ export default function LiveWorkspace({
         [
           "overview",
           "tasks",
+          "approvals",
           "meetings",
           "documents",
           "activity",
@@ -292,7 +295,7 @@ export default function LiveWorkspace({
   }, [inviteDetail]);
 
   const [view, setView] = useState<DeveloperView>(() =>
-    ["dashboard", "projects", "invitations", "teams"].includes(
+    ["dashboard", "projects", "invitations", "teams", "approvals"].includes(
       window.history.state?.developerView,
     )
       ? window.history.state.developerView
@@ -302,6 +305,7 @@ export default function LiveWorkspace({
     [
       "overview",
       "tasks",
+      "approvals",
       "meetings",
       "documents",
       "activity",
@@ -338,19 +342,37 @@ export default function LiveWorkspace({
   const isTeam = user.accountType === "team";
   const [dashboardRefresh, setDashboardRefresh] = useState(0);
   const desktopBridge = window.bridgainDesktop;
-  const codexProjectSignature = data && isTeam
-    ? JSON.stringify(data.projects.filter(p => p.canManage).map(p => [p.id, p.name]).sort((a, b) => a[0].localeCompare(b[0])))
-    : undefined;
+  const codexProjectSignature =
+    data && isTeam
+      ? JSON.stringify(
+          data.projects
+            .filter((p) => p.canManage)
+            .map((p) => [p.id, p.name])
+            .sort((a, b) => a[0].localeCompare(b[0])),
+        )
+      : undefined;
   useEffect(() => {
-    if (!desktopBridge?.syncProjects || codexProjectSignature === undefined) return;
+    if (!desktopBridge?.syncProjects || codexProjectSignature === undefined)
+      return;
     let active = true;
-    void desktopBridge.syncProjects().catch((error: unknown) => ({
-      synced: 0,
-      error: error instanceof Error ? error.message : "Codex 프로젝트 연결에 실패했어요.",
-    })).then(result => {
-      if (active) window.dispatchEvent(new CustomEvent("bridgain:codex-sync", { detail: result }));
-    });
-    return () => { active = false; };
+    void desktopBridge
+      .syncProjects()
+      .catch((error: unknown) => ({
+        synced: 0,
+        error:
+          error instanceof Error
+            ? error.message
+            : "Codex 프로젝트 연결에 실패했어요.",
+      }))
+      .then((result) => {
+        if (active)
+          window.dispatchEvent(
+            new CustomEvent("bridgain:codex-sync", { detail: result }),
+          );
+      });
+    return () => {
+      active = false;
+    };
   }, [desktopBridge, codexProjectSignature, user.id]);
 
   const reload = useCallback(async () => {
@@ -459,6 +481,40 @@ export default function LiveWorkspace({
     }
   }
   const project = data?.projects.find((p) => p.id === projectId);
+  const [approvalItems, setApprovalItems] = useState<Approval[]>([]);
+  const [approvalPending, setApprovalPending] = useState(0);
+  const [eligibleApproval, setEligibleApproval] = useState(false);
+  useEffect(() => {
+    let live = true;
+    const load = () =>
+      workflowApi<{
+        approvals: Approval[];
+        pendingCount: number;
+        canApproveTasks: boolean;
+      }>("/approvals")
+        .then((d) => {
+          if (live) {
+            setApprovalItems(d.approvals);
+            setApprovalPending(d.pendingCount);
+            setEligibleApproval(d.canApproveTasks);
+          }
+        })
+        .catch(() => {});
+    void load();
+    const timer = window.setInterval(load, 30000);
+    window.addEventListener("bridgain:approvals-changed", load);
+    return () => {
+      live = false;
+      window.clearInterval(timer);
+      window.removeEventListener("bridgain:approvals-changed", load);
+    };
+  }, [dashboardRefresh]);
+  const showApprovals =
+    eligibleApproval ||
+    !!data?.teams.some((t) => ["owner", "admin"].includes(t.permissionRole)) ||
+    !!data?.projects.some((p) =>
+      p.members.some((m) => m.userId === user.id && m.canApproveTasks),
+    );
   const team = data?.teams.find((t) => t.id === project?.teamId);
   const canManage = isTeam && project?.canManage === true;
   const received =
@@ -512,11 +568,14 @@ export default function LiveWorkspace({
   }, [reload]);
   useEffect(() => {
     const openSettings = (event: Event) => {
-      const id = (event as CustomEvent<{ projectId: string }>).detail?.projectId;
-      if (id && data?.projects.some(p => p.id === id)) openProject(id, "settings");
+      const id = (event as CustomEvent<{ projectId: string }>).detail
+        ?.projectId;
+      if (id && data?.projects.some((p) => p.id === id))
+        openProject(id, "settings");
     };
     window.addEventListener("bridgain:project-settings", openSettings);
-    return () => window.removeEventListener("bridgain:project-settings", openSettings);
+    return () =>
+      window.removeEventListener("bridgain:project-settings", openSettings);
   }, [data]);
   const requestProjectId = requestPath.match(
     /^\/projects\/([^/]+)\/requests(?:\/|$)/,
@@ -531,6 +590,8 @@ export default function LiveWorkspace({
         selectedId={selectedId}
         section={requestProjectId ? "requests" : projectSection}
         pending={received.filter((i) => i.status === "pending").length}
+        approvalPending={approvalPending}
+        showApprovals={showApprovals}
         onNavigate={navigate}
         onProject={openProject}
         onSection={(section) => {
@@ -601,28 +662,30 @@ export default function LiveWorkspace({
   return shell(
     <div className="pw-shell lw-shell">
       <div className="pw-body">
-        {!(view === "projects" && project) && <header className="pw-topbar">
-          <div className="project-page-title">
-          <strong>
-            {view === "dashboard"
-              ? "대시보드"
-              : view === "projects"
-                ? project
-                  ? project.name
-                  : "프로젝트"
-                : view === "teams"
-                  ? "팀 관리"
-                  : "받은 초대"}
-          </strong>
-          </div>
-          <button
-            className="pw-secondary"
-            disabled={busy || loading}
-            onClick={() => void run(reload, "최신 목록을 불러왔어요.")}
-          >
-            새로고침
-          </button>
-        </header>}
+        {!(view === "projects" && project) && (
+          <header className="pw-topbar">
+            <div className="project-page-title">
+              <strong>
+                {view === "dashboard"
+                  ? "대시보드"
+                  : view === "projects"
+                    ? project
+                      ? project.name
+                      : "프로젝트"
+                    : view === "teams"
+                      ? "팀 관리"
+                      : "받은 초대"}
+              </strong>
+            </div>
+            <button
+              className="pw-secondary"
+              disabled={busy || loading}
+              onClick={() => void run(reload, "최신 목록을 불러왔어요.")}
+            >
+              새로고침
+            </button>
+          </header>
+        )}
         <main className="pw-main">
           {error && (
             <div className="lw-alert" role="alert">
@@ -653,6 +716,52 @@ export default function LiveWorkspace({
             </section>
           ) : (
             <>
+              {view === "approvals" && (
+                <Approvals
+                  onChanged={() => {
+                    setDashboardRefresh((v) => v + 1);
+                    void reload();
+                  }}
+                />
+              )}
+              {view === "dashboard" &&
+                approvalItems.some(
+                  (a) =>
+                    a.requestedBy === user.id &&
+                    ["approved", "rejected"].includes(a.status),
+                ) && (
+                  <section className="pw-panel">
+                    <h2>내 승인 요청 결과</h2>
+                    {approvalItems
+                      .filter(
+                        (a) =>
+                          a.requestedBy === user.id &&
+                          ["approved", "rejected"].includes(a.status),
+                      )
+                      .slice(0, 5)
+                      .map((a) => (
+                        <p key={a.id}>
+                          <button
+                            onClick={() =>
+                              openProject(a.projectId, "approvals")
+                            }
+                          >
+                            {a.projectName} · {a.title} ·{" "}
+                            {a.status === "approved" ? "승인 완료" : "반려"}
+                          </button>
+                        </p>
+                      ))}
+                  </section>
+                )}
+              {view === "dashboard" && showApprovals && (
+                <section className="pw-panel">
+                  <h2>내 승인 대기</h2>
+                  <p>{approvalPending}건</p>
+                  <button onClick={() => navigate("approvals")}>
+                    승인함 보기 →
+                  </button>
+                </section>
+              )}
               {view === "dashboard" && (
                 <DeveloperDashboard
                   refreshKey={dashboardRefresh}
@@ -684,13 +793,30 @@ export default function LiveWorkspace({
                     onOpenRequest={(rid) => openRequest(project.id, rid)}
                   />
                 )}
-              {view === "projects" && project && projectSection === "settings" && (
-                <ProjectSettings key={project.id} project={project} canManage={canManage}
-                  onSave={async values => {
-                    await request(`/projects/${project.id}`, values, "PATCH");
-                    await reload();
-                  }} />
-              )}
+              {view === "projects" &&
+                project &&
+                projectSection === "settings" && (
+                  <ProjectSettings
+                    key={project.id}
+                    project={project}
+                    canManage={canManage}
+                    onSave={async (values) => {
+                      await request(`/projects/${project.id}`, values, "PATCH");
+                      await reload();
+                    }}
+                  />
+                )}
+              {view === "projects" &&
+                project &&
+                projectSection === "approvals" && (
+                  <Approvals
+                    projectId={project.id}
+                    onChanged={() => {
+                      setDashboardRefresh((v) => v + 1);
+                      void reload();
+                    }}
+                  />
+                )}
               {view === "projects" && project && projectSection === "tasks" && (
                 <ProjectTasks
                   refreshKey={dashboardRefresh}
@@ -704,6 +830,15 @@ export default function LiveWorkspace({
                     );
                     openProject(project.id, "documents");
                   }}
+                  onCreateRequest={() => {
+                    window.history.pushState(
+                      {},
+                      "",
+                      `/projects/${project.id}/requests/new?origin=development`,
+                    );
+                    window.dispatchEvent(new PopStateEvent("popstate"));
+                  }}
+                  onApprovals={() => openProject(project.id, "approvals")}
                   initialRequestId={taskRequestId}
                   onOpenRequest={(rid) => openRequest(project.id, rid)}
                   onChanged={() => setDashboardRefresh((v) => v + 1)}
@@ -719,6 +854,7 @@ export default function LiveWorkspace({
                     key={`${project.id}/${projectSection}`}
                     projectId={project.id}
                     members={project.members}
+                    onApprovals={() => openProject(project.id, "approvals")}
                     onTask={(tid) => {
                       window.sessionStorage.setItem("bridgain-task", tid);
                       openProject(project.id, "tasks");
@@ -795,6 +931,37 @@ export default function LiveWorkspace({
                                   <span className="pw-member-role">
                                     {roles[m.accessRole || "contributor"]}
                                   </span>
+                                  {type === "team" && canManage && (
+                                    <label>
+                                      <input
+                                        type="checkbox"
+                                        checked={
+                                          !!m.canApproveTasks ||
+                                          ["owner", "admin"].includes(
+                                            m.permissionRole || "",
+                                          )
+                                        }
+                                        disabled={
+                                          busy ||
+                                          ["owner", "admin"].includes(
+                                            m.permissionRole || "",
+                                          )
+                                        }
+                                        onChange={(e) => {
+                                          const value = e.target.checked;
+                                          void run(async () => {
+                                            await request(
+                                              `/projects/${project.id}/members/${m.userId}`,
+                                              { canApproveTasks: value },
+                                              "PATCH",
+                                            );
+                                            await reload();
+                                          });
+                                        }}
+                                      />
+                                      업무화 승인 권한
+                                    </label>
+                                  )}
                                 </div>
                               ))}
                             {!project.members.some(
@@ -1028,11 +1195,7 @@ export default function LiveWorkspace({
       <dialog
         className="pw-dialog"
         ref={dialog}
-        aria-label={
-          modal === "invite"
-            ? "참여자 초대"
-            : "프로젝트 만들기"
-        }
+        aria-label={modal === "invite" ? "참여자 초대" : "프로젝트 만들기"}
         onCancel={(e) => {
           if (busy) e.preventDefault();
           else setModal(null);

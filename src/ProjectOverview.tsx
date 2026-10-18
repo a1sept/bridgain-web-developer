@@ -6,6 +6,7 @@ type Request = {
   id: string;
   title: string;
   status: string;
+  workflowStage?: string;
   type: string;
   priority: string;
   createdAt: string;
@@ -52,7 +53,7 @@ const types: Record<string, string> = {
   other: "기타",
 };
 const statuses: Record<string, string> = {
-  todo: "할 일",
+  todo: "진행 전",
   in_progress: "진행 중",
   done: "개발 완료",
   released: "배포 완료",
@@ -107,7 +108,10 @@ export default function ProjectOverview({
       .then(([requests, tasks, meetings]) => {
         if (!controller.signal.aborted)
           setData({
-            requests: requests.requests,
+            requests: requests.requests.map((r) => ({
+              ...r,
+              status: r.workflowStage || r.status,
+            })),
             tasks: tasks.tasks,
             meetings: meetings.meetings,
           });
@@ -176,7 +180,7 @@ export default function ProjectOverview({
           <h1>
             개요 <small>Overview</small>
           </h1>
-          <p>고객 요청부터 개발 업무까지, 프로젝트 현황을 한눈에 확인하세요.</p>
+          <p>요청부터 개발 업무까지, 프로젝트 현황을 한눈에 확인하세요.</p>
         </div>
         <button
           type="button"
@@ -230,9 +234,7 @@ export default function ProjectOverview({
                         >
                           <span>{r.title}</span>
                           <span className={`po-badge ${r.status}`}>
-                            {r.status === "review"
-                              ? "검토 요청"
-                              : "반환 · 수정"}
+                            {r.status === "review" ? "검토" : "검토"}
                           </span>
                         </button>
                       </li>
@@ -244,7 +246,7 @@ export default function ProjectOverview({
               </section>
             </div>
             <section className="po-card">
-              {heading("고객 요청", "requests")}
+              {heading("요청", "requests")}
               {data.requests.length ? (
                 <div className="po-table-wrap">
                   <table>
@@ -287,11 +289,7 @@ export default function ProjectOverview({
                   </table>
                 </div>
               ) : (
-                empty(
-                  "아직 등록된 고객 요청이 없어요.",
-                  "requests",
-                  "고객 요청 보기",
-                )
+                empty("아직 등록된 요청이 없어요.", "requests", "요청 보기")
               )}
             </section>
             <section className="po-card">
@@ -336,7 +334,7 @@ export default function ProjectOverview({
                 </div>
               ) : (
                 empty(
-                  "고객 요청을 업무로 나누거나 내부 업무를 추가해보세요.",
+                  "요청을 등록하고 회의 또는 긴급 승인 절차를 진행해주세요.",
                   "tasks",
                   "업무 관리하기",
                 )

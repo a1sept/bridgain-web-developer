@@ -34,7 +34,7 @@ export const useAi = () => useContext(AiContext);
 const names = { codex: "Codex", claude: "Claude Code" };
 const draftNames = {
   note: "조사 메모",
-  task: "업무 초안",
+  task: "개발 요청 초안",
   meeting: "회의 초안",
   result: "개발 결과",
   document: "문서 변경",
@@ -101,7 +101,8 @@ export default function AiWorkspace({
   const bridge = window.bridgainDesktop;
   const syncStatus = codexSync ?? desktop?.codexSync;
   useEffect(() => {
-    const update = (event: Event) => setCodexSync((event as CustomEvent<CodexSync>).detail);
+    const update = (event: Event) =>
+      setCodexSync((event as CustomEvent<CodexSync>).detail);
     window.addEventListener("bridgain:codex-sync", update);
     return () => window.removeEventListener("bridgain:codex-sync", update);
   }, []);
@@ -118,14 +119,27 @@ export default function AiWorkspace({
   function openFolderSettings(target: Project) {
     setError("");
     setSettings(false);
-    window.dispatchEvent(new CustomEvent("bridgain:project-settings", { detail: { projectId: target.id } }));
+    window.dispatchEvent(
+      new CustomEvent("bridgain:project-settings", {
+        detail: { projectId: target.id },
+      }),
+    );
   }
   useEffect(() => {
     let active = true;
-    if (bridge) void bridge.state().then(value => {
-      if (active) { setDesktop(value); setRunning(value.running); }
-    }).catch(() => {});
-    return () => { active = false; };
+    if (bridge)
+      void bridge
+        .state()
+        .then((value) => {
+          if (active) {
+            setDesktop(value);
+            setRunning(value.running);
+          }
+        })
+        .catch(() => {});
+    return () => {
+      active = false;
+    };
   }, [bridge, userId]);
   useEffect(() => {
     if (settings) {
@@ -162,7 +176,8 @@ export default function AiWorkspace({
   }, [bridge, userId]);
   async function stopSelected() {
     const id = selected?.id;
-    if (!bridge || !id || !running.includes(id) || stopLocks.current.has(id)) return;
+    if (!bridge || !id || !running.includes(id) || stopLocks.current.has(id))
+      return;
     stopLocks.current.add(id);
     setStopping((s) => [...s, id]);
     setError("");
@@ -184,8 +199,20 @@ export default function AiWorkspace({
   useEffect(() => {
     if (panel !== "open" || !selected || !running.includes(selected.id)) return;
     function onKeyDown(event: KeyboardEvent) {
-      if (event.key !== "Escape" || event.isComposing || event.keyCode === 229 || event.defaultPrevented) return;
-      if (settings || document.querySelector('dialog[open], [role="dialog"][aria-modal="true"]')) return;
+      if (
+        event.key !== "Escape" ||
+        event.isComposing ||
+        event.keyCode === 229 ||
+        event.defaultPrevented
+      )
+        return;
+      if (
+        settings ||
+        document.querySelector(
+          'dialog[open], [role="dialog"][aria-modal="true"]',
+        )
+      )
+        return;
       event.preventDefault();
       void stopSelected();
     }
@@ -321,7 +348,10 @@ export default function AiWorkspace({
       throw Error("현재 응답을 기다리거나 중지한 뒤 전송해주세요.");
     const state = await bridge.state();
     if (!state.folders[selected.projectId]) {
-      openFolderSettings({ id: selected.projectId, name: project?.name || "현재 프로젝트" });
+      openFolderSettings({
+        id: selected.projectId,
+        name: project?.name || "현재 프로젝트",
+      });
       return;
     }
     const message = text.trim();
@@ -439,11 +469,18 @@ export default function AiWorkspace({
                 ))}
               </select>
             </label>
-            {bridge?.openCodex && selected?.provider === "codex" && (detail?.session.localSessionId || selected.localSessionId) && (
-              <button disabled={busy} onClick={() => void action(() => bridge.openCodex!(selected.id))}>
-                Codex에서 열기
-              </button>
-            )}
+            {bridge?.openCodex &&
+              selected?.provider === "codex" &&
+              (detail?.session.localSessionId || selected.localSessionId) && (
+                <button
+                  disabled={busy}
+                  onClick={() =>
+                    void action(() => bridge.openCodex!(selected.id))
+                  }
+                >
+                  Codex에서 열기
+                </button>
+              )}
             {!pending && (
               <button
                 disabled={!project || busy || loading}
@@ -524,7 +561,10 @@ export default function AiWorkspace({
             {selected && streams[selected.id] && (
               <article className="ai-message ai-assistant">
                 <strong>{names[selected.provider]}</strong>
-                <AiMessageBody body={streams[selected.id]} streaming={running.includes(selected.id)} />
+                <AiMessageBody
+                  body={streams[selected.id]}
+                  streaming={running.includes(selected.id)}
+                />
               </article>
             )}
             {detail?.drafts.map((d) => (
@@ -552,7 +592,9 @@ export default function AiWorkspace({
                   >
                     {d.kind === "note"
                       ? "메모 확인"
-                      : "내용 확인 · 프로젝트에 반영"}
+                      : d.kind === "task"
+                        ? "개발 요청으로 등록"
+                        : "내용 확인 · 프로젝트에 반영"}
                   </button>
                 )}
               </details>
@@ -585,18 +627,22 @@ export default function AiWorkspace({
                   disabled={stopping.includes(selected.id)}
                   onClick={() => void stopSelected()}
                 >
-                  {stopping.includes(selected.id) ? "중지 중…" : "실행 중지 · Esc"}
+                  {stopping.includes(selected.id)
+                    ? "중지 중…"
+                    : "실행 중지 · Esc"}
                 </button>
               ) : (
                 <button disabled={!selected || !bridge || busy || !text.trim()}>
                   전송
                 </button>
               )}
-              <small>{selected && stopping.includes(selected.id)
-                ? "중지 요청을 보냈어요. 응답이 끝날 때까지 기다려주세요."
-                : selected && running.includes(selected.id)
-                  ? "Esc로 현재 응답을 중지할 수 있어요."
-                  : "패널을 닫아도 대화는 유지됩니다."}</small>
+              <small>
+                {selected && stopping.includes(selected.id)
+                  ? "중지 요청을 보냈어요. 응답이 끝날 때까지 기다려주세요."
+                  : selected && running.includes(selected.id)
+                    ? "Esc로 현재 응답을 중지할 수 있어요."
+                    : "패널을 닫아도 대화는 유지됩니다."}
+              </small>
             </div>
           </form>
         </aside>
@@ -629,14 +675,38 @@ export default function AiWorkspace({
             {bridge.syncProjects && (
               <section>
                 <h3>Codex 프로젝트 연결</h3>
-                <p>프로젝트 이름을 Codex 엔진에 저장하고, 이 컴퓨터에서 만든 Codex 대화를 연결합니다.</p>
-                {syncStatus?.error ? <p className="ai-error" role="status">{syncStatus.error}</p> : syncStatus && <p role="status">Codex 엔진에 프로젝트 {syncStatus.synced}개 저장됨</p>}
-                <p className="ai-notice">실험적 연결입니다. Codex 앱 버전에 따라 사이드바에 자동 표시되지 않을 수 있습니다. 대화는 ‘Codex에서 열기’로 확인하세요.</p>
-                <button disabled={busy} onClick={() => void action(async () => {
-                  const result = await bridge.syncProjects!();
-                  setCodexSync(result);
-                  await refreshDesktop();
-                })}>프로젝트 연결 다시 확인</button>
+                <p>
+                  프로젝트 이름을 Codex 엔진에 저장하고, 이 컴퓨터에서 만든
+                  Codex 대화를 연결합니다.
+                </p>
+                {syncStatus?.error ? (
+                  <p className="ai-error" role="status">
+                    {syncStatus.error}
+                  </p>
+                ) : (
+                  syncStatus && (
+                    <p role="status">
+                      Codex 엔진에 프로젝트 {syncStatus.synced}개 저장됨
+                    </p>
+                  )
+                )}
+                <p className="ai-notice">
+                  실험적 연결입니다. Codex 앱 버전에 따라 사이드바에 자동
+                  표시되지 않을 수 있습니다. 대화는 ‘Codex에서 열기’로
+                  확인하세요.
+                </p>
+                <button
+                  disabled={busy}
+                  onClick={() =>
+                    void action(async () => {
+                      const result = await bridge.syncProjects!();
+                      setCodexSync(result);
+                      await refreshDesktop();
+                    })
+                  }
+                >
+                  프로젝트 연결 다시 확인
+                </button>
               </section>
             )}
             {Object.entries(names).map(([id, name]) => {

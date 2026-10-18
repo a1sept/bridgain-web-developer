@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { useAi } from "./ai/AiWorkspace";
 import "./developer-shell.css";
-export type DeveloperView = "dashboard" | "projects" | "invitations" | "teams";
+export type DeveloperView =
+  "dashboard" | "projects" | "invitations" | "teams" | "approvals";
 export type ProjectSection =
   | "overview"
   | "requests"
@@ -10,7 +11,8 @@ export type ProjectSection =
   | "documents"
   | "activity"
   | "members"
-  | "settings";
+  | "settings"
+  | "approvals";
 type Props = {
   children: ReactNode;
   active: DeveloperView;
@@ -19,6 +21,8 @@ type Props = {
   selectedId?: string;
   section?: ProjectSection;
   pending: number;
+  approvalPending?: number;
+  showApprovals?: boolean;
   onNavigate: (view: DeveloperView) => void;
   onProject: (id: string) => void;
   onSection: (section: ProjectSection) => void;
@@ -29,6 +33,7 @@ const labels = {
   projects: "프로젝트",
   invitations: "받은 초대",
   teams: "팀 관리",
+  approvals: "승인함",
 };
 function Icon({ name }: { name: DeveloperView }) {
   return (
@@ -84,7 +89,10 @@ export default function DeveloperShell(p: Props) {
   const toggleContext = (hidden: boolean) => {
     setContextHidden(hidden);
     try {
-      window.localStorage.setItem("bridgain-context-hidden", hidden ? "1" : "0");
+      window.localStorage.setItem(
+        "bridgain-context-hidden",
+        hidden ? "1" : "0",
+      );
     } catch {}
   };
   const [accountOpen, setAccountOpen] = useState(false);
@@ -92,7 +100,8 @@ export default function DeveloperShell(p: Props) {
   useEffect(() => {
     if (!accountOpen) return;
     const close = (e: MouseEvent) => {
-      if (!accountRef.current?.contains(e.target as Node)) setAccountOpen(false);
+      if (!accountRef.current?.contains(e.target as Node))
+        setAccountOpen(false);
     };
     const esc = (e: KeyboardEvent) => {
       if (e.key === "Escape") setAccountOpen(false);
@@ -140,26 +149,39 @@ export default function DeveloperShell(p: Props) {
           b
         </button>
         <nav aria-label="개발자 전역 메뉴">
-          {(Object.keys(labels) as DeveloperView[]).map((v) => (
-            <button
-              key={v}
-              aria-current={p.active === v ? "page" : undefined}
-              aria-expanded={v === "projects" && p.active === "projects" ? showContext : undefined}
-              onClick={() => {
-                // 데스크톱에서 현재 프로젝트 아이콘을 다시 누르면 VS Code처럼 사이드바를 접고 펼친다.
-                if (v === "projects" && p.active === "projects" && window.matchMedia("(min-width: 761px)").matches) {
-                  toggleContext(!contextHidden);
-                  return;
+          {(Object.keys(labels) as DeveloperView[])
+            .filter((v) => v !== "approvals" || p.showApprovals)
+            .map((v) => (
+              <button
+                key={v}
+                aria-current={p.active === v ? "page" : undefined}
+                aria-expanded={
+                  v === "projects" && p.active === "projects"
+                    ? showContext
+                    : undefined
                 }
-                if (v === "projects" && contextHidden) toggleContext(false);
-                act(() => p.onNavigate(v));
-              }}
-            >
-              <Icon name={v} />
-              <span>{labels[v]}</span>
-              {v === "invitations" && p.pending > 0 && <i>{p.pending}</i>}
-            </button>
-          ))}
+                onClick={() => {
+                  // 데스크톱에서 현재 프로젝트 아이콘을 다시 누르면 VS Code처럼 사이드바를 접고 펼친다.
+                  if (
+                    v === "projects" &&
+                    p.active === "projects" &&
+                    window.matchMedia("(min-width: 761px)").matches
+                  ) {
+                    toggleContext(!contextHidden);
+                    return;
+                  }
+                  if (v === "projects" && contextHidden) toggleContext(false);
+                  act(() => p.onNavigate(v));
+                }}
+              >
+                <Icon name={v} />
+                <span>{labels[v]}</span>
+                {v === "invitations" && p.pending > 0 && <i>{p.pending}</i>}
+                {v === "approvals" && !!p.approvalPending && (
+                  <i>{p.approvalPending}</i>
+                )}
+              </button>
+            ))}
         </nav>
         <div className="ds-account" ref={accountRef}>
           <button
@@ -173,9 +195,30 @@ export default function DeveloperShell(p: Props) {
           {accountOpen && (
             <div className="ds-account-menu">
               <strong title={p.userName}>{p.userName}</strong>
-              <button onClick={() => { setAccountOpen(false); act(ai.openSettings); }}>AI 연결 설정</button>
-              <button onClick={() => { setAccountOpen(false); act(ai.openPanel); }}>AI 채팅 열기</button>
-              <button onClick={() => { setAccountOpen(false); p.onLogout(); }}>로그아웃</button>
+              <button
+                onClick={() => {
+                  setAccountOpen(false);
+                  act(ai.openSettings);
+                }}
+              >
+                AI 연결 설정
+              </button>
+              <button
+                onClick={() => {
+                  setAccountOpen(false);
+                  act(ai.openPanel);
+                }}
+              >
+                AI 채팅 열기
+              </button>
+              <button
+                onClick={() => {
+                  setAccountOpen(false);
+                  p.onLogout();
+                }}
+              >
+                로그아웃
+              </button>
             </div>
           )}
         </div>
@@ -195,33 +238,53 @@ export default function DeveloperShell(p: Props) {
           </button>
           <nav aria-label="프로젝트 바로가기">
             {p.projects.map((project) => (
-              <button key={project.id}
+              <button
+                key={project.id}
                 aria-current={selected?.id === project.id ? "page" : undefined}
-                onClick={() => act(() => p.onProject(project.id))}>
-                <span aria-hidden="true">▱ </span>{project.name}
+                onClick={() => act(() => p.onProject(project.id))}
+              >
+                <span aria-hidden="true">▱ </span>
+                {project.name}
               </button>
             ))}
           </nav>
-          {!p.projects.length && <p className="ds-context-empty">프로젝트를 만들면 여기에 표시돼요.</p>}
+          {!p.projects.length && (
+            <p className="ds-context-empty">
+              프로젝트를 만들면 여기에 표시돼요.
+            </p>
+          )}
         </aside>
       )}
       <div className="ds-content">
         {p.active === "projects" && selected && (
           <nav className="ds-project-tabs" aria-label="프로젝트 메뉴">
-            {([
-              ["overview", "개요"],
-              ["requests", "고객 요청"],
-              ["tasks", "업무"],
-              ["meetings", "회의실"],
-              ["documents", "문서"],
-              ["activity", "활동 기록"],
-              ["members", "참여자 관리"],
-              ["settings", "설정"],
-            ] as const).map(([key, label]) => (
-              <button key={key} aria-current={p.section === key ? "page" : undefined}
-                onClick={() => act(() => p.onSection(key))}>{label}</button>
+            {(
+              [
+                ["overview", "개요"],
+                ["requests", "요청"],
+                ["tasks", "업무"],
+                ["approvals", "승인함"],
+                ["meetings", "회의실"],
+                ["documents", "문서"],
+                ["activity", "활동 기록"],
+                ["members", "참여자 관리"],
+                ["settings", "설정"],
+              ] as const
+            ).map(([key, label]) => (
+              <button
+                key={key}
+                aria-current={p.section === key ? "page" : undefined}
+                onClick={() => act(() => p.onSection(key))}
+              >
+                {label}
+              </button>
             ))}
-            <button className="ds-project-refresh" onClick={() => window.location.reload()}>새로고침</button>
+            <button
+              className="ds-project-refresh"
+              onClick={() => window.location.reload()}
+            >
+              새로고침
+            </button>
           </nav>
         )}
         {p.children}

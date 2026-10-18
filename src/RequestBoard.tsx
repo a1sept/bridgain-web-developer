@@ -1,3 +1,4 @@
+import { UrgentApproval } from "./Approvals";
 import { useAi } from "./ai/AiWorkspace";
 import RequestTaskLinks from "./RequestTaskLinks";
 import RequestConversation from "./RequestConversation";
@@ -12,6 +13,10 @@ type Member = {
 type Project = { id: string; name: string; members: Member[] };
 type RequestItem = {
   id: string;
+  origin?: "customer" | "development";
+  workflowStage?: string;
+  taskId?: string | null;
+  createdBy?: string;
   title: string;
   description: string;
   type: string;
@@ -56,20 +61,11 @@ type Detail = {
 };
 const stages: Record<string, string> = {
   received: "요청 접수",
+  review: "검토",
   in_progress: "개발 진행",
-  review: "검토 요청",
-  revision: "반환 · 수정",
   completed: "완료",
-  released: "배포",
 };
-const transitions: Record<string, string[]> = {
-  received: ["in_progress"],
-  in_progress: ["review"],
-  review: ["completed", "revision"],
-  revision: ["in_progress", "review"],
-  completed: ["released", "revision"],
-  released: ["revision"],
-};
+const stage = (request: RequestItem) => request.workflowStage || request.status;
 const types: Record<string, string> = {
   feature: "기능 추가",
   bug: "버그 수정",
@@ -152,7 +148,15 @@ export default function RequestBoard({
   const suffix = path.slice(base.length).split("/").filter(Boolean);
   const isNew = suffix[0] === "new";
   const requestId = isNew ? undefined : suffix[0];
-  const [list, setList] = useState<RequestItem[]>([]),
+  const [origin, setOrigin] = useState<"customer" | "development">(() =>
+    (isNew && user.accountType === "team") ||
+    new URLSearchParams(window.location.search).get("origin") === "development"
+      ? "development"
+      : "customer",
+  );
+  const [urgent, setUrgent] = useState(false);
+  const [mineOnly, setMineOnly] = useState(false);
+  const [allRequests, setList] = useState<RequestItem[]>([]),
     [detail, setDetail] = useState<Detail | null>(null),
     [loading, setLoading] = useState(true),
     [error, setError] = useState(""),
@@ -167,6 +171,11 @@ export default function RequestBoard({
     [files, setFiles] = useState<File[]>([]);
   const [priorityFilter, setPriorityFilter] = useState("");
   const [assigned, setAssigned] = useState<string[]>([]);
+  const list = allRequests.filter(
+    (r) =>
+      (r.origin || "customer") === origin &&
+      (!mineOnly || r.createdBy === user.id),
+  );
   const lock = useRef(false);
   const [retryFiles, setRetryFiles] = useState<File[]>([]);
   const [retryRequestId, setRetryRequestId] = useState<string | null>(null);
@@ -176,8 +185,13 @@ export default function RequestBoard({
     return () => window.removeEventListener("popstate", pop);
   }, []);
   function go(next: string) {
-    window.history.pushState({}, "", next);
-    setPath(next);
+    const destination = new URL(next, window.location.origin);
+    destination.searchParams.set(
+      "origin",
+      isNew && user.accountType === "team" ? "development" : origin,
+    );
+    window.history.pushState({}, "", destination.pathname + destination.search);
+    setPath(destination.pathname);
     window.dispatchEvent(new PopStateEvent("popstate"));
     setError("");
     setNotice("");
@@ -215,6 +229,7 @@ export default function RequestBoard({
         if (!active || !d) return;
         if ("request" in d) {
           setDetail(d);
+          if (d.request.origin) setOrigin(d.request.origin);
           setAssigned((d.request.assignees || []).map((m) => m.userId));
         } else setList(d.requests);
       })
@@ -272,6 +287,7 @@ export default function RequestBoard({
     e.preventDefault();
     void run(async () => {
       const { request } = await api<{ request: RequestItem }>(base, {
+        origin: user.accountType === "team" ? "development" : "customer",
         title: title.trim(),
         description: description.trim(),
         type,
@@ -314,7 +330,7 @@ export default function RequestBoard({
             (e) =>
               e.status === key || (key === "received" && e.kind === "created"),
           );
-          const current = d.request.status === key;
+          const current = stage(d.request) === key;
           return (
             <li
               key={key}
@@ -379,30 +395,64 @@ export default function RequestBoard({
     <div
       className={`rb-shell ${suffix[1] === "conversation" && detail && !loading ? "rb-chat-open" : ""}`}
     >
-      <header className="rb-header">
-        <div>
-          <button
-            className="rb-back"
-            aria-label="뒤로가기"
-            onClick={() => (requestId || isNew ? go(base) : onBack())}
-          >
-            ←
-          </button>
-          <strong>
-            {isNew
-              ? "새로운 요청 작성"
-              : requestId
-                ? suffix[1] === "timeline"
-                  ? "진행 현황 타임라인"
-                  : "요청 상세"
-                : "프로젝트 요청"}
-          </strong>
-        </div>
-        <a href="/" className="rb-brand">
-          bridgain<span>.</span>
-        </a>
-      </header>
+      {(requestId || isNew) && (
+        <header className="rb-header">
+          <div>
+            <button
+              className="rb-back"
+              aria-label="뒤로가기"
+              onClick={() => (requestId || isNew ? go(base) : onBack())}
+            >
+              ←
+            </button>
+            <strong>
+              {isNew
+                ? user.accountType === "team"
+                  ? "개발 요청 작성"
+                  : "고객 요청 작성"
+                : requestId
+                  ? suffix[1] === "timeline"
+                    ? "진행 현황 타임라인"
+                    : "요청 상세"
+                  : "프로젝트 요청"}
+            </strong>
+          </div>
+          <a href="/" className="rb-brand">
+            bridgain<span>.</span>
+          </a>
+        </header>
+      )}
       <main className="rb-page">
+        {!requestId && !isNew && (
+          <nav className="rb-heading-actions" aria-label="요청 종류">
+            {(["customer", "development"] as const).map((value) => (
+              <button
+                key={value}
+                aria-pressed={origin === value}
+                onClick={() => {
+                  setOrigin(value);
+                  const url = new URL(window.location.href);
+                  url.searchParams.set("origin", value);
+                  window.history.replaceState(
+                    window.history.state,
+                    "",
+                    url.pathname + url.search,
+                  );
+                }}
+              >
+                {value === "customer" ? "고객 요청" : "개발 요청"}
+              </button>
+            ))}
+            <label>
+              <input
+                type="checkbox"
+                checked={mineOnly}
+                onChange={(e) => setMineOnly(e.target.checked)}
+              />
+              내가 작성한 요청
+            </label>
+          </nav>
+        )}
         {error && (
           <div className="rb-alert" role="alert">
             {error}
@@ -439,8 +489,16 @@ export default function RequestBoard({
             <fieldset disabled={busy} className="rb-form-content">
               <div className="rb-heading">
                 <span className="rb-eyebrow">NEW REQUEST</span>
-                <h1>새로운 요청 작성</h1>
-                <p>필요한 내용을 알려주세요. 개발팀과 함께 해결해 나가요.</p>
+                <h1>
+                  {user.accountType === "team"
+                    ? "개발 요청 작성"
+                    : "새로운 요청 작성"}
+                </h1>
+                <p>
+                  {user.accountType === "team"
+                    ? "개선할 내용과 근거를 적고 회의 또는 긴급 승인으로 검토를 요청하세요."
+                    : "필요한 내용을 알려주세요. 개발팀과 함께 해결해 나가요."}
+                </p>
               </div>
               <div className="rb-create-grid">
                 <section className="rb-panel rb-fields">
@@ -591,7 +649,7 @@ export default function RequestBoard({
               <span className="rb-eyebrow">{project.name}</span>
               <div className="rd-status-row">
                 <span className="rb-badge">
-                  {stages[detail.request.status]}
+                  {stages[stage(detail.request)]}
                 </span>
                 <span title={detail.request.id}>
                   요청 ID #{detail.request.id.slice(0, 8).toUpperCase()}
@@ -654,10 +712,25 @@ export default function RequestBoard({
                       AI 조사
                     </button>
                   )}
-                  {onMeetings && requestId && (
+                  {onMeetings && requestId && !detail.request.taskId && (
                     <button type="button" onClick={() => onMeetings(requestId)}>
                       회의에 연결하기
                     </button>
+                  )}
+                  {onMeetings && requestId && !detail.request.taskId && (
+                    <button type="button" onClick={() => setUrgent((v) => !v)}>
+                      긴급 승인 요청
+                    </button>
+                  )}
+                  {urgent && requestId && (
+                    <UrgentApproval
+                      projectId={project.id}
+                      requestId={requestId}
+                      onDone={() => {
+                        setUrgent(false);
+                        void refresh();
+                      }}
+                    />
                   )}
                   {onTasks && project && (
                     <RequestTaskLinks
@@ -802,40 +875,6 @@ export default function RequestBoard({
                         아직 담당자가 배정되지 않았어요.
                       </p>
                     )}
-                    {detail.canManage && !detail.workflow?.tasks.length && (
-                      <label>
-                        진행 단계
-                        <select
-                          aria-label="진행 단계"
-                          disabled={busy}
-                          value={detail.request.status}
-                          onChange={(e) =>
-                            void run(async () => {
-                              await api(
-                                `${base}/${requestId}`,
-                                { status: e.target.value },
-                                "PATCH",
-                              );
-                              await refresh();
-                            })
-                          }
-                        >
-                          {Object.entries(stages)
-                            .filter(
-                              ([key]) =>
-                                key === detail.request.status ||
-                                transitions[detail.request.status]?.includes(
-                                  key,
-                                ),
-                            )
-                            .map(([key, label]) => (
-                              <option key={key} value={key}>
-                                {label}
-                              </option>
-                            ))}
-                        </select>
-                      </label>
-                    )}
                     {detail.canAssign && (
                       <fieldset className="rb-assignees">
                         <legend>담당자 배정</legend>
@@ -932,14 +971,15 @@ export default function RequestBoard({
               </div>
               <div className="rb-heading-actions">
                 <button onClick={onInfo}>참여자 관리</button>
-                {
+                {(user.accountType !== "team" || origin === "development") && (
                   <button
                     className="rb-primary"
                     onClick={() => go(`${base}/new`)}
                   >
-                    ＋ 요청 작성
+                    ＋ {user.accountType === "team" ? "개발 요청" : "고객 요청"}{" "}
+                    작성
                   </button>
-                }
+                )}
               </div>
             </div>
             <div className="rb-stats">
@@ -950,21 +990,13 @@ export default function RequestBoard({
               <div>
                 <span>진행 중</span>
                 <strong>
-                  {
-                    list.filter(
-                      (r) => !["completed", "released"].includes(r.status),
-                    ).length
-                  }
+                  {list.filter((r) => stage(r) !== "completed").length}
                 </strong>
               </div>
               <div>
                 <span>완료 · 배포</span>
                 <strong>
-                  {
-                    list.filter((r) =>
-                      ["completed", "released"].includes(r.status),
-                    ).length
-                  }
+                  {list.filter((r) => stage(r) === "completed").length}
                 </strong>
               </div>
             </div>
@@ -1007,7 +1039,9 @@ export default function RequestBoard({
               <table>
                 <thead>
                   <tr>
-                    <th>고객 요청</th>
+                    <th>
+                      {origin === "development" ? "개발 요청" : "고객 요청"}
+                    </th>
                     <th>우선순위</th>
                     <th>유형</th>
                     <th>요청일</th>
@@ -1020,7 +1054,7 @@ export default function RequestBoard({
                     .filter(
                       (r) =>
                         r.title.toLowerCase().includes(query.toLowerCase()) &&
-                        (!filter || r.status === filter) &&
+                        (!filter || stage(r) === filter) &&
                         (!priorityFilter || r.priority === priorityFilter),
                     )
                     .map((r) => (
@@ -1045,7 +1079,7 @@ export default function RequestBoard({
                           {new Date(r.createdAt).toLocaleDateString("ko-KR")}
                         </td>
                         <td>
-                          <span className="rb-badge">{stages[r.status]}</span>
+                          <span className="rb-badge">{stages[stage(r)]}</span>
                         </td>
                         <td>{r.creatorName}</td>
                       </tr>
@@ -1060,7 +1094,9 @@ export default function RequestBoard({
                 <p>
                   {user.accountType === "client"
                     ? "첫 요청을 작성하고 개발팀과 이야기를 시작해보세요."
-                    : "의뢰자가 요청을 등록하면 여기에 표시돼요."}
+                    : origin === "development"
+                      ? "개선·튜닝 등 필요한 작업을 개발 요청으로 등록해주세요."
+                      : "의뢰자가 요청을 등록하면 여기에 표시돼요."}
                 </p>
               </div>
             )}
@@ -1068,7 +1104,7 @@ export default function RequestBoard({
               !list.some(
                 (r) =>
                   r.title.toLowerCase().includes(query.toLowerCase()) &&
-                  (!filter || r.status === filter) &&
+                  (!filter || stage(r) === filter) &&
                   (!priorityFilter || r.priority === priorityFilter),
               ) && <p className="rb-empty">검색 조건에 맞는 요청이 없어요.</p>}
           </>
