@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, type FormEvent } from "react";
+import StageSettings from "./StageSettings";
 import RepositoryFields, { type RepositoryRelation } from "./RepositoryFields";
 import "./project-settings.css";
 import { useAi } from "./ai/AiWorkspace";
@@ -186,6 +187,7 @@ export default function ProjectSettings({
           </button>
         )}
       </form>
+      <StageSettings projectId={project.id} />
       <section className="pw-panel">
         <h2>내 로컬 작업 폴더</h2>
         <p>현재 프로젝트 · 내 계정 · 이 PC에만 적용됩니다.</p>

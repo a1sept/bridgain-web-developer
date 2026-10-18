@@ -3,6 +3,7 @@ import Approvals, { workflowApi, type Approval } from "./Approvals";
 import type { RepositoryRelation } from "./RepositoryFields";
 import ProjectSettings from "./ProjectSettings";
 import ProjectTasks from "./ProjectTasks";
+import Deployments from "./Deployments";
 import ProjectResources from "./ProjectResources";
 import ProjectOverview from "./ProjectOverview";
 import DeveloperShell, {
@@ -267,6 +268,7 @@ export default function LiveWorkspace({
         [
           "overview",
           "tasks",
+          "deployments",
           "approvals",
           "meetings",
           "documents",
@@ -310,6 +312,7 @@ export default function LiveWorkspace({
     [
       "overview",
       "tasks",
+      "deployments",
       "approvals",
       "meetings",
       "documents",
@@ -516,6 +519,7 @@ export default function LiveWorkspace({
   }, [dashboardRefresh]);
   const showApprovals =
     eligibleApproval ||
+    !!data?.projects.some((p) => p.permissions?.includes("approvals.work")) ||
     !!data?.teams.some((t) => ["owner", "admin"].includes(t.permissionRole)) ||
     !!data?.projects.some((p) =>
       p.members.some((m) => m.userId === user.id && m.canApproveTasks),
@@ -593,7 +597,9 @@ export default function LiveWorkspace({
         userName={user.displayName}
         projects={data?.projects || []}
         selectedId={selectedId}
-        projectPermissions={data?.projects.find(p => p.id === selectedId)?.permissions}
+        projectPermissions={
+          data?.projects.find((p) => p.id === selectedId)?.permissions
+        }
         section={requestProjectId ? "requests" : projectSection}
         pending={received.filter((i) => i.status === "pending").length}
         approvalPending={approvalPending}
@@ -724,6 +730,10 @@ export default function LiveWorkspace({
             <>
               {view === "approvals" && (
                 <Approvals
+                  onTask={(pid, tid) => {
+                    window.sessionStorage.setItem("bridgain-task", tid);
+                    openProject(pid, "tasks");
+                  }}
                   onChanged={() => {
                     setDashboardRefresh((v) => v + 1);
                     void reload();
@@ -805,7 +815,11 @@ export default function LiveWorkspace({
                   <ProjectSettings
                     key={project.id}
                     project={project}
-                    canManage={project.permissions ? project.permissions.includes("project.settings") : canManage}
+                    canManage={
+                      project.permissions
+                        ? project.permissions.includes("project.settings")
+                        : canManage
+                    }
                     onSave={async (values) => {
                       await request(`/projects/${project.id}`, values, "PATCH");
                       await reload();
@@ -817,9 +831,30 @@ export default function LiveWorkspace({
                 projectSection === "approvals" && (
                   <Approvals
                     projectId={project.id}
+                    onTask={(pid, tid) => {
+                      window.sessionStorage.setItem("bridgain-task", tid);
+                      openProject(pid, "tasks");
+                    }}
                     onChanged={() => {
                       setDashboardRefresh((v) => v + 1);
                       void reload();
+                    }}
+                  />
+                )}
+              {view === "projects" &&
+                project &&
+                projectSection === "deployments" && (
+                  <Deployments
+                    projectId={project.id}
+                    canDeploy={!!project.permissions?.includes("deploy.run")}
+                    refreshKey={dashboardRefresh}
+                    onChanged={() => {
+                      setDashboardRefresh((v) => v + 1);
+                      void reload();
+                    }}
+                    onTask={(tid) => {
+                      window.sessionStorage.setItem("bridgain-task", tid);
+                      openProject(project.id, "tasks");
                     }}
                   />
                 )}
@@ -907,12 +942,24 @@ export default function LiveWorkspace({
                       )}
                     </div>
                     <div className="pm-members-layout">
-                      <ProjectMembers key={project.id} projectId={project.id} members={project.members} userId={user.id} onChanged={reload}
-                        invitations={data.invitations.filter(i => i.projectId === project.id && i.direction === "sent")}
-                        canManageInvitations={canManage} invitationBusy={busy}
-                        onCancelInvitation={id => changeInvitation(id, "cancel")} />
+                      <ProjectMembers
+                        key={project.id}
+                        projectId={project.id}
+                        members={project.members}
+                        userId={user.id}
+                        onChanged={reload}
+                        invitations={data.invitations.filter(
+                          (i) =>
+                            i.projectId === project.id &&
+                            i.direction === "sent",
+                        )}
+                        canManageInvitations={canManage}
+                        invitationBusy={busy}
+                        onCancelInvitation={(id) =>
+                          changeInvitation(id, "cancel")
+                        }
+                      />
                     </div>
-
                   </>
                 )}
               {view === "invitations" && (

@@ -1,3 +1,7 @@
+import StagePlanEditor, {
+  type StagePlan,
+  validStages,
+} from "./StagePlanEditor";
 import {
   ApproverPicker,
   workflowApi,
@@ -8,6 +12,7 @@ import { useEffect, useState, useRef, type FormEvent } from "react";
 import "./project-resources.css";
 export type ResourceSection = "meetings" | "documents" | "activity";
 type Plan = {
+  stages?: StagePlan[];
   requestId: string;
   planning: string;
   uiNotes: string;
@@ -155,6 +160,7 @@ export default function ProjectResources({
   const [query, setQuery] = useState(""),
     [filter, setFilter] = useState("");
   const [approvers, setApprovers] = useState<Approver[]>([]);
+  const [workApprovers, setWorkApprovers] = useState<Approver[]>([]);
   const [selectedApprovers, setSelectedApprovers] = useState<string[]>([]);
   const [approvalItems, setApprovalItems] = useState<Approval[]>([]);
   const [transfers, setTransfers] = useState<Record<string, string>>({});
@@ -199,11 +205,14 @@ export default function ProjectResources({
   }, [base, section, reload, refreshKey]);
   useEffect(() => {
     if (section !== "meetings") return;
-    workflowApi<{ approvers: Approver[]; approvals: Approval[] }>(
-      `${base}/approvals`,
-    )
+    workflowApi<{
+      approvers: Approver[];
+      workApprovers?: Approver[];
+      approvals: Approval[];
+    }>(`${base}/approvals`)
       .then((d) => {
         setApprovers(d.approvers);
+        setWorkApprovers(d.workApprovers || []);
         setApprovalItems(d.approvals);
       })
       .catch((e) => setError(e.message));
@@ -339,6 +348,14 @@ export default function ProjectResources({
   async function save(e: FormEvent) {
     e.preventDefault();
     if (saveLock.current || locked) return;
+    if (
+      section === "meetings" &&
+      decision === "pending" &&
+      plans.some((p) => !validStages(p.stages))
+    ) {
+      setError("모든 요청의 단계·담당자·작업 승인자를 지정해주세요.");
+      return;
+    }
     saveLock.current = true;
     setBusy(true);
     setError("");
@@ -355,7 +372,10 @@ export default function ProjectResources({
               status,
               decisionStatus: "draft",
               transferFromMeetingIds: transfers,
-              requests: plans,
+              requests: plans.map((p) => ({
+                ...p,
+                stages: p.stages?.length ? p.stages : undefined,
+              })),
             }
           : {
               title,
@@ -512,7 +532,9 @@ export default function ProjectResources({
                         }
                       >
                         <option value="draft">작성 중</option>
-                        <option value="pending" disabled={!canAssign}>저장 후 승인 요청</option>
+                        <option value="pending" disabled={!canAssign}>
+                          저장 후 승인 요청
+                        </option>
                         {finalized && <option value="final">승인 완료</option>}
                       </select>
                     </label>
@@ -570,30 +592,32 @@ export default function ProjectResources({
                         {requests.find((r) => r.id === p.requestId)?.title ||
                           p.requestId}
                       </h3>
-                      {(
-                        [
-                          ["planning", "기획 · 결정사항"],
-                          ["uiNotes", "화면 UI 구상"],
-                          ["apiNotes", "API · 데이터 처리"],
-                          ["dbNotes", "DB 설계"],
-                        ] as const
-                      ).map(([key, text]) => (
-                        <label key={key}>
-                          {text}
-                          <textarea
-                            maxLength={10000}
-                            required={
-                              key === "planning" && decision === "pending"
-                            }
-                            value={p[key]}
-                            onChange={(e) =>
-                              patchPlan(p.requestId, { [key]: e.target.value })
-                            }
-                          />
-                        </label>
-                      ))}
+                      {[p.planning, p.uiNotes, p.apiNotes, p.dbNotes].some(
+                        (note) => note?.trim(),
+                      ) && (
+                        <details>
+                          <summary>이전 기획 기록</summary>
+                          {(
+                            [
+                              ["planning", "기획 · 결정사항"],
+                              ["uiNotes", "화면 UI 구상"],
+                              ["apiNotes", "API · 데이터 처리"],
+                              ["dbNotes", "DB 설계"],
+                            ] as const
+                          ).map(([key, text]) =>
+                            p[key]?.trim() ? (
+                              <div key={key}>
+                                <strong>{text}</strong>
+                                <p style={{ whiteSpace: "pre-wrap" }}>
+                                  {p[key]}
+                                </p>
+                              </div>
+                            ) : null,
+                          )}
+                        </details>
+                      )}
                       <fieldset>
-                        <legend>승인 후 생성할 업무 담당자</legend>
+                        <legend>요청 우선순위</legend>
                         <label>
                           우선순위
                           <select
@@ -611,27 +635,23 @@ export default function ProjectResources({
                             ))}
                           </select>
                         </label>
-                        {members
-                          .filter((m) => m.accountType === "team")
-                          .map((m) => (
-                            <label key={m.userId}>
-                              <input
-                                type="checkbox"
-                                checked={p.assigneeIds.includes(m.userId)}
-                                onChange={(e) =>
-                                  patchPlan(p.requestId, {
-                                    assigneeIds: e.target.checked
-                                      ? [...p.assigneeIds, m.userId]
-                                      : p.assigneeIds.filter(
-                                          (id) => id !== m.userId,
-                                        ),
-                                  })
-                                }
-                              />
-                              {m.displayName}
-                            </label>
-                          ))}
                       </fieldset>
+                      <StagePlanEditor
+                        projectId={projectId}
+                        value={p.stages || []}
+                        onChange={(stages) =>
+                          patchPlan(p.requestId, {
+                            stages,
+                            assigneeIds: [
+                              ...new Set(stages.flatMap((s) => s.assigneeIds)),
+                            ],
+                          })
+                        }
+                        members={members.filter(
+                          (m) => m.accountType === "team",
+                        )}
+                        reviewers={workApprovers}
+                      />
                       {p.taskId && (
                         <button
                           type="button"
@@ -717,7 +737,12 @@ export default function ProjectResources({
                 onChange={setSelectedApprovers}
               />
             )}
-            {section === "meetings" && !canAssign && <p className="pw-muted">업무 담당자를 확정하여 승인 요청하려면 업무 배정 권한이 필요합니다.</p>}
+            {section === "meetings" && !canAssign && (
+              <p className="pw-muted">
+                업무 담당자를 확정하여 승인 요청하려면 업무 배정 권한이
+                필요합니다.
+              </p>
+            )}
             <footer>
               <button
                 type="button"
@@ -738,12 +763,17 @@ export default function ProjectResources({
               {!locked && (
                 <button
                   className="pr-primary"
-                  disabled={(!canUpdate && editing !== "new") || (!canCreate && editing === "new") ||
+                  disabled={
+                    (!canUpdate && editing !== "new") ||
+                    (!canCreate && editing === "new") ||
                     busy ||
                     !title.trim() ||
                     (section === "meetings" &&
                       decision === "pending" &&
-                      (!canAssign || !selectedApprovers.length || !plans.length))
+                      (!canAssign ||
+                        !selectedApprovers.length ||
+                        !plans.length ||
+                        plans.some((p) => !validStages(p.stages))))
                   }
                 >
                   {busy

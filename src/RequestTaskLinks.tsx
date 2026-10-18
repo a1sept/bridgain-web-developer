@@ -3,6 +3,9 @@ type Task = {
   id: string;
   title: string;
   status: string;
+  stageName?: string;
+  stageOrder?: number;
+  dependencies?: { predecessorId: string; title: string; status: string }[];
   requests: { id: string }[];
 };
 export default function RequestTaskLinks({
@@ -58,23 +61,43 @@ export default function RequestTaskLinks({
         </p>
       ) : tasks.length ? (
         <ul className="rb-linked-tasks">
-          {tasks.map((task) => (
-            <li key={task.id}>
-              <button onClick={() => onTasks()}>{task.title}</button>
-              <span>
-                {
-                  (
-                    {
-                      todo: "진행 전",
-                      in_progress: "진행 중",
-                      done: "개발 완료",
-                      released: "배포 완료",
-                    } as Record<string, string>
-                  )[task.status]
-                }
-              </span>
-            </li>
-          ))}
+          {[...tasks]
+            .sort((a, b) => (a.stageOrder || 0) - (b.stageOrder || 0))
+            .map((task) => (
+              <li key={task.id}>
+                <button
+                  onClick={() => {
+                    window.sessionStorage.setItem("bridgain-task", task.id);
+                    onTasks(requestId);
+                  }}
+                >
+                  {task.stageName &&
+                    `${(task.stageOrder || 0) + 1}. ${task.stageName} · `}
+                  {task.title}
+                </button>
+                {!!task.dependencies?.length && (
+                  <small>
+                    선행: {task.dependencies.map((d) => d.title).join(", ")}
+                  </small>
+                )}
+                <span>
+                  {
+                    (
+                      {
+                        blocked: "선행 업무 대기",
+                        review_pending: "작업 승인 대기",
+                        deploy_pending: "배포 대기",
+                        deploying: "배포 중",
+                        todo: "진행 전",
+                        in_progress: "진행 중",
+                        done: "작업 완료",
+                        released: "배포 완료",
+                      } as Record<string, string>
+                    )[task.status]
+                  }
+                </span>
+              </li>
+            ))}
         </ul>
       ) : (
         <p className="rb-muted">

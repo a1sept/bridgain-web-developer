@@ -8,6 +8,7 @@ export type ProjectSection =
   | "overview"
   | "requests"
   | "tasks"
+  | "deployments"
   | "meetings"
   | "documents"
   | "activity"
@@ -265,6 +266,7 @@ export default function DeveloperShell(p: Props) {
                 ["overview", "개요"],
                 ["requests", "요청"],
                 ["tasks", "업무"],
+                ["deployments", "배포"],
                 ["approvals", "승인함"],
                 ["meetings", "회의실"],
                 ["documents", "문서"],
@@ -272,19 +274,32 @@ export default function DeveloperShell(p: Props) {
                 ["members", "참여자 관리"],
                 ["settings", "설정"],
               ] as const
-            ).filter(([key]) => {
-              if (!p.projectPermissions) return true;
-              const permission: Partial<Record<ProjectSection, string>> = {requests:"requests.read",tasks:"tasks.read",meetings:"meetings.read",documents:"documents.read",activity:"activity.read",settings:"project.settings"};
-              return !permission[key] || p.projectPermissions.includes(permission[key]!);
-            }).map(([key, label]) => (
-              <button
-                key={key}
-                aria-current={p.section === key ? "page" : undefined}
-                onClick={() => act(() => p.onSection(key))}
-              >
-                {label}
-              </button>
-            ))}
+            )
+              .filter(([key]) => {
+                if (!p.projectPermissions) return true;
+                const permission: Partial<Record<ProjectSection, string>> = {
+                  requests: "requests.read",
+                  tasks: "tasks.read",
+                  deployments: "tasks.read",
+                  meetings: "meetings.read",
+                  documents: "documents.read",
+                  activity: "activity.read",
+                  settings: "project.settings",
+                };
+                return (
+                  !permission[key] ||
+                  p.projectPermissions.includes(permission[key]!)
+                );
+              })
+              .map(([key, label]) => (
+                <button
+                  key={key}
+                  aria-current={p.section === key ? "page" : undefined}
+                  onClick={() => act(() => p.onSection(key))}
+                >
+                  {label}
+                </button>
+              ))}
             <button
               className="ds-project-refresh"
               onClick={() => window.location.reload()}

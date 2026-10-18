@@ -1,3 +1,7 @@
+import StagePlanEditor, {
+  type StagePlan,
+  validStages,
+} from "./StagePlanEditor";
 import { useEffect, useState } from "react";
 import "./approvals.css";
 export async function workflowApi<T>(
@@ -19,7 +23,9 @@ export async function workflowApi<T>(
     headers,
     body: body ? JSON.stringify(body) : undefined,
   });
-  const data = await response.json().catch(() => { throw Error("서버에 연결하지 못했어요. 잠시 후 다시 시도해주세요."); });
+  const data = await response.json().catch(() => {
+    throw Error("서버에 연결하지 못했어요. 잠시 후 다시 시도해주세요.");
+  });
   if (!response.ok) throw Error(data.message || "처리하지 못했어요.");
   return data;
 }
@@ -47,6 +53,7 @@ export type Approval = {
     dbNotes?: string;
     priority?: string;
     assigneeIds?: string[];
+    stages?: StagePlan[];
   }[];
 };
 export function ApproverPicker({
@@ -85,12 +92,24 @@ export function ApproverPicker({
     </fieldset>
   );
 }
+type WorkApproval = {
+  id: string;
+  projectId: string;
+  projectName: string;
+  title: string;
+  stageName: string;
+  status: string;
+  workRevision: number;
+  canApprove: boolean;
+};
 export default function Approvals({
   projectId,
   onChanged,
+  onTask,
 }: {
   projectId?: string;
   onChanged?: () => void;
+  onTask?: (projectId: string, taskId: string) => void;
 }) {
   const [names, setNames] = useState<Record<string, string>>({});
   useEffect(() => {
@@ -106,6 +125,7 @@ export default function Approvals({
       )
       .catch(() => {});
   }, []);
+  const [workItems, setWorkItems] = useState<WorkApproval[]>([]);
   const [items, setItems] = useState<Approval[]>([]),
     [error, setError] = useState(""),
     [busy, setBusy] = useState(false),
@@ -116,11 +136,15 @@ export default function Approvals({
     [origin, setOrigin] = useState("");
   useEffect(() => {
     let live = true;
-    workflowApi<{ approvals: Approval[] }>(
+    workflowApi<{ approvals: Approval[]; workApprovals?: WorkApproval[] }>(
       projectId ? `/projects/${projectId}/approvals` : "/approvals",
     )
       .then((data) => {
-        if (live) setItems(data.approvals);
+        if (live) {
+          setItems(data.approvals);
+          setWorkItems(data.workApprovals || []);
+          setError("");
+        }
       })
       .catch((e) => {
         if (live) setError(e.message);
@@ -169,7 +193,8 @@ export default function Approvals({
         <span>WORKFLOW APPROVALS</span>
         <h1>승인함</h1>
         <p>
-          지정된 필수 승인자가 모두 승인하면 요청별로 업무가 하나씩 생성됩니다.
+          업무화 승인은 요청별 단계 업무를 생성합니다. 작업 승인은 담당자가
+          완료한 결과를 검토합니다.
         </p>
       </header>
       {error && (
@@ -177,6 +202,34 @@ export default function Approvals({
           {error}
         </p>
       )}
+      <section className="approval-work-inbox">
+        <h2>
+          내 작업 승인 대기 <small>{workItems.length}건</small>
+        </h2>
+        {workItems.length ? (
+          workItems.map((item) => (
+            <article className="approval-card" key={item.id}>
+              <p className="pw-muted">
+                {item.projectName} · {item.stageName}
+              </p>
+              <h3>{item.title}</h3>
+              <p>
+                담당자 전원이 완료한 작업입니다. 결과를 확인하고 승인 또는
+                재작업을 요청해주세요.
+              </p>
+              <button
+                className="pw-primary"
+                onClick={() => onTask?.(item.projectId, item.id)}
+              >
+                업무 열고 검토
+              </button>
+            </article>
+          ))
+        ) : (
+          <p className="pw-muted">검토할 작업 승인이 없습니다.</p>
+        )}
+      </section>
+      <h2>업무화 승인</h2>
       <div className="approvals-filters">
         <select
           aria-label="승인 상태"
@@ -259,6 +312,28 @@ export default function Approvals({
                     </p>
                   ),
               )}
+              {p.stages?.map((s, i) => (
+                <section className="approval-plan" key={s.id}>
+                  <strong>
+                    {i + 1}. {s.name} · {s.title}
+                  </strong>
+                  <p>{s.brief}</p>
+                  <p>
+                    담당:{" "}
+                    {s.assigneeIds.map((id) => names[id] || id).join(", ")} /
+                    전원 승인:{" "}
+                    {s.reviewerIds.map((id) => names[id] || id).join(", ")}
+                  </p>
+                  <p>
+                    선행:{" "}
+                    {s.dependsOn
+                      .map(
+                        (id) => p.stages?.find((x) => x.id === id)?.name || id,
+                      )
+                      .join(", ") || "없음"}
+                  </p>
+                </section>
+              ))}
               <p>
                 담당자:{" "}
                 {p.assigneeIds?.map((id) => names[id] || id).join(", ") ||
@@ -336,14 +411,19 @@ export function UrgentApproval({
 }) {
   const [approvers, setApprovers] = useState<Approver[]>([]),
     [selected, setSelected] = useState<string[]>([]),
-    [planning, setPlanning] = useState(""),
     [error, setError] = useState(""),
     [busy, setBusy] = useState(false),
-    [members, setMembers] = useState<Approver[]>([]),
-    [assignees, setAssignees] = useState<string[]>([]);
+    [members, setMembers] = useState<Approver[]>([]);
+  const [stages, setStages] = useState<StagePlan[]>([]);
+  const [workApprovers, setWorkApprovers] = useState<Approver[]>([]);
   useEffect(() => {
-    workflowApi<{ approvers: Approver[] }>(`/projects/${projectId}/approvals`)
-      .then((d) => setApprovers(d.approvers))
+    workflowApi<{ approvers: Approver[]; workApprovers?: Approver[] }>(
+      `/projects/${projectId}/approvals`,
+    )
+      .then((d) => {
+        setApprovers(d.approvers);
+        setWorkApprovers(d.workApprovers || []);
+      })
       .catch((e) => setError(e.message));
     workflowApi<{
       projects: {
@@ -364,30 +444,26 @@ export function UrgentApproval({
     <section className="rb-panel urgent-approval">
       <h2>긴급 승인 요청</h2>
       <p>회의만 생략하며 필수 승인자 전원의 승인이 필요합니다.</p>
-      <label>
-        작업 범위
-        <textarea
-          value={planning}
-          onChange={(e) => setPlanning(e.target.value)}
-        />
-      </label>
-      <ApproverPicker
-        label="업무 담당자"
-        items={members}
-        value={assignees}
-        onChange={setAssignees}
-      />
       <ApproverPicker
         items={approvers}
         value={selected}
         onChange={setSelected}
       />
-      {!canAssign && <p role="status">긴급 승인 요청에는 업무 배정 권한이 필요합니다.</p>}
+      <StagePlanEditor
+        projectId={projectId}
+        value={stages}
+        onChange={setStages}
+        members={members}
+        reviewers={workApprovers}
+      />
+      {!canAssign && (
+        <p role="status">긴급 승인 요청에는 업무 배정 권한이 필요합니다.</p>
+      )}
       {error && <p role="alert">{error}</p>}
       <button
         className="pw-primary"
         disabled={
-          !canAssign || busy || !selected.length || !planning.trim() || !assignees.length
+          !canAssign || busy || !selected.length || !validStages(stages)
         }
         onClick={async () => {
           setBusy(true);
@@ -399,9 +475,11 @@ export function UrgentApproval({
               plans: [
                 {
                   requestId,
-                  planning,
                   priority: "urgent",
-                  assigneeIds: assignees,
+                  assigneeIds: [
+                    ...new Set(stages.flatMap((s) => s.assigneeIds)),
+                  ],
+                  stages: stages.length ? stages : undefined,
                 },
               ],
             });

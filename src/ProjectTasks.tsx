@@ -1,3 +1,4 @@
+import WorkReview from "./WorkReview";
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import "./project-tasks.css";
 
@@ -17,10 +18,43 @@ export type ProjectTask = {
   version: string;
   title: string;
   description: string;
-  status: "todo" | "in_progress" | "done" | "released";
+  status:
+    | "blocked"
+    | "todo"
+    | "in_progress"
+    | "review_pending"
+    | "deploy_pending"
+    | "deploying"
+    | "done"
+    | "released";
+  stageKey?: string;
+  stageName?: string;
+  stageOrder?: number;
+  completionMode?: string;
+  workRevision?: number;
+  approvedHeadSha?: string;
+  dependencies?: {
+    taskId?: string;
+    predecessorId?: string;
+    title: string;
+    status: string;
+    completionMode?: string;
+    resultSummary?: string;
+    verification?: string;
+    documentVersions?: {
+      id: string;
+      documentId: string;
+      title: string;
+      url?: string | null;
+    }[];
+  }[];
   priority: "urgent" | "high" | "normal" | "low";
   dueDate: string | null;
-  assignees: { userId: string; displayName: string }[];
+  assignees: {
+    userId: string;
+    displayName: string;
+    completedAt?: string | null;
+  }[];
   requests: RequestLink[];
   repositoryUrl: string | null;
   workBranch: string;
@@ -94,9 +128,13 @@ const reviewActions: Record<string, string> = {
   merged: "병합 완료",
 };
 const statuses = {
+  blocked: "선행 업무 대기",
   todo: "진행 전",
   in_progress: "진행 중",
-  done: "개발 완료",
+  review_pending: "작업 승인 대기",
+  deploy_pending: "배포 대기",
+  deploying: "배포 중",
+  done: "작업 완료",
   released: "배포 완료",
 } as const;
 const priorities = {
@@ -237,6 +275,11 @@ export default function ProjectTasks({
   const selectedTask = tasks.find((t) => t.id === editing);
   const dirty = JSON.stringify(draft) !== savedDraft.current;
   const isAssignee = selectedTask?.assignees.some((m) => m.userId === userId);
+  const canEditProgress =
+    isAssignee &&
+    (!selectedTask?.stageKey ||
+      (["todo", "in_progress"].includes(selectedTask.status) &&
+        !selectedTask.assignees.some((a) => !!a.completedAt)));
   const isReviewer =
     selectedTask?.mergeReviewerId === userId &&
     project.members.some((m) => m.userId === userId && m.canApproveMerge);
@@ -247,7 +290,9 @@ export default function ProjectTasks({
     setLoadError("");
     Promise.all([
       request<{ tasks: ProjectTask[] }>(`${base}/tasks`),
-      request<{ requests: RequestLink[] }>(`${base}/requests`),
+      request<{ requests: RequestLink[] }>(`${base}/requests`).catch(() => ({
+        requests: [],
+      })),
     ])
       .then(([result, links]) => {
         if (active) {
@@ -467,7 +512,7 @@ export default function ProjectTasks({
   }
   async function save(event: FormEvent) {
     event.preventDefault();
-    if (saveLock.current || !editing || !isAssignee) return;
+    if (saveLock.current || !editing || !canEditProgress) return;
     saveLock.current = true;
     setSaving(true);
     setError("");
@@ -480,20 +525,32 @@ export default function ProjectTasks({
           workBranch: draft.workBranch,
           liveBranch: draft.liveBranch,
           pullRequestUrl: draft.pullRequestUrl,
-          mergeCommit: draft.mergeCommit,
-          deploymentUrl: draft.deploymentUrl,
+          ...(!selectedTask?.stageKey
+            ? {
+                mergeCommit: draft.mergeCommit,
+                deploymentUrl: draft.deploymentUrl,
+              }
+            : selectedTask.completionMode === "deploy"
+              ? { deploymentUrl: draft.deploymentUrl }
+              : {}),
           resultSummary: draft.resultSummary,
           dbChanges: draft.dbChanges,
           apiChanges: draft.apiChanges,
           frontendChanges: draft.frontendChanges,
           verification: draft.verification,
-          mergeApprovalRequired: draft.mergeApprovalRequired,
-          mergeReviewerId: draft.mergeReviewerId,
+          ...(!selectedTask?.stageKey
+            ? {
+                mergeApprovalRequired: draft.mergeApprovalRequired,
+                mergeReviewerId: draft.mergeReviewerId,
+              }
+            : {}),
           expectedVersion: taskVersion.current,
         },
         "PATCH",
       );
-      setTasks(current => current.map(task => task.id === editing ? result.task : task));
+      setTasks((current) =>
+        current.map((task) => (task.id === editing ? result.task : task)),
+      );
       setEditing(undefined);
       setNotice("업무를 수정했어요.");
       onChanged?.();
@@ -531,6 +588,11 @@ export default function ProjectTasks({
             </span>
           </span>
           <strong>{task.title}</strong>
+          {task.stageName && (
+            <span className="pt-help">
+              {(task.stageOrder ?? 0) + 1}단계 · {task.stageName}
+            </span>
+          )}
           {task.mergeApprovalRequired && (
             <span className="pt-help">
               병합 검토 · {reviewStatuses[task.reviewStatus]}
@@ -637,6 +699,32 @@ export default function ProjectTasks({
         </label>
         <span>{visible.length}개 업무</span>
       </div>
+      {!loading && (
+        <section className="pt-request-chains" aria-label="요청별 단계 흐름">
+          {requests
+            .filter((r) =>
+              visible.some(
+                (t) =>
+                  t.stageKey && t.requests.some((link) => link.id === r.id),
+              ),
+            )
+            .map((r) => (
+              <details key={r.id}>
+                <summary>{r.title} · 단계별 업무</summary>
+                <div className="sw-flow">
+                  {visible
+                    .filter((t) => t.requests.some((link) => link.id === r.id))
+                    .sort((a, b) => (a.stageOrder || 0) - (b.stageOrder || 0))
+                    .map((t) => (
+                      <button key={t.id} onClick={() => open(t)}>
+                        {t.stageName || t.title} · {statuses[t.status]}
+                      </button>
+                    ))}
+                </div>
+              </details>
+            ))}
+        </section>
+      )}
       {loading ? (
         <p className="pt-empty" role="status">
           업무를 불러오는 중이에요.
@@ -687,6 +775,11 @@ export default function ProjectTasks({
                       : "내부 업무"}
                   </small>
                   <strong>{task.title}</strong>
+                  {task.stageName && (
+                    <span className="pt-help">
+                      {(task.stageOrder ?? 0) + 1}단계 · {task.stageName}
+                    </span>
+                  )}
                 </span>
                 <span className={`pt-status ${task.status}`}>
                   {statuses[task.status]}
@@ -785,7 +878,12 @@ export default function ProjectTasks({
                 <label>
                   상태
                   <select
-                    disabled={saving || !isAssignee}
+                    disabled={
+                      saving ||
+                      !canEditProgress ||
+                      (!!selectedTask?.stageKey &&
+                        !["todo", "in_progress"].includes(selectedTask.status))
+                    }
                     value={draft.status}
                     onChange={(event) =>
                       setDraft({
@@ -799,9 +897,15 @@ export default function ProjectTasks({
                         value={value}
                         key={value}
                         disabled={
-                          draft.mergeApprovalRequired &&
-                          value === "done" &&
-                          selectedTask?.status !== "done"
+                          selectedTask?.stageKey
+                            ? ![
+                                "todo",
+                                "in_progress",
+                                selectedTask.status,
+                              ].includes(value)
+                            : draft.mergeApprovalRequired &&
+                              value === "done" &&
+                              selectedTask?.status !== "done"
                         }
                       >
                         {label}
@@ -840,12 +944,13 @@ export default function ProjectTasks({
                   />
                 </label>
               </div>
-              <fieldset disabled={saving || !isAssignee}>
+              <fieldset disabled={saving || !canEditProgress}>
                 <legend>Git · 개발 진행</legend>
                 <p className="pt-help">
-                  작업 브랜치를 저장하면 진행 중으로 전환합니다. 병합·배포는
-                  실제 결과를 확인한 후 기록하세요. 승인이 필요한 업무는 아래
-                  검토·병합 절차를 이용하세요.
+                  작업 브랜치와 PR 링크를 기록하세요. 단계 업무는 작업 완료와
+                  전원 승인을 거쳐 배포 목록에서 처리합니다. 기존 업무의
+                  병합·배포는 실제 결과를 확인한 후 기록하세요. 승인이 필요한
+                  업무는 아래 검토·병합 절차를 이용하세요.
                 </p>
                 {(
                   [
@@ -863,6 +968,7 @@ export default function ProjectTasks({
                       type={key.endsWith("Url") ? "url" : "text"}
                       maxLength={key.endsWith("Url") ? 2000 : 200}
                       value={draft[key]}
+                      readOnly={!!selectedTask?.stageKey && (key === "mergeCommit" || (key === "deploymentUrl" && selectedTask.completionMode !== "deploy"))}
                       onChange={(e) =>
                         setDraft({ ...draft, [key]: e.target.value })
                       }
@@ -870,203 +976,284 @@ export default function ProjectTasks({
                   </label>
                 ))}
               </fieldset>
-              <fieldset disabled={saving}>
-                <legend>병합 승인</legend>
-                <label>
-                  <input
-                    type="checkbox"
-                    checked={draft.mergeApprovalRequired}
-                    disabled={
-                      !project.canManage ||
-                      !isAssignee ||
-                      ["done", "released"].includes(selectedTask?.status || "")
-                    }
-                    onChange={(e) =>
-                      setDraft({
-                        ...draft,
-                        mergeApprovalRequired: e.target.checked,
-                        mergeReviewerId: e.target.checked
-                          ? draft.mergeReviewerId
-                          : "",
-                      })
-                    }
-                  />
-                  이 업무는 병합 승인이 필요해요
-                </label>
-                {draft.mergeApprovalRequired && (
-                  <>
-                    <label>
-                      병합 승인자
-                      <select
-                        value={draft.mergeReviewerId}
-                        disabled={
-                          !project.canManage ||
-                          !isAssignee ||
-                          ["done", "released"].includes(
-                            selectedTask?.status || "",
-                          )
-                        }
-                        onChange={(e) =>
-                          setDraft({
-                            ...draft,
-                            mergeReviewerId: e.target.value,
-                          })
-                        }
-                      >
-                        <option value="">승인자 선택</option>
-                        {members
-                          .filter(
-                            (m) =>
-                              m.canApproveMerge &&
-                              !draft.assigneeIds.includes(m.userId),
-                          )
-                          .map((m) => (
-                            <option key={m.userId} value={m.userId}>
-                              {m.displayName}
-                            </option>
-                          ))}
-                        {draft.mergeReviewerId &&
-                          !members.some(
-                            (m) =>
-                              m.userId === draft.mergeReviewerId &&
-                              m.canApproveMerge &&
-                              !draft.assigneeIds.includes(m.userId),
-                          ) && (
-                            <option value={draft.mergeReviewerId}>
-                              기존 승인자 · 권한 또는 담당자 설정 확인 필요
-                            </option>
-                          )}
-                      </select>
-                    </label>
-                    <p className="pt-help">
-                      관리자가 팀의 승인 권한을 가진 프로젝트 참여자를 지정해요.
-                      담당자는 자신의 작업을 승인할 수 없어요.
-                    </p>
-                  </>
-                )}
-                {selectedTask?.mergeApprovalRequired && (
-                  <>
-                    <p>
-                      현재 검토:{" "}
-                      <strong>
-                        {reviewStatuses[selectedTask.reviewStatus]}
-                      </strong>
-                    </p>
-                    {selectedTask.reviewHeadSha && (
+              {!selectedTask?.stageKey && (
+                <fieldset disabled={saving}>
+                  <legend>병합 승인</legend>
+                  <label>
+                    <input
+                      type="checkbox"
+                      checked={draft.mergeApprovalRequired}
+                      disabled={
+                        !project.canManage ||
+                        !isAssignee ||
+                        ["done", "released"].includes(
+                          selectedTask?.status || "",
+                        )
+                      }
+                      onChange={(e) =>
+                        setDraft({
+                          ...draft,
+                          mergeApprovalRequired: e.target.checked,
+                          mergeReviewerId: e.target.checked
+                            ? draft.mergeReviewerId
+                            : "",
+                        })
+                      }
+                    />
+                    이 업무는 병합 승인이 필요해요
+                  </label>
+                  {draft.mergeApprovalRequired && (
+                    <>
+                      <label>
+                        병합 승인자
+                        <select
+                          value={draft.mergeReviewerId}
+                          disabled={
+                            !project.canManage ||
+                            !isAssignee ||
+                            ["done", "released"].includes(
+                              selectedTask?.status || "",
+                            )
+                          }
+                          onChange={(e) =>
+                            setDraft({
+                              ...draft,
+                              mergeReviewerId: e.target.value,
+                            })
+                          }
+                        >
+                          <option value="">승인자 선택</option>
+                          {members
+                            .filter(
+                              (m) =>
+                                m.canApproveMerge &&
+                                !draft.assigneeIds.includes(m.userId),
+                            )
+                            .map((m) => (
+                              <option key={m.userId} value={m.userId}>
+                                {m.displayName}
+                              </option>
+                            ))}
+                          {draft.mergeReviewerId &&
+                            !members.some(
+                              (m) =>
+                                m.userId === draft.mergeReviewerId &&
+                                m.canApproveMerge &&
+                                !draft.assigneeIds.includes(m.userId),
+                            ) && (
+                              <option value={draft.mergeReviewerId}>
+                                기존 승인자 · 권한 또는 담당자 설정 확인 필요
+                              </option>
+                            )}
+                        </select>
+                      </label>
                       <p className="pt-help">
-                        검토 커밋: {selectedTask.reviewHeadSha}
+                        관리자가 팀의 승인 권한을 가진 프로젝트 참여자를
+                        지정해요. 담당자는 자신의 작업을 승인할 수 없어요.
                       </p>
-                    )}
-                    <p className="pt-help">
-                      변경 요약·검증 결과·PR 링크를 저장한 뒤 검토를 요청하세요.
-                      승인 이후 코드가 바뀌면 재검토가 필요해요.
-                    </p>
-                    {dirty && (
-                      <p className="pt-help">
-                        수정 내용을 먼저 저장한 뒤 업무를 다시 열어주세요.
-                      </p>
-                    )}
-                    {selectedTask.status === "in_progress" && (
+                    </>
+                  )}
+                  {!selectedTask?.stageKey &&
+                    selectedTask?.mergeApprovalRequired && (
                       <>
-                        <label>
-                          검토 의견 · 수정 요청 시 필수
-                          <textarea
-                            rows={3}
-                            maxLength={5000}
-                            value={reviewNote}
-                            onChange={(e) => setReviewNote(e.target.value)}
-                          />
-                        </label>
-                        <div className="pt-options">
-                          {isAssignee && (
-                            <button
-                              type="button"
-                              disabled={dirty || saving}
-                              onClick={() => void review("request")}
-                            >
-                              검토 요청 / 재요청
-                            </button>
-                          )}
-                          {isReviewer &&
-                            selectedTask.reviewStatus === "pending" && (
-                              <>
+                        <p>
+                          현재 검토:{" "}
+                          <strong>
+                            {reviewStatuses[selectedTask.reviewStatus]}
+                          </strong>
+                        </p>
+                        {selectedTask.reviewHeadSha && (
+                          <p className="pt-help">
+                            검토 커밋: {selectedTask.reviewHeadSha}
+                          </p>
+                        )}
+                        <p className="pt-help">
+                          변경 요약·검증 결과·PR 링크를 저장한 뒤 검토를
+                          요청하세요. 승인 이후 코드가 바뀌면 재검토가 필요해요.
+                        </p>
+                        {dirty && (
+                          <p className="pt-help">
+                            수정 내용을 먼저 저장한 뒤 업무를 다시 열어주세요.
+                          </p>
+                        )}
+                        {selectedTask.status === "in_progress" && (
+                          <>
+                            <label>
+                              검토 의견 · 수정 요청 시 필수
+                              <textarea
+                                rows={3}
+                                maxLength={5000}
+                                value={reviewNote}
+                                onChange={(e) => setReviewNote(e.target.value)}
+                              />
+                            </label>
+                            <div className="pt-options">
+                              {isAssignee && (
                                 <button
                                   type="button"
                                   disabled={dirty || saving}
-                                  onClick={() => void review("approve")}
+                                  onClick={() => void review("request")}
                                 >
-                                  승인
+                                  검토 요청 / 재요청
                                 </button>
-                                <button
-                                  type="button"
-                                  disabled={
-                                    dirty || saving || !reviewNote.trim()
-                                  }
-                                  onClick={() =>
-                                    void review("changes_requested")
-                                  }
-                                >
-                                  수정 요청
-                                </button>
-                              </>
-                            )}
-                          <button
-                            type="button"
-                            disabled={dirty || saving}
-                            onClick={() => void review("refresh")}
-                          >
-                            최신 PR 확인
-                          </button>
-                          {(isAssignee || isReviewer) &&
-                            selectedTask.reviewStatus === "approved" && (
+                              )}
+                              {isReviewer &&
+                                selectedTask.reviewStatus === "pending" && (
+                                  <>
+                                    <button
+                                      type="button"
+                                      disabled={dirty || saving}
+                                      onClick={() => void review("approve")}
+                                    >
+                                      승인
+                                    </button>
+                                    <button
+                                      type="button"
+                                      disabled={
+                                        dirty || saving || !reviewNote.trim()
+                                      }
+                                      onClick={() =>
+                                        void review("changes_requested")
+                                      }
+                                    >
+                                      수정 요청
+                                    </button>
+                                  </>
+                                )}
                               <button
                                 type="button"
                                 disabled={dirty || saving}
-                                onClick={() => void review("merge")}
+                                onClick={() => void review("refresh")}
                               >
-                                승인된 PR 병합
+                                최신 PR 확인
                               </button>
-                            )}
-                        </div>
+                              {(isAssignee || isReviewer) &&
+                                selectedTask.reviewStatus === "approved" && (
+                                  <button
+                                    type="button"
+                                    disabled={dirty || saving}
+                                    onClick={() => void review("merge")}
+                                  >
+                                    승인된 PR 병합
+                                  </button>
+                                )}
+                            </div>
+                          </>
+                        )}
                       </>
                     )}
-                  </>
-                )}
-                {selectedTask &&
-                  !selectedTask.mergeApprovalRequired &&
-                  selectedTask.status === "in_progress" &&
-                  isAssignee && (
-                    <button
-                      type="button"
-                      disabled={dirty || saving}
-                      onClick={() => void review("merge")}
-                    >
-                      PR 병합
-                    </button>
+                  {selectedTask &&
+                    !selectedTask.stageKey &&
+                    !selectedTask.mergeApprovalRequired &&
+                    selectedTask.status === "in_progress" &&
+                    isAssignee && (
+                      <button
+                        type="button"
+                        disabled={dirty || saving}
+                        onClick={() => void review("merge")}
+                      >
+                        PR 병합
+                      </button>
+                    )}
+                  {historyError && <p role="alert">{historyError}</p>}
+                  {history.length > 0 && (
+                    <section aria-label="병합 검토 이력">
+                      <h3>검토 이력</h3>
+                      {history.map((item) => (
+                        <div key={item.id} className="pt-help">
+                          <strong>
+                            {reviewActions[item.action] || item.action} ·{" "}
+                            {item.actorName}
+                          </strong>
+                          <p>
+                            {new Date(item.createdAt).toLocaleString("ko-KR")} ·{" "}
+                            {item.headSha.slice(0, 12)}
+                          </p>
+                          {item.note && (
+                            <p style={{ whiteSpace: "pre-wrap" }}>
+                              {item.note}
+                            </p>
+                          )}
+                        </div>
+                      ))}
+                    </section>
                   )}
-                {historyError && <p role="alert">{historyError}</p>}
-                {history.length > 0 && (
-                  <section aria-label="병합 검토 이력">
-                    <h3>검토 이력</h3>
-                    {history.map((item) => (
-                      <div key={item.id} className="pt-help">
-                        <strong>
-                          {reviewActions[item.action] || item.action} ·{" "}
-                          {item.actorName}
-                        </strong>
-                        <p>
-                          {new Date(item.createdAt).toLocaleString("ko-KR")} ·{" "}
-                          {item.headSha.slice(0, 12)}
+                </fieldset>
+              )}
+              {selectedTask?.dependencies?.length ? (
+                <section className="sw-review" aria-label="선행 단계 결과물">
+                  <h3>선행 단계 결과물</h3>
+                  {selectedTask.dependencies.map((d) => (
+                    <article key={d.predecessorId || d.taskId}>
+                      <h4>
+                        {d.title} ·{" "}
+                        {statuses[d.status as keyof typeof statuses] ||
+                          d.status}
+                      </h4>
+                      {d.resultSummary && (
+                        <p style={{ whiteSpace: "pre-wrap" }}>
+                          {d.resultSummary}
                         </p>
-                        {item.note && (
-                          <p style={{ whiteSpace: "pre-wrap" }}>{item.note}</p>
+                      )}
+                      {d.verification && (
+                        <p
+                          style={{ whiteSpace: "pre-wrap" }}
+                          className="pt-help"
+                        >
+                          검증 결과: {d.verification}
+                        </p>
+                      )}
+                      {d.documentVersions?.map((doc) => (
+                        <button
+                          type="button"
+                          key={doc.id}
+                          onClick={() => onDocument?.(doc.documentId, doc.id)}
+                          disabled={!onDocument}
+                        >
+                          {doc.title} · 확정 문서 버전 열기
+                        </button>
+                      ))}
+                      {!d.resultSummary &&
+                        !d.verification &&
+                        !d.documentVersions?.length && (
+                          <p className="pt-help">등록된 결과물이 없습니다.</p>
                         )}
-                      </div>
+                    </article>
+                  ))}
+                </section>
+              ) : null}
+              {selectedTask?.stageKey && (
+                <>
+                  <div className="sw-flow">
+                    {selectedTask.dependencies?.map((d) => (
+                      <span key={d.predecessorId || d.taskId}>
+                        선행: {d.title} ·{" "}
+                        {statuses[d.status as keyof typeof statuses] ||
+                          d.status}
+                      </span>
                     ))}
-                  </section>
-                )}
-              </fieldset>
-              <fieldset disabled={saving || !isAssignee}>
+                    <span>
+                      현재: {selectedTask.stageName} ·{" "}
+                      {statuses[selectedTask.status]}
+                    </span>
+                  </div>
+                  <WorkReview
+                    workRevision={selectedTask.workRevision}
+                    projectId={project.id}
+                    taskId={selectedTask.id}
+                    status={selectedTask.status}
+                    userId={userId}
+                    assignees={selectedTask.assignees}
+                    disabled={dirty || saving}
+                    onChanged={() => {
+                      setRevision((v) => v + 1);
+                      setEditing(undefined);
+                      onChanged?.();
+                    }}
+                  />
+                </>
+              )}
+              <fieldset disabled={saving || !canEditProgress}>
                 <legend>개발 결과 · 승인 시점 내용</legend>
                 {selectedTask?.mergeApprovalRequired &&
                   ["done", "released"].includes(selectedTask.status) && (
@@ -1298,7 +1485,7 @@ export default function ProjectTasks({
               <button
                 type="submit"
                 className="pt-primary"
-                disabled={saving || !draft.title.trim() || !isAssignee}
+                disabled={saving || !draft.title.trim() || !canEditProgress}
               >
                 {saving ? "저장 중…" : editing ? "변경 저장" : "업무 만들기"}
               </button>
