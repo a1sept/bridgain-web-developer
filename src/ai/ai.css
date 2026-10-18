@@ -217,19 +217,6 @@
   overflow: hidden;
   clip-path: inset(50%);
 }
-.ds-profile-actions {
-  display: grid;
-  gap: 5px;
-}
-.ds-profile-actions button {
-  border: 0;
-  background: transparent;
-  color: #697a96;
-  cursor: pointer;
-  font: inherit;
-  font-size: 11px;
-  padding: 6px 0;
-}
 .ai-investigate {
   padding: 10px 15px;
   background: #eef2ff;

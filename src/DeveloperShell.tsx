@@ -1,6 +1,5 @@
-import { useEffect } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { useAi } from "./ai/AiWorkspace";
-import { useState, type ReactNode } from "react";
 import "./developer-shell.css";
 export type DeveloperView = "dashboard" | "projects" | "invitations" | "teams";
 export type ProjectSection =
@@ -74,6 +73,37 @@ export default function DeveloperShell(p: Props) {
     if (project) ai.setProject(project);
   }, [p.selectedId, p.projects]);
   const [open, setOpen] = useState(false);
+  const [contextHidden, setContextHidden] = useState(() => {
+    try {
+      return window.localStorage.getItem("bridgain-context-hidden") === "1";
+    } catch {
+      return false;
+    }
+  });
+  const showContext = p.active === "projects" && !contextHidden;
+  const toggleContext = (hidden: boolean) => {
+    setContextHidden(hidden);
+    try {
+      window.localStorage.setItem("bridgain-context-hidden", hidden ? "1" : "0");
+    } catch {}
+  };
+  const [accountOpen, setAccountOpen] = useState(false);
+  const accountRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!accountOpen) return;
+    const close = (e: MouseEvent) => {
+      if (!accountRef.current?.contains(e.target as Node)) setAccountOpen(false);
+    };
+    const esc = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setAccountOpen(false);
+    };
+    document.addEventListener("mousedown", close);
+    document.addEventListener("keydown", esc);
+    return () => {
+      document.removeEventListener("mousedown", close);
+      document.removeEventListener("keydown", esc);
+    };
+  }, [accountOpen]);
   const selected = p.projects.find((x) => x.id === p.selectedId);
   const act = (fn: () => void) => {
     fn();
@@ -81,7 +111,7 @@ export default function DeveloperShell(p: Props) {
   };
   return (
     <div
-      className={`ds-shell ${open ? "ds-menu-open" : ""} ${p.active === "projects" ? "ds-with-context" : ""}`}
+      className={`ds-shell ${open ? "ds-menu-open" : ""} ${showContext ? "ds-with-context" : ""}`}
     >
       <header className="ds-mobile-bar">
         <button
@@ -113,9 +143,17 @@ export default function DeveloperShell(p: Props) {
           {(Object.keys(labels) as DeveloperView[]).map((v) => (
             <button
               key={v}
-              title={labels[v]}
               aria-current={p.active === v ? "page" : undefined}
-              onClick={() => act(() => p.onNavigate(v))}
+              aria-expanded={v === "projects" && p.active === "projects" ? showContext : undefined}
+              onClick={() => {
+                // 데스크톱에서 현재 프로젝트 아이콘을 다시 누르면 VS Code처럼 사이드바를 접고 펼친다.
+                if (v === "projects" && p.active === "projects" && window.matchMedia("(min-width: 761px)").matches) {
+                  toggleContext(!contextHidden);
+                  return;
+                }
+                if (v === "projects" && contextHidden) toggleContext(false);
+                act(() => p.onNavigate(v));
+              }}
             >
               <Icon name={v} />
               <span>{labels[v]}</span>
@@ -123,17 +161,26 @@ export default function DeveloperShell(p: Props) {
             </button>
           ))}
         </nav>
-        <div className="ds-account">
-          <span className="ds-avatar">{p.userName.slice(0, 1)}</span>
-          <strong title={p.userName}>{p.userName}</strong>
-          <div className="ds-profile-actions">
-            <button onClick={ai.openSettings}>AI 연결 설정</button>
-            <button onClick={ai.openPanel}>AI 채팅 열기</button>
-            <button onClick={p.onLogout}>로그아웃</button>
-          </div>
+        <div className="ds-account" ref={accountRef}>
+          <button
+            className="ds-account-trigger"
+            aria-label={`${p.userName} 계정 메뉴`}
+            aria-expanded={accountOpen}
+            onClick={() => setAccountOpen(!accountOpen)}
+          >
+            <span className="ds-avatar">{p.userName.slice(0, 1)}</span>
+          </button>
+          {accountOpen && (
+            <div className="ds-account-menu">
+              <strong title={p.userName}>{p.userName}</strong>
+              <button onClick={() => { setAccountOpen(false); act(ai.openSettings); }}>AI 연결 설정</button>
+              <button onClick={() => { setAccountOpen(false); act(ai.openPanel); }}>AI 채팅 열기</button>
+              <button onClick={() => { setAccountOpen(false); p.onLogout(); }}>로그아웃</button>
+            </div>
+          )}
         </div>
       </aside>
-      {p.active === "projects" && (
+      {showContext && (
         <aside className="ds-context">
           <div className="ds-context-heading">
             <small>WORKSPACE</small>
