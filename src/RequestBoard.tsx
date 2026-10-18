@@ -683,7 +683,7 @@ export default function RequestBoard({
                           {
                             (
                               {
-                                todo: "할당 대기",
+                                todo: "진행 전",
                                 in_progress: "진행 중",
                                 done: "개발 완료",
                                 released: "배포 완료",
