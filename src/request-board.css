@@ -727,39 +727,321 @@
 }
 
 /* Request detail: people, summary, and content share the same card style. */
-.rd-status-row { display:flex; align-items:center; justify-content:space-between; gap:16px; margin:18px 0 12px; }
-.rd-status-row > span:last-child { color:#91a1ba; font-size:12px; }
-.rd-section-title { font-size:20px; line-height:1.4; margin:0 0 16px; color:#111c30; }
-.rb-request-detail .rb-panel { border:1px solid #dfe7f1; border-radius:20px; padding:24px; box-shadow:none; margin-bottom:28px; }
-.rd-people { list-style:none; padding:0; margin:0; }
-.rd-people li { display:flex; align-items:center; gap:14px; padding:18px 0; }
-.rd-people li:first-child { padding-top:0; }
-.rd-people li:last-child { padding-bottom:0; }
-.rd-people li + li { border-top:1px solid #e7ecf4; }
-.rd-avatar { display:grid; place-items:center; width:48px; height:48px; flex-shrink:0; border-radius:50%; background:#edf3ff; color:#2964ef; font-size:21px; font-weight:700; }
-.rd-people strong { display:block; font-size:17px; overflow-wrap:anywhere; }
-.rd-people div > span { display:block; color:#708199; font-size:13px; margin-top:5px; }
-.rd-empty { margin:0; color:#8290a5; line-height:1.8; font-size:14px; }
-.rd-summary { margin:0; }
-.rd-summary > div { display:flex; justify-content:space-between; gap:18px; padding:13px 0; font-size:14px; line-height:1.6; }
-.rd-summary > div:first-child { padding-top:0; }
-.rd-summary > div:last-child { padding-bottom:0; }
-.rd-summary > div + div { border-top:1px solid #edf0f6; }
-.rd-summary dt { color:#63738a; flex-shrink:0; }
-.rd-summary dd { margin:0; text-align:right; color:#152036; font-weight:650; overflow-wrap:anywhere; }
-.rd-help { grid-column:1 / -1; display:flex; align-items:flex-start; gap:14px; background:#edf4ff; border-radius:18px; padding:20px 24px; color:#2964ef; }
-.rd-help > span { font-size:23px; }
-.rd-help p { margin:0; font-size:14px; line-height:1.8; }
-.rb-request-detail .rb-description { margin-top:0; color:#43536c; }
-.rd-team-panel > label, .rd-team-panel > fieldset { margin-top:22px; }
-@media(max-width:900px) {
-  .rb-request-detail { display:flex; flex-direction:column; gap:0; }
-  .rb-request-detail > aside { order:-1; }
-  .rb-request-detail .rb-panel { padding:22px 18px; border-radius:18px; }
-  .rd-section-title { font-size:18px; }
-  .rd-help { padding:18px; }
+.rd-status-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin: 18px 0 12px;
+}
+.rd-status-row > span:last-child {
+  color: #91a1ba;
+  font-size: 12px;
+}
+.rd-section-title {
+  font-size: 20px;
+  line-height: 1.4;
+  margin: 0 0 16px;
+  color: #111c30;
+}
+.rb-request-detail .rb-panel {
+  border: 1px solid #dfe7f1;
+  border-radius: 20px;
+  padding: 24px;
+  box-shadow: none;
+  margin-bottom: 28px;
+}
+.rd-people {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+.rd-people li {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 18px 0;
+}
+.rd-people li:first-child {
+  padding-top: 0;
+}
+.rd-people li:last-child {
+  padding-bottom: 0;
+}
+.rd-people li + li {
+  border-top: 1px solid #e7ecf4;
+}
+.rd-avatar {
+  display: grid;
+  place-items: center;
+  width: 48px;
+  height: 48px;
+  flex-shrink: 0;
+  border-radius: 50%;
+  background: #edf3ff;
+  color: #2964ef;
+  font-size: 21px;
+  font-weight: 700;
+}
+.rd-people strong {
+  display: block;
+  font-size: 17px;
+  overflow-wrap: anywhere;
+}
+.rd-people div > span {
+  display: block;
+  color: #708199;
+  font-size: 13px;
+  margin-top: 5px;
+}
+.rd-empty {
+  margin: 0;
+  color: #8290a5;
+  line-height: 1.8;
+  font-size: 14px;
+}
+.rd-summary {
+  margin: 0;
+}
+.rd-summary > div {
+  display: flex;
+  justify-content: space-between;
+  gap: 18px;
+  padding: 13px 0;
+  font-size: 14px;
+  line-height: 1.6;
+}
+.rd-summary > div:first-child {
+  padding-top: 0;
+}
+.rd-summary > div:last-child {
+  padding-bottom: 0;
+}
+.rd-summary > div + div {
+  border-top: 1px solid #edf0f6;
+}
+.rd-summary dt {
+  color: #63738a;
+  flex-shrink: 0;
+}
+.rd-summary dd {
+  margin: 0;
+  text-align: right;
+  color: #152036;
+  font-weight: 650;
+  overflow-wrap: anywhere;
+}
+.rd-help {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+  background: #edf4ff;
+  border-radius: 18px;
+  padding: 20px 24px;
+  color: #2964ef;
+}
+.rd-help > span {
+  font-size: 23px;
+}
+.rd-help p {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.8;
+}
+.rb-request-detail .rb-description {
+  margin-top: 0;
+  color: #43536c;
+}
+.rd-team-panel > label,
+.rd-team-panel > fieldset {
+  margin-top: 22px;
+}
+@media (max-width: 900px) {
+  .rb-request-detail {
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+  }
+  .rb-request-detail > aside {
+    order: -1;
+  }
+  .rb-request-detail .rb-panel {
+    padding: 22px 18px;
+    border-radius: 18px;
+  }
+  .rd-section-title {
+    font-size: 18px;
+  }
+  .rd-help {
+    padding: 18px;
+  }
 }
 
-.rb-linked-tasks{padding:0;list-style:none;margin:16px 0}.rb-linked-tasks li{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:12px 0;border-bottom:1px solid #edf0f6}.rb-linked-tasks li button{text-align:left;overflow-wrap:anywhere}.rb-linked-tasks li span{font-size:12px;white-space:nowrap;color:#708099}
+.rb-linked-tasks {
+  padding: 0;
+  list-style: none;
+  margin: 16px 0;
+}
+.rb-linked-tasks li {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 0;
+  border-bottom: 1px solid #edf0f6;
+}
+.rb-linked-tasks li button {
+  text-align: left;
+  overflow-wrap: anywhere;
+}
+.rb-linked-tasks li span {
+  font-size: 12px;
+  white-space: nowrap;
+  color: #708099;
+}
 
-.rb-developer-table{overflow-x:auto;background:white;border:1px solid #e0e7f0;border-radius:14px;margin-top:16px}.rb-developer-table table{width:100%;min-width:750px;border-collapse:collapse;font-size:13px}.rb-developer-table th{text-align:left;background:#f6f8fc;color:#8493a9;font-size:11px;font-weight:600;padding:15px}.rb-developer-table td{padding:18px 15px;border-top:1px solid #edf0f6;white-space:nowrap}.rb-developer-table td:first-child{width:45%;white-space:normal}.rb-shell .rb-developer-table button{border:0;padding:0;background:transparent;text-align:left;color:#23354f;overflow-wrap:anywhere}.rb-developer-table p{color:#94a1b5;font-size:11px;margin:6px 0 0;display:-webkit-box;-webkit-line-clamp:1;-webkit-box-orient:vertical;overflow:hidden}.rb-priority-filter{display:flex;gap:12px;align-items:center;font-size:12px;color:#7e8ea5;margin-top:12px}.rb-priority-filter select{max-width:170px}
+.rb-developer-table {
+  overflow-x: auto;
+  background: white;
+  border: 1px solid #e0e7f0;
+  border-radius: 14px;
+  margin-top: 16px;
+}
+.rb-developer-table table {
+  width: 100%;
+  min-width: 750px;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+.rb-developer-table th {
+  text-align: left;
+  background: #f6f8fc;
+  color: #8493a9;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 15px;
+}
+.rb-developer-table td {
+  padding: 18px 15px;
+  border-top: 1px solid #edf0f6;
+  white-space: nowrap;
+}
+.rb-developer-table td:first-child {
+  width: 45%;
+  white-space: normal;
+}
+.rb-shell .rb-developer-table button {
+  border: 0;
+  padding: 0;
+  background: transparent;
+  text-align: left;
+  color: #23354f;
+  overflow-wrap: anywhere;
+}
+.rb-developer-table p {
+  color: #94a1b5;
+  font-size: 11px;
+  margin: 6px 0 0;
+  display: -webkit-box;
+  -webkit-line-clamp: 1;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.rb-priority-filter {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  font-size: 12px;
+  color: #7e8ea5;
+  margin-top: 12px;
+}
+.rb-priority-filter select {
+  max-width: 170px;
+}
+
+.rb-request-metrics {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+.rb-origin-tabs {
+  display: flex;
+  gap: 28px;
+  border-bottom: 1px solid #dce4ee;
+  margin-bottom: 20px;
+}
+.rb-shell .rb-origin-tabs button {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 14px 2px;
+  border: 0;
+  border-bottom: 3px solid transparent;
+  border-radius: 0;
+  background: transparent;
+  color: #77849a;
+  font-weight: 650;
+  box-shadow: none;
+}
+.rb-shell .rb-origin-tabs button[aria-pressed="true"] {
+  color: #2762eb;
+  border-bottom-color: #2762eb;
+}
+.rb-origin-tabs button span {
+  background: #edf1f7;
+  color: #6a7890;
+  border-radius: 6px;
+  padding: 2px 7px;
+  font-size: 12px;
+}
+.rb-origin-tabs button[aria-pressed="true"] span {
+  background: #eaf0ff;
+  color: #2762eb;
+}
+.rb-request-filters {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  margin-bottom: 22px;
+}
+.rb-shell .rb-request-filters input {
+  flex: 1 1 280px;
+  min-width: 160px;
+}
+.rb-shell .rb-request-filters select {
+  flex: 0 1 160px;
+  width: 160px;
+}
+.rb-request-list-title {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 14px;
+}
+.rb-request-list-title h2 {
+  font-size: 18px;
+  margin: 0;
+}
+.rb-request-list-title > span {
+  color: #77849a;
+  font-size: 13px;
+}
+@media (max-width: 900px) {
+  .rb-request-filters {
+    flex-wrap: wrap;
+  }
+  .rb-shell .rb-request-filters input {
+    flex-basis: 100%;
+  }
+  .rb-shell .rb-request-filters select {
+    flex: 1 1 130px;
+    width: auto;
+  }
+}
+@media (max-width: 600px) {
+  .rb-request-metrics {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .rb-origin-tabs {
+    gap: 20px;
+  }
+}

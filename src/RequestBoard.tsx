@@ -16,6 +16,8 @@ type RequestItem = {
   origin?: "customer" | "development";
   workflowStage?: string;
   taskId?: string | null;
+  approvalId?: string | null;
+  meetingId?: string | null;
   createdBy?: string;
   title: string;
   description: string;
@@ -66,6 +68,20 @@ const stages: Record<string, string> = {
   completed: "완료",
 };
 const stage = (request: RequestItem) => request.workflowStage || request.status;
+const listStages: Record<string, string> = {
+  received: "접수",
+  reviewing: "검토 중",
+  pending: "승인 대기",
+  tasked: "업무화 완료",
+};
+const listStage = (r: RequestItem) =>
+  r.taskId || ["in_progress", "completed"].includes(r.workflowStage || "")
+    ? "tasked"
+    : r.approvalId
+      ? "pending"
+      : r.meetingId || r.workflowStage === "review"
+        ? "reviewing"
+        : "received";
 const types: Record<string, string> = {
   feature: "기능 추가",
   bug: "버그 수정",
@@ -124,7 +140,6 @@ export default function RequestBoard({
   project,
   projects,
   onBack,
-  onInfo,
   onTasks,
   onMeetings,
 }: {
@@ -171,10 +186,17 @@ export default function RequestBoard({
     [files, setFiles] = useState<File[]>([]);
   const [priorityFilter, setPriorityFilter] = useState("");
   const [assigned, setAssigned] = useState<string[]>([]);
-  const list = allRequests.filter(
+  const originRequests = allRequests.filter(
+    (r) => (r.origin || "customer") === origin,
+  );
+  const list = originRequests.filter(
+    (r) => origin !== "development" || !mineOnly || r.createdBy === user.id,
+  );
+  const visibleRequests = list.filter(
     (r) =>
-      (r.origin || "customer") === origin &&
-      (!mineOnly || r.createdBy === user.id),
+      r.title.toLowerCase().includes(query.toLowerCase()) &&
+      (!filter || listStage(r) === filter) &&
+      (!priorityFilter || r.priority === priorityFilter),
   );
   const lock = useRef(false);
   const [retryFiles, setRetryFiles] = useState<File[]>([]);
@@ -188,7 +210,9 @@ export default function RequestBoard({
     const destination = new URL(next, window.location.origin);
     destination.searchParams.set(
       "origin",
-      isNew && user.accountType === "team" ? "development" : origin,
+      destination.pathname.endsWith("/new") && user.accountType === "team"
+        ? "development"
+        : origin,
     );
     window.history.pushState({}, "", destination.pathname + destination.search);
     setPath(destination.pathname);
@@ -423,36 +447,6 @@ export default function RequestBoard({
         </header>
       )}
       <main className="rb-page">
-        {!requestId && !isNew && (
-          <nav className="rb-heading-actions" aria-label="요청 종류">
-            {(["customer", "development"] as const).map((value) => (
-              <button
-                key={value}
-                aria-pressed={origin === value}
-                onClick={() => {
-                  setOrigin(value);
-                  const url = new URL(window.location.href);
-                  url.searchParams.set("origin", value);
-                  window.history.replaceState(
-                    window.history.state,
-                    "",
-                    url.pathname + url.search,
-                  );
-                }}
-              >
-                {value === "customer" ? "고객 요청" : "개발 요청"}
-              </button>
-            ))}
-            <label>
-              <input
-                type="checkbox"
-                checked={mineOnly}
-                onChange={(e) => setMineOnly(e.target.checked)}
-              />
-              내가 작성한 요청
-            </label>
-          </nav>
-        )}
         {error && (
           <div className="rb-alert" role="alert">
             {error}
@@ -970,8 +964,7 @@ export default function RequestBoard({
                 <p>요청을 모으고 진행 상황을 함께 확인하세요.</p>
               </div>
               <div className="rb-heading-actions">
-                <button onClick={onInfo}>참여자 관리</button>
-                {(user.accountType !== "team" || origin === "development") && (
+                {
                   <button
                     className="rb-primary"
                     onClick={() => go(`${base}/new`)}
@@ -979,29 +972,53 @@ export default function RequestBoard({
                     ＋ {user.accountType === "team" ? "개발 요청" : "고객 요청"}{" "}
                     작성
                   </button>
-                )}
+                }
               </div>
             </div>
-            <div className="rb-stats">
-              <div>
-                <span>전체 요청</span>
-                <strong>{list.length}</strong>
-              </div>
-              <div>
-                <span>진행 중</span>
-                <strong>
-                  {list.filter((r) => stage(r) !== "completed").length}
-                </strong>
-              </div>
-              <div>
-                <span>완료 · 배포</span>
-                <strong>
-                  {list.filter((r) => stage(r) === "completed").length}
-                </strong>
-              </div>
+            <div className="rb-stats rb-request-metrics">
+              {[
+                ["전체 요청", originRequests.length],
+                ...["reviewing", "pending", "tasked"].map((key) => [
+                  listStages[key],
+                  originRequests.filter((r) => listStage(r) === key).length,
+                ]),
+              ].map(([label, count]) => (
+                <div key={label}>
+                  <span>{label}</span>
+                  <strong>{count}</strong>
+                </div>
+              ))}
             </div>
-            <div className="rb-list-toolbar">
-              <h2>요청 목록</h2>
+            <nav className="rb-origin-tabs" aria-label="요청 종류">
+              {(["customer", "development"] as const).map((value) => (
+                <button
+                  key={value}
+                  aria-pressed={origin === value}
+                  onClick={() => {
+                    setOrigin(value);
+                    setMineOnly(false);
+                    setFilter("");
+                    const url = new URL(window.location.href);
+                    url.searchParams.set("origin", value);
+                    window.history.replaceState(
+                      window.history.state,
+                      "",
+                      url.pathname + url.search,
+                    );
+                  }}
+                >
+                  {value === "customer" ? "고객 요청" : "개발 요청"}
+                  <span>
+                    {
+                      allRequests.filter(
+                        (r) => (r.origin || "customer") === value,
+                      ).length
+                    }
+                  </span>
+                </button>
+              ))}
+            </nav>
+            <div className="rb-request-filters">
               <input
                 aria-label="요청 검색"
                 placeholder="요청 제목 검색"
@@ -1014,27 +1031,39 @@ export default function RequestBoard({
                 onChange={(e) => setFilter(e.target.value)}
               >
                 <option value="">전체 상태</option>
-                {Object.entries(stages).map(([key, label]) => (
+                {Object.entries(listStages).map(([key, label]) => (
                   <option key={key} value={key}>
                     {label}
                   </option>
                 ))}
               </select>
-            </div>
-            <label className="rb-priority-filter">
-              우선순위{" "}
               <select
+                aria-label="우선순위 필터"
                 value={priorityFilter}
                 onChange={(e) => setPriorityFilter(e.target.value)}
               >
-                <option value="">전체</option>
-                {Object.entries(priorities).map(([v, t]) => (
-                  <option key={v} value={v}>
-                    {t}
+                <option value="">전체 우선순위</option>
+                {Object.entries(priorities).map(([key, label]) => (
+                  <option key={key} value={key}>
+                    {label}
                   </option>
                 ))}
               </select>
-            </label>
+              {origin === "development" && (
+                <select
+                  aria-label="작성자 필터"
+                  value={mineOnly ? "mine" : "all"}
+                  onChange={(e) => setMineOnly(e.target.value === "mine")}
+                >
+                  <option value="all">전체 작성자</option>
+                  <option value="mine">내가 작성</option>
+                </select>
+              )}
+            </div>
+            <div className="rb-request-list-title">
+              <h2>요청 목록</h2>
+              <span>{visibleRequests.length}개</span>
+            </div>
             <div className="rb-developer-table">
               <table>
                 <thead>
@@ -1050,40 +1079,33 @@ export default function RequestBoard({
                   </tr>
                 </thead>
                 <tbody>
-                  {list
-                    .filter(
-                      (r) =>
-                        r.title.toLowerCase().includes(query.toLowerCase()) &&
-                        (!filter || stage(r) === filter) &&
-                        (!priorityFilter || r.priority === priorityFilter),
-                    )
-                    .map((r) => (
-                      <tr key={r.id}>
-                        <td>
-                          <button onClick={() => go(`${base}/${r.id}`)}>
-                            {r.title}
-                          </button>
-                          <p>{r.description}</p>
-                        </td>
-                        <td>
-                          <span
-                            className={
-                              r.priority === "urgent" ? "rb-urgent" : ""
-                            }
-                          >
-                            {priorities[r.priority]}
-                          </span>
-                        </td>
-                        <td>{types[r.type]}</td>
-                        <td>
-                          {new Date(r.createdAt).toLocaleDateString("ko-KR")}
-                        </td>
-                        <td>
-                          <span className="rb-badge">{stages[stage(r)]}</span>
-                        </td>
-                        <td>{r.creatorName}</td>
-                      </tr>
-                    ))}
+                  {visibleRequests.map((r) => (
+                    <tr key={r.id}>
+                      <td>
+                        <button onClick={() => go(`${base}/${r.id}`)}>
+                          {r.title}
+                        </button>
+                        <p>{r.description}</p>
+                      </td>
+                      <td>
+                        <span
+                          className={r.priority === "urgent" ? "rb-urgent" : ""}
+                        >
+                          {priorities[r.priority]}
+                        </span>
+                      </td>
+                      <td>{types[r.type]}</td>
+                      <td>
+                        {new Date(r.createdAt).toLocaleDateString("ko-KR")}
+                      </td>
+                      <td>
+                        <span className="rb-badge">
+                          {listStages[listStage(r)]}
+                        </span>
+                      </td>
+                      <td>{r.creatorName}</td>
+                    </tr>
+                  ))}
                 </tbody>
               </table>
             </div>
@@ -1100,13 +1122,9 @@ export default function RequestBoard({
                 </p>
               </div>
             )}
-            {list.length > 0 &&
-              !list.some(
-                (r) =>
-                  r.title.toLowerCase().includes(query.toLowerCase()) &&
-                  (!filter || stage(r) === filter) &&
-                  (!priorityFilter || r.priority === priorityFilter),
-              ) && <p className="rb-empty">검색 조건에 맞는 요청이 없어요.</p>}
+            {list.length > 0 && visibleRequests.length === 0 && (
+              <p className="rb-empty">검색 조건에 맞는 요청이 없어요.</p>
+            )}
           </>
         ) : null}
       </main>
