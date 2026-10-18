@@ -313,7 +313,7 @@ export default function ProjectMembers({
                             </div>
                             {data.canManageRoles && !owner && (
                               <button
-                                className="pw-secondary"
+                                className={`pm-save ${changed ? "pw-primary" : "pw-secondary"}`}
                                 disabled={busy || !changed}
                                 onClick={() =>
                                   void save(() =>
@@ -325,7 +325,7 @@ export default function ProjectMembers({
                                   )
                                 }
                               >
-                                저장
+                                {changed ? "변경사항 저장" : "저장"}
                               </button>
                             )}
                           </div>
@@ -593,6 +593,49 @@ export default function ProjectMembers({
                 </fieldset>
               ))}
             </div>
+            {selected && data.canManageRoles && (
+              <div className="pm-role-danger">
+                <div>
+                  <strong>역할 삭제</strong>
+                  <p className="pw-muted">
+                    이 역할과 참여자 연결을 삭제합니다. 다른 역할과 프로젝트
+                    참여는 유지됩니다.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  className="pm-delete-role"
+                  disabled={busy}
+                  onClick={() => {
+                    const role = data.roles.find((r) => r.id === selected);
+                    if (!role) return;
+                    const count = data.members.filter((m) =>
+                      m.roleIds.includes(role.id),
+                    ).length;
+                    if (
+                      !window.confirm(
+                        `‘${role.name}’ 역할을 삭제할까요?\n${count ? `${count}명에게 부여된 이 역할과 권한이 해제됩니다. ` : ""}다른 역할은 유지되며 삭제는 되돌릴 수 없습니다.`,
+                      )
+                    )
+                      return;
+                    void save(async () => {
+                      await workflowApi(
+                        `/projects/${projectId}/roles/${role.id}`,
+                        {},
+                        "DELETE",
+                      );
+                      setSelected(null);
+                      setName("");
+                      setColor(roleColors[0]);
+                      setPermissions([]);
+                      setDirty(false);
+                    });
+                  }}
+                >
+                  역할 삭제
+                </button>
+              </div>
+            )}
             <div className="pm-form-footer">
               <p className="pw-muted">
                 역할 변경은 해당 역할을 가진 모든 프로젝트 참여자에게
@@ -600,7 +643,7 @@ export default function ProjectMembers({
               </p>
               {data.canManageRoles && (
                 <button
-                  className="pw-primary"
+                  className="pw-primary pm-save"
                   disabled={busy || !name.trim() || (!!selected && !dirty)}
                 >
                   {busy ? "저장 중…" : selected ? "역할 저장" : "역할 만들기"}

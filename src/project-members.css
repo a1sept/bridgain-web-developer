@@ -60,30 +60,34 @@
 .pm-chip-list {
   display: flex;
   flex-wrap: wrap;
-  gap: 10px;
+  gap: 8px;
   flex: 1;
 }
 .pm-chip {
   display: inline-flex;
   align-items: center;
-  gap: 9px;
+  gap: 6px;
   border: 1px solid #dae3f2;
   background: #fff;
   color: #53627b;
   border-radius: 999px;
-  padding: 7px 15px 7px 7px;
+  padding: 5px 10px 5px 5px;
   font: inherit;
+  font-size: 13px;
+  line-height: 20px;
   cursor: pointer;
   white-space: nowrap;
 }
 .pm-chip > span {
   display: grid;
   place-items: center;
-  width: 32px;
-  height: 32px;
+  width: 22px;
+  height: 22px;
+  flex-shrink: 0;
+  font-size: 12px;
   border-radius: 50%;
-  background: var(--role-color, #2d63ed);
-  color: var(--role-ink, white);
+  background: #e8ecf2;
+  color: #7b8799;
   font-weight: 700;
 }
 .pm-chip.is-selected {
@@ -347,4 +351,62 @@
   .pm-person {
     flex-wrap: wrap;
   }
+}
+
+.pm-role-danger {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  border-top: 1px solid #e4eaf3;
+  padding-top: 22px;
+  margin-top: 26px;
+}
+.pm-role-danger strong {
+  font-size: 14px;
+}
+.pm-role-danger p {
+  margin-bottom: 0;
+}
+.pm-delete-role {
+  color: #b42332;
+  border: 1px solid #efc5ca;
+  background: #fff;
+  padding: 10px 16px;
+  border-radius: 10px;
+  font: inherit;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.pm-delete-role:hover {
+  background: #fff3f4;
+}
+.pm-delete-role:disabled {
+  cursor: default;
+  opacity: 0.5;
+}
+@media (max-width: 600px) {
+  .pm-role-danger {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+}
+
+.pm-chip:not(.is-selected) {
+  border-color: #e1e6ee;
+  background: #f8f9fb;
+  color: #8a95a7;
+}
+.pm-root .pm-save:disabled {
+  background: #f0f2f6;
+  border-color: #e1e6ee;
+  color: #98a2b3;
+  box-shadow: none;
+  cursor: default;
+}
+.pm-root .pm-save.pw-primary:not(:disabled) {
+  background: #2d63ed;
+  border-color: #2d63ed;
+  color: #fff;
+  box-shadow: 0 4px 10px #2d63ed20;
 }

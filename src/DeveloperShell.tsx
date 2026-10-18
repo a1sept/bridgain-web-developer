@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { useAi } from "./ai/AiWorkspace";
 import "./developer-shell.css";
+import "./project-controls.css";
 export type DeveloperView =
   "dashboard" | "projects" | "invitations" | "teams" | "approvals";
 export type ProjectSection =

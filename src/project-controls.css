@@ -1,0 +1,53 @@
+/* Compact desktop project controls; leave mobile touch targets unchanged.
+   Target actions explicitly so clickable cards and document titles keep their layout. */
+@media (min-width: 761px) {
+  .ds-shell .ds-project-tabs {
+    gap: 4px;
+    padding: 4px 24px 0;
+  }
+  .ds-shell .ds-project-tabs button {
+    padding: 10px 12px;
+    font-size: 12px;
+    line-height: 18px;
+  }
+  .ds-shell .ds-project-tabs .ds-project-refresh {
+    padding: 6px 10px;
+    margin-bottom: 4px;
+    border-radius: 7px;
+  }
+
+  .ds-shell .ds-content :is(.pw-primary, .pw-secondary, .po-primary, .pt-primary),
+  .ds-shell .rb-shell .rb-heading-actions button,
+  .ds-shell .rb-shell .rb-submit button,
+  .ds-shell .rb-shell .rb-segments button,
+  .ds-shell .rb-shell .rb-pills button,
+  .ds-shell .pr-page button:not(.pr-document-title, .pr-text, h2 button),
+  .ds-shell .repo-fields button,
+  .ds-shell .approvals-page button,
+  .ds-shell .urgent-approval > button,
+  .ds-shell .pt-dialog footer button,
+  .ds-shell .pm-delete-role {
+    box-sizing: border-box;
+    padding: 7px 12px;
+    min-height: 34px;
+    font-size: 12px;
+    line-height: 18px;
+    border-radius: 7px;
+  }
+  .ds-shell .ds-content .po-primary {
+    font-size: 12px !important;
+  }
+
+  .ds-shell .rb-shell .rb-origin-tabs button,
+  .ds-shell .rb-shell .rb-tabs button,
+  .ds-shell .pm-tabs button {
+    padding: 10px 2px;
+    font-size: 12px;
+    line-height: 18px;
+  }
+  .ds-shell .pt-workspace .pt-view-switch button {
+    padding: 5px 10px;
+    font-size: 12px;
+    line-height: 18px;
+  }
+}
