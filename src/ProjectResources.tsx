@@ -117,8 +117,12 @@ export default function ProjectResources({
   members = [],
   onTask,
   onApprovals,
+  permissions,
+  rolesConfigured,
 }: {
   projectId: string;
+  permissions?: string[];
+  rolesConfigured?: boolean;
   onApprovals?: () => void;
   section: ResourceSection;
   refreshKey?: number;
@@ -204,6 +208,9 @@ export default function ProjectResources({
       })
       .catch((e) => setError(e.message));
   }, [base, section, reload, refreshKey]);
+  const canAssign = !rolesConfigured || !!permissions?.includes("tasks.assign");
+  const canCreate = !permissions || permissions.includes(`${section}.create`);
+  const canUpdate = !permissions || permissions.includes(`${section}.update`);
   function edit(item?: Meeting | Document) {
     setTransfers({});
     setSelectedApprovers([]);
@@ -405,7 +412,7 @@ export default function ProjectResources({
                 : "프로젝트의 최근 변경 내역이에요."}
           </p>
         </div>
-        {section !== "activity" && !editing && (
+        {section !== "activity" && !editing && canCreate && (
           <button
             className="pr-primary"
             disabled={loading || busy}
@@ -505,7 +512,7 @@ export default function ProjectResources({
                         }
                       >
                         <option value="draft">작성 중</option>
-                        <option value="pending">저장 후 승인 요청</option>
+                        <option value="pending" disabled={!canAssign}>저장 후 승인 요청</option>
                         {finalized && <option value="final">승인 완료</option>}
                       </select>
                     </label>
@@ -710,6 +717,7 @@ export default function ProjectResources({
                 onChange={setSelectedApprovers}
               />
             )}
+            {section === "meetings" && !canAssign && <p className="pw-muted">업무 담당자를 확정하여 승인 요청하려면 업무 배정 권한이 필요합니다.</p>}
             <footer>
               <button
                 type="button"
@@ -730,12 +738,12 @@ export default function ProjectResources({
               {!locked && (
                 <button
                   className="pr-primary"
-                  disabled={
+                  disabled={(!canUpdate && editing !== "new") || (!canCreate && editing === "new") ||
                     busy ||
                     !title.trim() ||
                     (section === "meetings" &&
                       decision === "pending" &&
-                      (!selectedApprovers.length || !plans.length))
+                      (!canAssign || !selectedApprovers.length || !plans.length))
                   }
                 >
                   {busy

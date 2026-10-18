@@ -19,7 +19,7 @@ export async function workflowApi<T>(
     headers,
     body: body ? JSON.stringify(body) : undefined,
   });
-  const data = await response.json();
+  const data = await response.json().catch(() => { throw Error("서버에 연결하지 못했어요. 잠시 후 다시 시도해주세요."); });
   if (!response.ok) throw Error(data.message || "처리하지 못했어요.");
   return data;
 }
@@ -327,10 +327,12 @@ export function UrgentApproval({
   projectId,
   requestId,
   onDone,
+  canAssign = true,
 }: {
   projectId: string;
   requestId: string;
   onDone: () => void;
+  canAssign?: boolean;
 }) {
   const [approvers, setApprovers] = useState<Approver[]>([]),
     [selected, setSelected] = useState<string[]>([]),
@@ -380,11 +382,12 @@ export function UrgentApproval({
         value={selected}
         onChange={setSelected}
       />
+      {!canAssign && <p role="status">긴급 승인 요청에는 업무 배정 권한이 필요합니다.</p>}
       {error && <p role="alert">{error}</p>}
       <button
         className="pw-primary"
         disabled={
-          busy || !selected.length || !planning.trim() || !assignees.length
+          !canAssign || busy || !selected.length || !planning.trim() || !assignees.length
         }
         onClick={async () => {
           setBusy(true);

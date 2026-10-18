@@ -1,0 +1,350 @@
+.pm-root {
+  min-width: 0;
+}
+.pm-tabs {
+  display: flex;
+  gap: 24px;
+  border-bottom: 1px solid #dce4f0;
+  margin-bottom: 24px;
+}
+.pm-tabs button {
+  border: 0;
+  border-bottom: 3px solid transparent;
+  background: none;
+  padding: 15px 4px;
+  color: #73829b;
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+}
+.pm-tabs button[aria-selected="true"] {
+  color: #2d63ed;
+  border-color: #2d63ed;
+}
+.pm-tabs span {
+  font-size: 0.85em;
+  margin-left: 5px;
+}
+.pm-error {
+  color: #b42332;
+}
+.pm-notice {
+  color: #246642;
+}
+.pm-member-group {
+  margin-top: 28px;
+}
+.pm-member {
+  padding: 24px 0;
+  border-bottom: 1px solid #e4eaf3;
+}
+.pm-member:last-child {
+  border: 0;
+}
+.pm-person {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+.pm-person p {
+  margin: 5px 0;
+  color: #7c8ba4;
+  font-size: 13px;
+}
+.pm-assignment {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  margin-top: 18px;
+}
+.pm-chip-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  flex: 1;
+}
+.pm-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  border: 1px solid #dae3f2;
+  background: #fff;
+  color: #53627b;
+  border-radius: 999px;
+  padding: 7px 15px 7px 7px;
+  font: inherit;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.pm-chip > span {
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: var(--role-color, #2d63ed);
+  color: var(--role-ink, white);
+  font-weight: 700;
+}
+.pm-chip.is-selected {
+  background: var(--role-tint, #edf3ff);
+  border-color: var(--role-color, #7fa3ff);
+  color: #243249;
+}
+.pm-chip.is-selected > span {
+  background: var(--role-color, #2d63ed);
+  color: var(--role-ink, white);
+}
+.pm-chip:disabled {
+  cursor: default;
+  opacity: 0.65;
+}
+.pm-chip:focus-visible,
+.pm-tabs button:focus-visible {
+  outline: 3px solid #93b2ff;
+  outline-offset: 3px;
+}
+.pm-effective {
+  font-size: 13px;
+  line-height: 1.7;
+  color: #7c8ba4;
+  margin: 12px 0 0;
+}
+.pm-role-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+}
+.pm-role-heading h2 {
+  margin-bottom: 8px;
+}
+.pm-role-rail {
+  display: flex;
+  overflow-x: auto;
+  gap: 12px;
+  padding: 16px;
+  margin: 24px 0;
+  background: #f5f7fc;
+  border: 1px solid #e1e7f2;
+  border-radius: 999px;
+}
+.pm-role-rail p {
+  margin: 8px;
+}
+.pm-name {
+  display: grid;
+  gap: 10px;
+  max-width: 480px;
+  font-weight: 600;
+}
+.pm-name input {
+  border: 1px solid #dce4f0;
+  border-radius: 10px;
+  padding: 12px 14px;
+  font: inherit;
+  background: #fff;
+}
+.pm-permission-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-top: 24px;
+}
+.pm-permission-heading label,
+.pm-permission-grid label {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+}
+.pm-root input[type="checkbox"] {
+  width: 17px;
+  height: 17px;
+  accent-color: #2d63ed;
+}
+.pm-permission-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+}
+.pm-permission-grid fieldset {
+  border: 1px solid #dce4f0;
+  border-radius: 12px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 15px;
+  padding: 18px;
+}
+.pm-permission-grid legend {
+  padding: 0 6px;
+  font-weight: 700;
+}
+.pm-form-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  margin-top: 24px;
+}
+.pm-form-footer button {
+  flex-shrink: 0;
+}
+@media (max-width: 700px) {
+  .pm-permission-grid {
+    grid-template-columns: 1fr;
+  }
+  .pm-role-heading,
+  .pm-form-footer {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+  .pm-assignment {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+  .pm-role-rail {
+    border-radius: 20px;
+  }
+  .pm-form-footer button {
+    align-self: flex-end;
+  }
+}
+
+.pm-colors {
+  border: 0;
+  padding: 0;
+  margin: 24px 0;
+  min-width: 0;
+}
+.pm-colors legend {
+  font-weight: 600;
+  margin-bottom: 12px;
+}
+.pm-color-options {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+}
+.pm-root .pm-color-swatch {
+  width: 34px;
+  height: 34px;
+  min-height: 34px;
+  padding: 0;
+  border: 3px solid white;
+  border-radius: 50%;
+  color: var(--role-ink, white);
+  font-weight: 800;
+  box-shadow: 0 0 0 1px #dce4f0;
+  cursor: pointer;
+}
+.pm-root .pm-color-swatch[aria-pressed="true"] {
+  box-shadow: 0 0 0 2px var(--role-color);
+}
+.pm-color-swatch:focus-visible {
+  outline: 3px solid #94a3b8;
+  outline-offset: 4px;
+}
+.pm-custom-color {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: #53627b;
+}
+.pm-custom-color input {
+  width: 34px;
+  height: 34px;
+  padding: 3px;
+  border: 1px solid #dce4f0;
+  border-radius: 8px;
+  cursor: pointer;
+}
+.pm-color-options code {
+  font-size: 12px;
+  color: #73829b;
+}
+.pm-color-preview {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 18px;
+}
+.pm-color-preview small {
+  color: #73829b;
+}
+
+.pm-member-cards {
+  display: grid;
+  grid-template-columns: minmax(0, 2fr) minmax(260px, 1fr);
+  gap: 24px;
+  align-items: start;
+}
+.pm-member-card {
+  min-width: 0;
+}
+.pm-member-card-heading {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+.pm-member-card-heading h2 {
+  margin: 0;
+}
+.pm-member-card-heading > span {
+  color: #6d7b95;
+  background: #f0f3f8;
+  padding: 3px 9px;
+  border-radius: 999px;
+  font-size: 13px;
+}
+@media (max-width: 1100px) {
+  .pm-member-cards {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.pm-join-status {
+  margin-left: auto;
+  flex-shrink: 0;
+  padding: 5px 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 600;
+}
+.pm-join-status.is-accepted {
+  color: #15704b;
+  background: #e7f6ed;
+}
+.pm-join-status.is-waiting {
+  color: #77849a;
+  background: #f0f2f6;
+}
+.pm-invited-member .pm-person strong {
+  color: #73829b;
+}
+.pm-invited-member .pm-invite-avatar {
+  background: #f0f2f6;
+  color: #8a95a7;
+}
+.pm-invite-actions {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  margin-top: 12px;
+}
+.pm-invite-actions button {
+  flex-shrink: 0;
+}
+@media (max-width: 600px) {
+  .pm-invite-actions {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+  .pm-person {
+    flex-wrap: wrap;
+  }
+}

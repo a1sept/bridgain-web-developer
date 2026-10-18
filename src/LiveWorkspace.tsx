@@ -1,3 +1,4 @@
+import ProjectMembers from "./ProjectMembers";
 import Approvals, { workflowApi, type Approval } from "./Approvals";
 import type { RepositoryRelation } from "./RepositoryFields";
 import ProjectSettings from "./ProjectSettings";
@@ -44,6 +45,9 @@ type Project = {
   repositoryUrls?: string[];
   repositoryRelations?: RepositoryRelation[];
   canManage: boolean;
+  permissions?: string[];
+  isOwner?: boolean;
+  rolesConfigured?: boolean;
   id: string;
   teamId: string;
   name: string;
@@ -62,6 +66,7 @@ type Invitation = {
   inviterName: string;
   inviteeId: string;
   inviteeName: string;
+  inviteeAccountType?: string | null;
   status: string;
   direction: string;
 };
@@ -588,6 +593,7 @@ export default function LiveWorkspace({
         userName={user.displayName}
         projects={data?.projects || []}
         selectedId={selectedId}
+        projectPermissions={data?.projects.find(p => p.id === selectedId)?.permissions}
         section={requestProjectId ? "requests" : projectSection}
         pending={received.filter((i) => i.status === "pending").length}
         approvalPending={approvalPending}
@@ -799,7 +805,7 @@ export default function LiveWorkspace({
                   <ProjectSettings
                     key={project.id}
                     project={project}
-                    canManage={canManage}
+                    canManage={project.permissions ? project.permissions.includes("project.settings") : canManage}
                     onSave={async (values) => {
                       await request(`/projects/${project.id}`, values, "PATCH");
                       await reload();
@@ -853,6 +859,8 @@ export default function LiveWorkspace({
                     refreshKey={dashboardRefresh}
                     key={`${project.id}/${projectSection}`}
                     projectId={project.id}
+                    permissions={project.permissions}
+                    rolesConfigured={project.rolesConfigured}
                     members={project.members}
                     onApprovals={() => openProject(project.id, "approvals")}
                     onTask={(tid) => {
@@ -898,126 +906,13 @@ export default function LiveWorkspace({
                         </div>
                       )}
                     </div>
-                    <div className="pw-detail-grid">
-                      <section className="pw-panel">
-                        <h2>
-                          참여자 <span>{project.members.length}</span>
-                        </h2>
-                        {(["team", "client"] as const).map((type) => (
-                          <div className="pw-member-group" key={type}>
-                            <h3>{type === "team" ? "개발팀" : "의뢰자"}</h3>
-                            {project.members
-                              .filter((m) => m.accountType === type)
-                              .map((m) => (
-                                <div className="pw-member" key={m.userId}>
-                                  <span className="pw-avatar">
-                                    {m.displayName.slice(0, 1)}
-                                  </span>
-                                  <div>
-                                    <strong>
-                                      {m.displayName}
-                                      {m.userId === user.id && (
-                                        <small> 나</small>
-                                      )}
-                                    </strong>
-                                    <p>
-                                      {type === "client"
-                                        ? "의뢰자"
-                                        : (m.positions || [])
-                                            .map((x) => positions[x])
-                                            .join(" · ") || "직무 미지정"}
-                                    </p>
-                                  </div>
-                                  <span className="pw-member-role">
-                                    {roles[m.accessRole || "contributor"]}
-                                  </span>
-                                  {type === "team" && canManage && (
-                                    <label>
-                                      <input
-                                        type="checkbox"
-                                        checked={
-                                          !!m.canApproveTasks ||
-                                          ["owner", "admin"].includes(
-                                            m.permissionRole || "",
-                                          )
-                                        }
-                                        disabled={
-                                          busy ||
-                                          ["owner", "admin"].includes(
-                                            m.permissionRole || "",
-                                          )
-                                        }
-                                        onChange={(e) => {
-                                          const value = e.target.checked;
-                                          void run(async () => {
-                                            await request(
-                                              `/projects/${project.id}/members/${m.userId}`,
-                                              { canApproveTasks: value },
-                                              "PATCH",
-                                            );
-                                            await reload();
-                                          });
-                                        }}
-                                      />
-                                      업무화 승인 권한
-                                    </label>
-                                  )}
-                                </div>
-                              ))}
-                            {!project.members.some(
-                              (m) => m.accountType === type,
-                            ) && (
-                              <p className="pw-muted">아직 참여자가 없어요.</p>
-                            )}
-                          </div>
-                        ))}
-                      </section>
-                      <section className="pw-panel">
-                        <h2>프로젝트 정보</h2>
-                        <p>
-                          진행 상태{" "}
-                          <span className="pw-status">
-                            {statuses[project.status]}
-                          </span>
-                        </p>
-                        <p className="pw-muted">{team?.name}</p>
-                      </section>
+                    <div className="pm-members-layout">
+                      <ProjectMembers key={project.id} projectId={project.id} members={project.members} userId={user.id} onChanged={reload}
+                        invitations={data.invitations.filter(i => i.projectId === project.id && i.direction === "sent")}
+                        canManageInvitations={canManage} invitationBusy={busy}
+                        onCancelInvitation={id => changeInvitation(id, "cancel")} />
                     </div>
-                    {canManage && (
-                      <section className="pw-panel lw-section">
-                        <h2>보낸 초대</h2>
-                        {data.invitations
-                          .filter(
-                            (i) =>
-                              i.direction === "sent" &&
-                              i.projectId === project.id,
-                          )
-                          .map((i) => (
-                            <div className="pw-member" key={i.id}>
-                              <div>
-                                <strong>{i.inviteeName}</strong>
-                                <p>{statuses[i.status]}</p>
-                              </div>
-                              {i.status === "pending" && (
-                                <button
-                                  className="pw-secondary"
-                                  disabled={busy}
-                                  onClick={() =>
-                                    changeInvitation(i.id, "cancel")
-                                  }
-                                >
-                                  초대 취소
-                                </button>
-                              )}
-                            </div>
-                          ))}
-                        {!data.invitations.some(
-                          (i) =>
-                            i.direction === "sent" &&
-                            i.projectId === project.id,
-                        ) && <p className="pw-muted">보낸 초대가 없어요.</p>}
-                      </section>
-                    )}
+
                   </>
                 )}
               {view === "invitations" && (

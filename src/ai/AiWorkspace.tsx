@@ -10,7 +10,7 @@ import type { CodexSync, DesktopState, AiProviderName } from "../desktop";
 import { aiApi, type AiSession, type SessionDetail, type AiDraft } from "./api";
 import AiMessageBody from "./AiMessageBody";
 import "./ai.css";
-type Project = { id: string; name: string };
+type Project = { id: string; name: string; permissions?: string[] };
 type Context = {
   setProject: (project?: Project) => void;
   openSettings: () => void;
@@ -402,6 +402,7 @@ export default function AiWorkspace({
             <div>
               <strong>AI 채팅</strong>
               <small>{project?.name || "프로젝트를 선택해주세요"}</small>
+              {project?.permissions && !["requests.read", "meetings.read", "documents.read", "tasks.read"].every(p => project.permissions!.includes(p)) && <small role="status">AI 조사는 요청·회의·문서·업무 조회 권한이 모두 필요합니다.</small>}
             </div>
             <button onClick={() => setSettings(true)} aria-label="AI 연결 설정">
               설정

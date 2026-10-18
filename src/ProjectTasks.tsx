@@ -467,28 +467,35 @@ export default function ProjectTasks({
   }
   async function save(event: FormEvent) {
     event.preventDefault();
-    if (saveLock.current || !draft.title.trim() || !isAssignee) return;
+    if (saveLock.current || !editing || !isAssignee) return;
     saveLock.current = true;
     setSaving(true);
     setError("");
     try {
       const result = await request<{ task: ProjectTask }>(
-        `${base}/tasks${editing ? `/${editing}` : ""}`,
+        `${base}/tasks/${editing}`,
         {
-          ...draft,
-          title: draft.title.trim(),
-          dueDate: draft.dueDate || null,
-          ...(editing ? { expectedVersion: taskVersion.current } : {}),
+          status: draft.status,
+          repositoryUrl: draft.repositoryUrl,
+          workBranch: draft.workBranch,
+          liveBranch: draft.liveBranch,
+          pullRequestUrl: draft.pullRequestUrl,
+          mergeCommit: draft.mergeCommit,
+          deploymentUrl: draft.deploymentUrl,
+          resultSummary: draft.resultSummary,
+          dbChanges: draft.dbChanges,
+          apiChanges: draft.apiChanges,
+          frontendChanges: draft.frontendChanges,
+          verification: draft.verification,
+          mergeApprovalRequired: draft.mergeApprovalRequired,
+          mergeReviewerId: draft.mergeReviewerId,
+          expectedVersion: taskVersion.current,
         },
-        editing ? "PATCH" : "POST",
+        "PATCH",
       );
-      setTasks((current) =>
-        editing
-          ? current.map((task) => (task.id === editing ? result.task : task))
-          : [result.task, ...current],
-      );
+      setTasks(current => current.map(task => task.id === editing ? result.task : task));
       setEditing(undefined);
-      setNotice(editing ? "업무를 수정했어요." : "새 업무를 만들었어요.");
+      setNotice("업무를 수정했어요.");
       onChanged?.();
     } catch (cause) {
       setError(

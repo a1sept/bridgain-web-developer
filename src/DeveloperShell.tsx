@@ -17,8 +17,9 @@ type Props = {
   children: ReactNode;
   active: DeveloperView;
   userName: string;
-  projects: { id: string; name: string }[];
+  projects: { id: string; name: string; permissions?: string[] }[];
   selectedId?: string;
+  projectPermissions?: string[];
   section?: ProjectSection;
   pending: number;
   approvalPending?: number;
@@ -270,7 +271,11 @@ export default function DeveloperShell(p: Props) {
                 ["members", "참여자 관리"],
                 ["settings", "설정"],
               ] as const
-            ).map(([key, label]) => (
+            ).filter(([key]) => {
+              if (!p.projectPermissions) return true;
+              const permission: Partial<Record<ProjectSection, string>> = {requests:"requests.read",tasks:"tasks.read",meetings:"meetings.read",documents:"documents.read",activity:"activity.read",settings:"project.settings"};
+              return !permission[key] || p.projectPermissions.includes(permission[key]!);
+            }).map(([key, label]) => (
               <button
                 key={key}
                 aria-current={p.section === key ? "page" : undefined}

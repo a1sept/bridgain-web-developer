@@ -10,7 +10,7 @@ type Member = {
   displayName: string;
   accountType: "client" | "team";
 };
-type Project = { id: string; name: string; members: Member[] };
+type Project = { rolesConfigured?: boolean; permissions?: string[]; id: string; name: string; members: Member[] };
 type RequestItem = {
   id: string;
   origin?: "customer" | "development";
@@ -160,6 +160,7 @@ export default function RequestBoard({
   }, []);
   const [path, setPath] = useState(window.location.pathname);
   const base = `/projects/${project?.id}/requests`;
+  const canCreate = !project?.permissions || project.permissions.includes("requests.create");
   const suffix = path.slice(base.length).split("/").filter(Boolean);
   const isNew = suffix[0] === "new";
   const requestId = isNew ? undefined : suffix[0];
@@ -480,7 +481,7 @@ export default function RequestBoard({
         )}
         {isNew ? (
           <form onSubmit={submit} className="rb-create">
-            <fieldset disabled={busy} className="rb-form-content">
+            <fieldset disabled={busy || !canCreate} className="rb-form-content">
               <div className="rb-heading">
                 <span className="rb-eyebrow">NEW REQUEST</span>
                 <h1>
@@ -718,6 +719,7 @@ export default function RequestBoard({
                   )}
                   {urgent && requestId && (
                     <UrgentApproval
+                      canAssign={!project.rolesConfigured || !!project.permissions?.includes("tasks.assign")}
                       projectId={project.id}
                       requestId={requestId}
                       onDone={() => {
@@ -964,7 +966,7 @@ export default function RequestBoard({
                 <p>요청을 모으고 진행 상황을 함께 확인하세요.</p>
               </div>
               <div className="rb-heading-actions">
-                {
+                {canCreate &&
                   <button
                     className="rb-primary"
                     onClick={() => go(`${base}/new`)}
