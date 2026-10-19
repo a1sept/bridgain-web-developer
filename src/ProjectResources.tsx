@@ -8,7 +8,14 @@ import {
   type Approver,
   type Approval,
 } from "./Approvals";
-import { useEffect, useState, useRef, type FormEvent } from "react";
+import {
+  Fragment,
+  useLayoutEffect,
+  useEffect,
+  useState,
+  useRef,
+  type FormEvent,
+} from "react";
 import "./project-resources.css";
 export type ResourceSection = "meetings" | "documents" | "activity";
 type Plan = {
@@ -165,6 +172,109 @@ export default function ProjectResources({
   const [transfers, setTransfers] = useState<Record<string, string>>({});
   const [requestQuery, setRequestQuery] = useState("");
   const [requestPickerOpen, setRequestPickerOpen] = useState(false);
+  const [requestInsertIndex, setRequestInsertIndex] = useState(0);
+  const [requestConnector, setRequestConnector] = useState("");
+  const requestPickerRef = useRef<HTMLDivElement>(null);
+  const requestPopupRef = useRef<HTMLElement>(null);
+  const [requestPopupPosition, setRequestPopupPosition] = useState<{
+    left: number;
+    top: number;
+    maxHeight: number;
+    width: number;
+  } | null>(null);
+  useLayoutEffect(() => {
+    if (!requestPickerOpen) return;
+    const popup = requestPopupRef.current;
+    const trigger = requestTriggerRef.current;
+    if (!popup || !trigger) return;
+    let frame = 0;
+    const position = () => {
+      const viewport = window.visualViewport;
+      const viewportTop = viewport?.offsetTop ?? 0;
+      const viewportLeft = viewport?.offsetLeft ?? 0;
+      const viewportWidth =
+        viewport?.width ?? document.documentElement.clientWidth;
+      const viewportHeight = viewport?.height ?? window.innerHeight;
+      const margin = 12,
+        gap = 8;
+      const rect = trigger.getBoundingClientRect();
+      const bottom = viewportTop + viewportHeight - margin;
+      const top = viewportTop + margin;
+      const below = Math.max(0, bottom - rect.bottom - gap);
+      const above = Math.max(0, rect.top - gap - top);
+      const list = popup.querySelector<HTMLElement>(".pr-request-results");
+      const naturalHeight =
+        popup.scrollHeight +
+        2 -
+        (list?.clientHeight ?? 0) +
+        Math.min(list?.scrollHeight ?? 0, 320);
+      const desiredHeight = Math.min(naturalHeight, 480);
+      const opensAbove = below < desiredHeight && above > below;
+      const maxHeight = Math.max(0, Math.min(480, opensAbove ? above : below));
+      const height = Math.min(desiredHeight, maxHeight);
+      const width = Math.min(440, Math.max(0, viewportWidth - margin * 2));
+      const left = Math.max(
+        viewportLeft + margin,
+        Math.min(
+          rect.left + rect.width / 2 - width / 2,
+          viewportLeft + viewportWidth - margin - width,
+        ),
+      );
+      const next = {
+        left,
+        top: opensAbove
+          ? Math.max(top, rect.top - gap - height)
+          : Math.max(top, Math.min(rect.bottom + gap, bottom - height)),
+        maxHeight,
+        width,
+      };
+      setRequestPopupPosition((current) =>
+        current &&
+        Object.keys(next).every(
+          (key) =>
+            current[key as keyof typeof next] ===
+            next[key as keyof typeof next],
+        )
+          ? current
+          : next,
+      );
+    };
+    const schedule = () => {
+      cancelAnimationFrame(frame);
+      frame = requestAnimationFrame(position);
+    };
+    position();
+    const observer = new ResizeObserver(schedule);
+    observer.observe(popup);
+    const results = popup.querySelector(".pr-request-results");
+    if (results) observer.observe(results);
+    window.addEventListener("resize", schedule);
+    window.addEventListener("scroll", schedule, true);
+    window.visualViewport?.addEventListener("resize", schedule);
+    window.visualViewport?.addEventListener("scroll", schedule);
+    return () => {
+      cancelAnimationFrame(frame);
+      observer.disconnect();
+      window.removeEventListener("resize", schedule);
+      window.removeEventListener("scroll", schedule, true);
+      window.visualViewport?.removeEventListener("resize", schedule);
+      window.visualViewport?.removeEventListener("scroll", schedule);
+    };
+  }, [requestPickerOpen, requestConnector, requestQuery]);
+  const requestTriggerRef = useRef<HTMLButtonElement>(null);
+  const closeRequestPicker = () => {
+    setRequestPickerOpen(false);
+    requestTriggerRef.current?.focus();
+  };
+  useEffect(() => {
+    if (!requestPickerOpen) return;
+    const closeOutside = (event: PointerEvent) => {
+      if (!requestPickerRef.current?.contains(event.target as Node))
+        setRequestPickerOpen(false);
+    };
+    document.addEventListener("pointerdown", closeOutside);
+    return () => document.removeEventListener("pointerdown", closeOutside);
+  }, [requestPickerOpen]);
   const saveLock = useRef(false);
   const base = `/projects/${projectId}`;
   useEffect(() => {
@@ -437,6 +547,149 @@ export default function ProjectResources({
         ? "문서"
         : "활동 기록";
   const currentDocument = documents.find((d) => d.id === editing);
+  function renderRequestConnector(
+    index: number,
+    mode: "empty" | "append" | "gap",
+  ) {
+    const key = `${mode}-${index}`;
+    const active = requestPickerOpen && requestConnector === key;
+    return (
+      <div
+        className={`pr-request-anchor pr-request-${mode === "empty" ? "empty-action" : mode}`}
+        ref={active ? requestPickerRef : undefined}
+        onKeyDown={(event) => {
+          if (event.key === "Escape") {
+            event.stopPropagation();
+            closeRequestPicker();
+          }
+        }}
+      >
+        <button
+          type="button"
+          aria-haspopup="dialog"
+          aria-controls="meeting-request-picker"
+          aria-expanded={active}
+          aria-label={
+            mode === "gap" ? `${index + 1}번째 위치에 요청 연결` : undefined
+          }
+          onClick={(event) => {
+            requestTriggerRef.current = event.currentTarget;
+            setRequestPopupPosition(null);
+            setRequestQuery("");
+            setRequestInsertIndex(index);
+            setRequestConnector(key);
+            setRequestPickerOpen(!active);
+          }}
+        >
+          {mode === "gap"
+            ? "＋"
+            : mode === "empty"
+              ? "＋ 요청 연결"
+              : "＋ 추가로 요청 연결하기"}
+        </button>
+        {active && (
+          <section
+            className="pr-request-picker"
+            ref={requestPopupRef}
+            style={{
+              position: "fixed",
+              right: "auto",
+              transform: "none",
+              ...requestPopupPosition,
+              visibility: requestPopupPosition ? "visible" : "hidden",
+            }}
+            id="meeting-request-picker"
+            role="dialog"
+            aria-label="연결할 요청 선택"
+          >
+            <div className="pr-section-heading">
+              <strong>요청 검색</strong>
+              <button type="button" onClick={closeRequestPicker}>
+                닫기
+              </button>
+            </div>
+            <input
+              autoFocus
+              onKeyDown={(e) => {
+                if (e.key === "Enter") e.preventDefault();
+              }}
+              aria-label="요청 제목 검색"
+              placeholder="요청 제목으로 검색…"
+              value={requestQuery}
+              onChange={(e) => setRequestQuery(e.target.value)}
+            />
+            <div className="pr-request-results">
+              {requests
+                .filter(
+                  (r) =>
+                    !r.taskId &&
+                    !plans.some((p) => p.requestId === r.id) &&
+                    r.title
+                      .toLocaleLowerCase()
+                      .includes(requestQuery.toLocaleLowerCase()),
+                )
+                .map((r) => (
+                  <div className="pr-request-result" key={r.id}>
+                    <div>
+                      <span>
+                        {r.origin === "development" ? "개발 요청" : "고객 요청"}
+                      </span>
+                      <strong>{r.title}</strong>
+                      {r.meetingId && r.meetingId !== editing && (
+                        <small>{r.meetingTitle || "다른 회의"}에 연결됨</small>
+                      )}
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (r.meetingId && r.meetingId !== editing) {
+                          if (
+                            !window.confirm(
+                              `이 요청은 '${r.meetingTitle || r.meetingId}' 회의에 연결되어 있습니다. 기존 회의에서 제외하고 이 회의로 이동할까요? 승인 대기 중인 회의에서는 먼저 승인을 취소해야 합니다.`,
+                            )
+                          )
+                            return;
+                          setTransfers((current) => ({
+                            ...current,
+                            [r.id]: r.meetingId!,
+                          }));
+                        }
+                        setPlans((current) => [
+                          ...current.slice(0, requestInsertIndex),
+                          {
+                            requestId: r.id,
+                            planning: "",
+                            uiNotes: "",
+                            apiNotes: "",
+                            dbNotes: "",
+                            priority: "normal",
+                            assigneeIds: [],
+                            stages: [],
+                          },
+                          ...current.slice(requestInsertIndex),
+                        ]);
+                        setRequestQuery("");
+                        closeRequestPicker();
+                      }}
+                    >
+                      ＋ 연결
+                    </button>
+                  </div>
+                ))}
+              {!requests.some(
+                (r) =>
+                  !r.taskId &&
+                  !plans.some((p) => p.requestId === r.id) &&
+                  r.title
+                    .toLocaleLowerCase()
+                    .includes(requestQuery.toLocaleLowerCase()),
+              ) && <p>연결할 수 있는 요청이 없어요.</p>}
+            </div>
+          </section>
+        )}
+      </div>
+    );
+  }
   return (
     <div className="pr-page">
       <header className="pr-heading">
@@ -565,222 +818,134 @@ export default function ProjectResources({
                         개
                       </p>
                     </div>
-                    <button
-                      type="button"
-                      aria-expanded={requestPickerOpen}
-                      onClick={() => setRequestPickerOpen((v) => !v)}
-                    >
-                      ＋ 요청 연결
-                    </button>
                   </div>
-                  {requestPickerOpen && (
-                    <section
-                      className="pr-request-picker"
-                      aria-label="연결할 요청 선택"
-                    >
-                      <div className="pr-section-heading">
-                        <strong>요청 검색</strong>
-                        <button
-                          type="button"
-                          onClick={() => setRequestPickerOpen(false)}
-                        >
-                          닫기
-                        </button>
-                      </div>
-                      <input
-                        autoFocus
-                        onKeyDown={(e) => {
-                          if (e.key === "Enter") e.preventDefault();
-                          if (e.key === "Escape") setRequestPickerOpen(false);
-                        }}
-                        aria-label="요청 제목 검색"
-                        placeholder="요청 제목으로 검색…"
-                        value={requestQuery}
-                        onChange={(e) => setRequestQuery(e.target.value)}
-                      />
-                      <div className="pr-request-results">
-                        {requests
-                          .filter(
-                            (r) =>
-                              !r.taskId &&
-                              !plans.some((p) => p.requestId === r.id) &&
-                              r.title
-                                .toLocaleLowerCase()
-                                .includes(requestQuery.toLocaleLowerCase()),
-                          )
-                          .map((r) => (
-                            <div className="pr-request-result" key={r.id}>
-                              <div>
-                                <span>
-                                  {r.origin === "development"
-                                    ? "개발 요청"
-                                    : "고객 요청"}
-                                </span>
-                                <strong>{r.title}</strong>
-                                {r.meetingId && r.meetingId !== editing && (
-                                  <small>
-                                    {r.meetingTitle || "다른 회의"}에 연결됨
-                                  </small>
-                                )}
-                              </div>
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  if (r.meetingId && r.meetingId !== editing) {
-                                    if (
-                                      !window.confirm(
-                                        `이 요청은 '${r.meetingTitle || r.meetingId}' 회의에 연결되어 있습니다. 기존 회의에서 제외하고 이 회의로 이동할까요? 승인 대기 중인 회의에서는 먼저 승인을 취소해야 합니다.`,
-                                      )
-                                    )
-                                      return;
-                                    setTransfers((current) => ({
-                                      ...current,
-                                      [r.id]: r.meetingId!,
-                                    }));
-                                  }
-                                  setPlans((current) => [
-                                    ...current,
-                                    {
-                                      requestId: r.id,
-                                      planning: "",
-                                      uiNotes: "",
-                                      apiNotes: "",
-                                      dbNotes: "",
-                                      priority: "normal",
-                                      assigneeIds: [],
-                                      stages: [],
-                                    },
-                                  ]);
-                                }}
-                              >
-                                ＋ 연결
-                              </button>
-                            </div>
-                          ))}
-                        {!requests.some(
-                          (r) =>
-                            !r.taskId &&
-                            !plans.some((p) => p.requestId === r.id) &&
-                            r.title
-                              .toLocaleLowerCase()
-                              .includes(requestQuery.toLocaleLowerCase()),
-                        ) && <p>연결할 수 있는 요청이 없어요.</p>}
-                      </div>
-                    </section>
+                  {!plans.length && !locked && (
+                    <div className="pr-request-empty">
+                      <p>
+                        요청을 연결한 뒤, 요청 박스 안에서 업무를 추가하세요.
+                      </p>
+                      {renderRequestConnector(0, "empty")}
+                    </div>
                   )}
-                  {!plans.length && (
-                    <p className="pr-request-empty">
-                      요청을 연결한 뒤, 요청 박스 안에서 업무를 추가하세요.
-                    </p>
-                  )}
-                  {plans.map((p) => (
-                    <section
-                      className="pr-editor pr-request-plan"
-                      key={p.requestId}
-                    >
-                      <div className="pr-section-heading">
-                        <h3>
-                          {requests.find((r) => r.id === p.requestId)?.title ||
-                            p.requestId}
-                        </h3>
-                        {!locked && (
+                  {plans.map((p, index) => (
+                    <Fragment key={p.requestId}>
+                      {!locked && renderRequestConnector(index, "gap")}
+                      <section
+                        className="pr-editor pr-request-plan"
+                        key={p.requestId}
+                      >
+                        <div className="pr-section-heading">
+                          <h3>
+                            {requests.find((r) => r.id === p.requestId)
+                              ?.title || p.requestId}
+                          </h3>
+                          {!locked && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                if (
+                                  p.stages?.length &&
+                                  !window.confirm(
+                                    "작성한 업무 초안도 함께 제거됩니다. 요청 연결을 해제할까요?",
+                                  )
+                                )
+                                  return;
+                                setPlans((current) =>
+                                  current.filter(
+                                    (plan) => plan.requestId !== p.requestId,
+                                  ),
+                                );
+                                setTransfers((current) => {
+                                  const next = { ...current };
+                                  delete next[p.requestId];
+                                  return next;
+                                });
+                              }}
+                            >
+                              연결 해제
+                            </button>
+                          )}
+                        </div>
+                        {[p.planning, p.uiNotes, p.apiNotes, p.dbNotes].some(
+                          (note) => note?.trim(),
+                        ) && (
+                          <details>
+                            <summary>이전 기획 기록</summary>
+                            {(
+                              [
+                                ["planning", "기획 · 결정사항"],
+                                ["uiNotes", "화면 UI 구상"],
+                                ["apiNotes", "API · 데이터 처리"],
+                                ["dbNotes", "DB 설계"],
+                              ] as const
+                            ).map(([key, text]) =>
+                              p[key]?.trim() ? (
+                                <div key={key}>
+                                  <strong>{text}</strong>
+                                  <p style={{ whiteSpace: "pre-wrap" }}>
+                                    {p[key]}
+                                  </p>
+                                </div>
+                              ) : null,
+                            )}
+                          </details>
+                        )}
+                        <fieldset>
+                          <legend>요청 우선순위</legend>
+                          <label>
+                            우선순위
+                            <select
+                              value={p.priority}
+                              onChange={(e) =>
+                                patchPlan(p.requestId, {
+                                  priority: e.target.value,
+                                })
+                              }
+                            >
+                              {Object.entries(priorities).map(([v, t]) => (
+                                <option key={v} value={v}>
+                                  {t}
+                                </option>
+                              ))}
+                            </select>
+                          </label>
+                        </fieldset>
+                        <StagePlanEditor
+                          projectId={projectId}
+                          disabled={busy || locked}
+                          value={p.stages || []}
+                          onChange={(stages) =>
+                            patchPlan(p.requestId, {
+                              stages,
+                              assigneeIds: [
+                                ...new Set(
+                                  stages.flatMap((s) => s.assigneeIds),
+                                ),
+                              ],
+                            })
+                          }
+                          members={members.filter(
+                            (m) => m.accountType === "team",
+                          )}
+                          reviewers={workApprovers}
+                        />
+                        {p.taskId && (
                           <button
                             type="button"
-                            onClick={() => {
-                              if (
-                                p.stages?.length &&
-                                !window.confirm(
-                                  "작성한 업무 초안도 함께 제거됩니다. 요청 연결을 해제할까요?",
-                                )
-                              )
-                                return;
-                              setPlans((current) =>
-                                current.filter(
-                                  (plan) => plan.requestId !== p.requestId,
-                                ),
-                              );
-                              setTransfers((current) => {
-                                const next = { ...current };
-                                delete next[p.requestId];
-                                return next;
-                              });
-                            }}
+                            onClick={() => onTask?.(p.taskId!)}
                           >
-                            연결 해제
+                            생성된 개발 업무 열기
                           </button>
                         )}
-                      </div>
-                      {[p.planning, p.uiNotes, p.apiNotes, p.dbNotes].some(
-                        (note) => note?.trim(),
-                      ) && (
-                        <details>
-                          <summary>이전 기획 기록</summary>
-                          {(
-                            [
-                              ["planning", "기획 · 결정사항"],
-                              ["uiNotes", "화면 UI 구상"],
-                              ["apiNotes", "API · 데이터 처리"],
-                              ["dbNotes", "DB 설계"],
-                            ] as const
-                          ).map(([key, text]) =>
-                            p[key]?.trim() ? (
-                              <div key={key}>
-                                <strong>{text}</strong>
-                                <p style={{ whiteSpace: "pre-wrap" }}>
-                                  {p[key]}
-                                </p>
-                              </div>
-                            ) : null,
-                          )}
-                        </details>
-                      )}
-                      <fieldset>
-                        <legend>요청 우선순위</legend>
-                        <label>
-                          우선순위
-                          <select
-                            value={p.priority}
-                            onChange={(e) =>
-                              patchPlan(p.requestId, {
-                                priority: e.target.value,
-                              })
-                            }
-                          >
-                            {Object.entries(priorities).map(([v, t]) => (
-                              <option key={v} value={v}>
-                                {t}
-                              </option>
-                            ))}
-                          </select>
-                        </label>
-                      </fieldset>
-                      <StagePlanEditor
-                        projectId={projectId}
-                        disabled={busy || locked}
-                        value={p.stages || []}
-                        onChange={(stages) =>
-                          patchPlan(p.requestId, {
-                            stages,
-                            assigneeIds: [
-                              ...new Set(stages.flatMap((s) => s.assigneeIds)),
-                            ],
-                          })
-                        }
-                        members={members.filter(
-                          (m) => m.accountType === "team",
-                        )}
-                        reviewers={workApprovers}
-                      />
-                      {p.taskId && (
-                        <button
-                          type="button"
-                          onClick={() => onTask?.(p.taskId!)}
-                        >
-                          생성된 개발 업무 열기
-                        </button>
-                      )}
-                    </section>
+                      </section>
+                    </Fragment>
                   ))}
+                  {!!plans.length && !locked && (
+                    <>
+                      {renderRequestConnector(plans.length, "gap")}
+                      {renderRequestConnector(plans.length, "append")}
+                    </>
+                  )}
                 </>
               ) : (
                 <>
