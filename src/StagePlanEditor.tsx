@@ -1,3 +1,4 @@
+import { createLocalId } from "./browser-id";
 import { sequenceStages, isSequential as hasSequentialOrder, moveStage } from "./stage-order";
 import { useEffect, useState } from "react";
 import "./stage-workflow.css";
@@ -20,7 +21,7 @@ export const newStage = (
   name = "개발",
   completionMode: StagePlan["completionMode"] = "code",
 ): StagePlan => ({
-  id: crypto.randomUUID(),
+  id: createLocalId(),
   name,
   title: name,
   brief: "",
@@ -115,12 +116,12 @@ export default function StagePlanEditor({ value, onChange, members, reviewers = 
         }}>삭제</button>
       </header>
       {collapsed.includes(s.id) ? <p className="sw-help">담당: {s.assigneeIds.map(id => members.find(m => m.userId === id)?.displayName || "기존 멤버").join(", ") || "미지정"} · 승인: {s.reviewerIds.map(id => reviewers.find(m => m.userId === id)?.displayName || "기존 멤버").join(", ") || "미지정"}</p> : <>
-        <label>업무 제목<input maxLength={160} placeholder="무엇을 할 업무인가요?" value={s.title} onChange={e => patch(s.id, { title: e.target.value })} /></label>
         <div className="sw-people-row">
           <MemberPicker label="담당자" items={members} value={s.assigneeIds} disabled={disabled} onChange={ids => patch(s.id, { assigneeIds: ids })} />
           <MemberPicker label="작업 승인자" items={reviewers} value={s.reviewerIds} disabled={disabled} onChange={ids => patch(s.id, { reviewerIds: ids })} />
         </div>
-        <label>카테고리<select value={s.name} onChange={e => { const t = categories.find(t => t.name === e.target.value); if (t) patch(s.id, { name: t.name, completionMode: t.completionMode }); }}>
+        <label className="sw-inline-field"><span>업무 제목</span><input maxLength={160} placeholder="무엇을 할 업무인가요?" value={s.title} onChange={e => patch(s.id, { title: e.target.value })} /></label>
+        <label className="sw-inline-field"><span>카테고리</span><select value={s.name} onChange={e => { const t = categories.find(t => t.name === e.target.value); if (t) patch(s.id, { name: t.name, completionMode: t.completionMode }); }}>
           <option value="" disabled>선택하세요</option>
           {!!s.name && !categories.some(t => t.name === s.name) && <option value={s.name}>{s.name}</option>}
           {categories.map(t => <option key={t.name} value={t.name}>{t.name}</option>)}

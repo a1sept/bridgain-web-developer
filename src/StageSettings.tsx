@@ -1,3 +1,4 @@
+import { createLocalId } from "./browser-id";
 import { useEffect, useState } from "react";
 import { workflowApi } from "./Approvals";
 import "./stage-settings.css";
@@ -20,7 +21,7 @@ const modes: [Mode, string][] = [
   ["test", "테스트"],
   ["deploy", "배포"],
 ];
-const key = () => crypto.randomUUID();
+const key = () => createLocalId();
 export default function StageSettings({ projectId }: { projectId: string }) {
   const [data, setData] = useState<Settings>();
   const [original, setOriginal] = useState("");
