@@ -635,16 +635,17 @@ export default function RequestBoard({
                       </p>
                     </div>
                   </section>
+                  <footer className="rb-submit">
+                    <button
+                      type="submit"
+                      className="rb-primary"
+                      disabled={busy || !title.trim() || !description.trim()}
+                    >
+                      {busy ? "제출 중…" : "요청 제출하기"}
+                    </button>
+                  </footer>
                 </aside>
               </div>
-              <footer className="rb-submit">
-                <button
-                  className="rb-primary"
-                  disabled={busy || !title.trim() || !description.trim()}
-                >
-                  {busy ? "제출 중…" : "요청 제출하기"}
-                </button>
-              </footer>
             </fieldset>
           </form>
         ) : loading ? (
