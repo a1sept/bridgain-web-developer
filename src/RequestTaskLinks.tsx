@@ -6,13 +6,16 @@ type Task = {
   stageName?: string;
   stageOrder?: number;
   dependencies?: { predecessorId: string; title: string; status: string }[];
+  assignees?: { userId: string; displayName: string }[];
   requests: { id: string }[];
 };
 export default function RequestTaskLinks({
   projectId,
   requestId,
   onTasks,
+  refreshKey,
 }: {
+  refreshKey?: string;
   projectId: string;
   requestId: string;
   onTasks: (requestId?: string) => void;
@@ -48,7 +51,7 @@ export default function RequestTaskLinks({
         if (!controller.signal.aborted) setLoading(false);
       });
     return () => controller.abort();
-  }, [projectId, requestId, retry]);
+  }, [projectId, requestId, retry, refreshKey]);
   return (
     <section className="rb-panel">
       <h2>연결된 업무</h2>
@@ -75,6 +78,11 @@ export default function RequestTaskLinks({
                     `${(task.stageOrder || 0) + 1}. ${task.stageName} · `}
                   {task.title}
                 </button>
+                {!!task.assignees?.length && (
+                  <small>
+                    담당: {task.assignees.map((p) => p.displayName).join(", ")}
+                  </small>
+                )}
                 {!!task.dependencies?.length && (
                   <small>
                     선행: {task.dependencies.map((d) => d.title).join(", ")}

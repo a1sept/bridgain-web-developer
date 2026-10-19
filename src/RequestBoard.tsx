@@ -10,7 +10,13 @@ type Member = {
   displayName: string;
   accountType: "client" | "team";
 };
-type Project = { rolesConfigured?: boolean; permissions?: string[]; id: string; name: string; members: Member[] };
+type Project = {
+  rolesConfigured?: boolean;
+  permissions?: string[];
+  id: string;
+  name: string;
+  members: Member[];
+};
 type RequestItem = {
   id: string;
   origin?: "customer" | "development";
@@ -27,6 +33,7 @@ type RequestItem = {
   createdAt: string;
   updatedAt: string;
   creatorName: string;
+  handler?: { userId: string; displayName: string; handledAt: string } | null;
   assignees: Member[];
 };
 type Event = {
@@ -149,7 +156,7 @@ export default function RequestBoard({
   onBack: () => void;
   onInfo: () => void;
   onTasks?: (requestId?: string) => void;
-  onMeetings?: (requestId: string) => void;
+  onMeetings?: (requestId: string, meetingId?: string) => void;
 }) {
   const ai = useAi();
   const [aiRevision, setAiRevision] = useState(0);
@@ -160,7 +167,8 @@ export default function RequestBoard({
   }, []);
   const [path, setPath] = useState(window.location.pathname);
   const base = `/projects/${project?.id}/requests`;
-  const canCreate = !project?.permissions || project.permissions.includes("requests.create");
+  const canCreate =
+    !project?.permissions || project.permissions.includes("requests.create");
   const suffix = path.slice(base.length).split("/").filter(Boolean);
   const isNew = suffix[0] === "new";
   const requestId = isNew ? undefined : suffix[0];
@@ -186,7 +194,21 @@ export default function RequestBoard({
     [priority, setPriority] = useState("normal"),
     [files, setFiles] = useState<File[]>([]);
   const [priorityFilter, setPriorityFilter] = useState("");
-  const [assigned, setAssigned] = useState<string[]>([]);
+  const [actionsOpen, setActionsOpen] = useState(false);
+  const actionsRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!actionsOpen) return;
+    const close = (event: PointerEvent) => {
+      if (!actionsRef.current?.contains(event.target as Node))
+        setActionsOpen(false);
+    };
+    document.addEventListener("pointerdown", close);
+    return () => document.removeEventListener("pointerdown", close);
+  }, [actionsOpen]);
+  useEffect(() => {
+    setActionsOpen(false);
+    setUrgent(false);
+  }, [requestId, project?.id]);
   const originRequests = allRequests.filter(
     (r) => (r.origin || "customer") === origin,
   );
@@ -228,7 +250,6 @@ export default function RequestBoard({
       const d = await api<Detail>(`${base}/${requestId}`);
       if (window.location.pathname !== path) return;
       setDetail(d);
-      setAssigned((d.request.assignees || []).map((m) => m.userId));
     } else if (!isNew) {
       const result = await api<{ requests: RequestItem[] }>(base);
       if (window.location.pathname !== path) return;
@@ -255,7 +276,6 @@ export default function RequestBoard({
         if ("request" in d) {
           setDetail(d);
           if (d.request.origin) setOrigin(d.request.origin);
-          setAssigned((d.request.assignees || []).map((m) => m.userId));
         } else setList(d.requests);
       })
       .catch((e) => {
@@ -340,12 +360,7 @@ export default function RequestBoard({
       <h2>진행 현황 타임라인</h2>
       <div className="rb-timeline-summary">
         <strong>{d.request.title}</strong>
-        <p>
-          담당 개발팀:{" "}
-          {d.request.assignees.length
-            ? d.request.assignees.map((m) => m.displayName).join(", ")
-            : "배정 대기"}
-        </p>
+        <p>처리 담당자: {d.request.handler?.displayName || "처리 전"}</p>
         <small>최종 업데이트 {date(d.request.updatedAt)}</small>
       </div>
       <p className="rb-muted">현재 단계와 실제 변경 이력을 확인하세요.</p>
@@ -417,9 +432,7 @@ export default function RequestBoard({
       </main>
     );
   return (
-    <div
-      className={`rb-shell ${suffix[1] === "conversation" && detail && !loading ? "rb-chat-open" : ""}`}
-    >
+    <div className="rb-shell">
       {(requestId || isNew) && (
         <header className="rb-header">
           <div>
@@ -652,34 +665,11 @@ export default function RequestBoard({
               </div>
               <div className="rc-title-row">
                 <h1>{detail.request.title}</h1>
-                <button
-                  type="button"
-                  className="rc-title-action"
-                  aria-label="대화 열기"
-                  title="대화 열기"
-                  aria-pressed={suffix[1] === "conversation"}
-                  onClick={() => go(`${base}/${requestId}/conversation`)}
-                >
-                  <svg
-                    width="24"
-                    height="24"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="1.8"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    aria-hidden="true"
-                  >
-                    <path d="M21 11.5a8.4 8.4 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.4 8.4 0 0 1-3.8-.9L3 21l1.9-5.7a8.4 8.4 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.4 8.4 0 0 1 3.8-.9h.5a8.5 8.5 0 0 1 8 8v.5Z" />
-                    <path d="M8 11h8M8 14h5" />
-                  </svg>
-                </button>
               </div>
             </div>
             <nav className="rb-tabs" aria-label="요청 상세 메뉴">
               <button
-                className={!suffix[1] ? "selected" : ""}
+                className={suffix[1] !== "timeline" ? "selected" : ""}
                 onClick={() => go(`${base}/${requestId}`)}
               >
                 요청 상세
@@ -696,30 +686,39 @@ export default function RequestBoard({
             ) : (
               <div className="rb-detail-grid rb-request-detail">
                 <div>
-                  {project && requestId && (
-                    <button
-                      className="ai-investigate"
-                      type="button"
-                      onClick={() =>
-                        ai.investigate(project, requestId, detail.request.title)
-                      }
-                    >
-                      AI 조사
-                    </button>
-                  )}
-                  {onMeetings && requestId && !detail.request.taskId && (
-                    <button type="button" onClick={() => onMeetings(requestId)}>
-                      회의에 연결하기
-                    </button>
-                  )}
-                  {onMeetings && requestId && !detail.request.taskId && (
-                    <button type="button" onClick={() => setUrgent((v) => !v)}>
-                      긴급 승인 요청
-                    </button>
-                  )}
+                  <h2 className="rd-section-title">요청 요약 정보</h2>
+                  <section className="rb-panel">
+                    <dl className="rd-summary rd-summary-grid">
+                      <div>
+                        <dt>요청자</dt>
+                        <dd>{detail.request.creatorName}</dd>
+                      </div>
+                      <div>
+                        <dt>등록일</dt>
+                        <dd>{date(detail.request.createdAt)}</dd>
+                      </div>
+                      <div>
+                        <dt>요청 유형</dt>
+                        <dd>{types[detail.request.type]}</dd>
+                      </div>
+                      <div>
+                        <dt>우선순위</dt>
+                        <dd>{priorities[detail.request.priority]}</dd>
+                      </div>
+                      <div>
+                        <dt>처리 담당자</dt>
+                        <dd>
+                          {detail.request.handler?.displayName || "처리 전"}
+                        </dd>
+                      </div>
+                    </dl>
+                  </section>
                   {urgent && requestId && (
                     <UrgentApproval
-                      canAssign={!project.rolesConfigured || !!project.permissions?.includes("tasks.assign")}
+                      canAssign={
+                        !project.rolesConfigured ||
+                        !!project.permissions?.includes("tasks.assign")
+                      }
                       projectId={project.id}
                       requestId={requestId}
                       onDone={() => {
@@ -728,50 +727,6 @@ export default function RequestBoard({
                       }}
                     />
                   )}
-                  {onTasks && project && (
-                    <RequestTaskLinks
-                      projectId={project.id}
-                      requestId={requestId}
-                      onTasks={onTasks}
-                    />
-                  )}
-                  <section className="rb-panel">
-                    <h2>연결된 회의 · 개발 업무</h2>
-                    {detail.workflow?.meetings.map((m) => (
-                      <p key={m.id}>
-                        {m.title} ·{" "}
-                        {m.decisionStatus === "final"
-                          ? "최종안"
-                          : "회의 논의 중"}
-                      </p>
-                    ))}
-                    {detail.workflow?.tasks.map((t) => (
-                      <div key={t.id}>
-                        <strong>{t.title}</strong>
-                        <p>
-                          {
-                            (
-                              {
-                                todo: "진행 전",
-                                in_progress: "진행 중",
-                                done: "개발 완료",
-                                released: "배포 완료",
-                              } as Record<string, string>
-                            )[t.status]
-                          }
-                        </p>
-                        {t.resultSummary && (
-                          <p style={{ whiteSpace: "pre-wrap" }}>
-                            {t.resultSummary}
-                          </p>
-                        )}
-                      </div>
-                    ))}
-                    {!detail.workflow?.tasks.length &&
-                      !detail.workflow?.meetings.length && (
-                        <p>아직 연결된 회의나 업무가 없습니다.</p>
-                      )}
-                  </section>
                   <h2 className="rd-section-title">요청 내용</h2>
                   <section className="rb-panel">
                     <p className="rb-description">
@@ -848,112 +803,171 @@ export default function RequestBoard({
                       </label>
                     )}
                   </section>
+                  <h2 className="rd-section-title">댓글</h2>
+                  <RequestConversation
+                    embedded
+                    key={requestId}
+                    userId={user.id}
+                    title={detail.request.title}
+                    status={detail.request.status}
+                    assignees={
+                      detail.request.handler
+                        ? [detail.request.handler.displayName]
+                        : []
+                    }
+                    events={detail.events}
+                    onClose={() => go(`${base}/${requestId}`)}
+                    onSend={async (body) => {
+                      await api(`${base}/${requestId}/comments`, { body });
+                    }}
+                    onLoad={async () => {
+                      const latest = await api<Detail>(`${base}/${requestId}`);
+                      if (window.location.pathname === path) setDetail(latest);
+                      return latest.events;
+                    }}
+                  />
                 </div>
-                <aside>
-                  <h2 className="rd-section-title">담당 개발팀</h2>
-                  <section className="rb-panel rd-team-panel">
-                    {detail.request.assignees?.length ? (
-                      <ul className="rd-people">
-                        {detail.request.assignees.map((member) => (
-                          <li key={member.userId}>
-                            <span className="rd-avatar" aria-hidden="true">
-                              {member.displayName.slice(0, 1)}
-                            </span>
-                            <div>
-                              <strong>{member.displayName}</strong>
-                              <span>요청 담당자</span>
-                            </div>
-                          </li>
-                        ))}
-                      </ul>
-                    ) : (
-                      <p className="rd-empty">
-                        아직 담당자가 배정되지 않았어요.
-                      </p>
-                    )}
-                    {detail.canAssign && (
-                      <fieldset className="rb-assignees">
-                        <legend>담당자 배정</legend>
-                        {project.members
-                          .filter((m) => m.accountType === "team")
-                          .map((m) => (
-                            <label key={m.userId}>
-                              <input
-                                type="checkbox"
-                                checked={assigned.includes(m.userId)}
-                                onChange={(e) =>
-                                  setAssigned(
-                                    e.target.checked
-                                      ? [...assigned, m.userId]
-                                      : assigned.filter(
-                                          (id) => id !== m.userId,
-                                        ),
-                                  )
-                                }
-                              />
-                              {m.displayName}
-                            </label>
-                          ))}
-                        <button
-                          disabled={busy}
-                          onClick={() =>
-                            void run(async () => {
-                              await api(
-                                `${base}/${requestId}`,
-                                { assigneeIds: assigned },
-                                "PATCH",
-                              );
-                              await refresh();
-                              setNotice("담당자를 저장했어요.");
-                            })
-                          }
-                        >
-                          담당자 저장
-                        </button>
-                      </fieldset>
-                    )}
-                  </section>
-                  <h2 className="rd-section-title">요청 요약 정보</h2>
+                <aside className="rd-connections">
                   <section className="rb-panel">
-                    <dl className="rd-summary">
-                      <div>
-                        <dt>요청 유형</dt>
-                        <dd>{types[detail.request.type]}</dd>
-                      </div>
-                      <div>
-                        <dt>생성 일시</dt>
-                        <dd>
-                          {new Date(detail.request.createdAt).toLocaleString(
-                            "ko-KR",
-                            {
-                              year: "numeric",
-                              month: "2-digit",
-                              day: "2-digit",
-                              hour: "2-digit",
-                              minute: "2-digit",
-                              hour12: false,
-                            },
+                    <h2>연결된 회의</h2>
+                    {detail.workflow?.meetings.length ? (
+                      detail.workflow.meetings.map((meeting) => (
+                        <div className="rd-meeting-link" key={meeting.id}>
+                          <strong>{meeting.title}</strong>
+                          <span>
+                            {meeting.decisionStatus === "final"
+                              ? "승인 완료"
+                              : meeting.decisionStatus === "pending"
+                                ? "승인 대기"
+                                : "논의 중"}{" "}
+                            · {date(meeting.scheduledAt)}
+                          </span>
+                          {onMeetings && (
+                            <button
+                              type="button"
+                              onClick={() => onMeetings(requestId, meeting.id)}
+                            >
+                              회의 열기 →
+                            </button>
                           )}
-                        </dd>
-                      </div>
-                      <div>
-                        <dt>요청자</dt>
-                        <dd>{detail.request.creatorName}</dd>
-                      </div>
-                      <div>
-                        <dt>우선순위</dt>
-                        <dd>{priorities[detail.request.priority]}</dd>
-                      </div>
-                    </dl>
+                        </div>
+                      ))
+                    ) : (
+                      <p className="rb-muted">아직 연결된 회의가 없습니다.</p>
+                    )}
                   </section>
+                  {onTasks && (
+                    <RequestTaskLinks
+                      projectId={project.id}
+                      requestId={requestId}
+                      onTasks={onTasks}
+                      refreshKey={detail.request.approvalId || ""}
+                    />
+                  )}
+                  <div
+                    className="rd-actions rd-process-actions"
+                    ref={actionsRef}
+                    onKeyDown={(e) => {
+                      if (e.key === "Escape") {
+                        setActionsOpen(false);
+                        actionsRef.current
+                          ?.querySelector<HTMLButtonElement>(
+                            ".rd-action-trigger",
+                          )
+                          ?.focus();
+                      }
+                    }}
+                  >
+                    <button
+                      type="button"
+                      className="rd-action-trigger"
+                      aria-expanded={actionsOpen}
+                      aria-controls="request-action-popover"
+                      onClick={() => setActionsOpen((v) => !v)}
+                    >
+                      요청 처리 ▾
+                    </button>
+                    {actionsOpen && (
+                      <div
+                        className="rd-action-popover"
+                        id="request-action-popover"
+                        aria-label="요청 처리 동작"
+                      >
+                        {onMeetings && !detail.request.taskId && (
+                          <>
+                            <button
+                              type="button"
+                              disabled={
+                                !!detail.request.approvalId ||
+                                (!!project.permissions &&
+                                  !project.permissions.includes(
+                                    "meetings.create",
+                                  ))
+                              }
+                              onClick={() => {
+                                setActionsOpen(false);
+                                onMeetings(requestId);
+                              }}
+                            >
+                              <strong>
+                                {detail.request.meetingId
+                                  ? "연결 회의 변경"
+                                  : "회의에 연결하기"}
+                              </strong>
+                              <small>
+                                {detail.request.approvalId
+                                  ? "승인 요청을 먼저 취소해주세요."
+                                  : "회의에서 논의할 요청입니다."}
+                              </small>
+                            </button>
+                            <button
+                              type="button"
+                              disabled={
+                                !!detail.request.meetingId ||
+                                !!detail.request.approvalId ||
+                                (!!project.permissions &&
+                                  (!project.permissions.includes(
+                                    "requests.create",
+                                  ) ||
+                                    (project.rolesConfigured &&
+                                      !project.permissions.includes(
+                                        "tasks.assign",
+                                      ))))
+                              }
+                              onClick={() => {
+                                setActionsOpen(false);
+                                setUrgent(true);
+                              }}
+                            >
+                              <strong>긴급 승인 요청</strong>
+                              <small>
+                                {detail.request.meetingId
+                                  ? "연결된 회의에서 먼저 제외해주세요."
+                                  : detail.request.approvalId
+                                    ? "이미 승인 요청 중입니다."
+                                    : "회의를 생략하고 승인받아요."}
+                              </small>
+                            </button>
+                          </>
+                        )}
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setActionsOpen(false);
+                            ai.investigate(
+                              project,
+                              requestId,
+                              detail.request.title,
+                            );
+                          }}
+                        >
+                          <strong>AI 조사</strong>
+                          <small>요청과 관련된 내용을 조사합니다.</small>
+                        </button>
+                      </div>
+                    )}
+                  </div>
                 </aside>
-                <div className="rd-help">
-                  <span aria-hidden="true">ⓘ</span>
-                  <p>
-                    담당 개발팀에게 질문이나 추가 내용을 전달하려면 상단의
-                    말풍선 아이콘을 눌러주세요.
-                  </p>
-                </div>
               </div>
             )}
           </>
@@ -966,7 +980,7 @@ export default function RequestBoard({
                 <p>요청을 모으고 진행 상황을 함께 확인하세요.</p>
               </div>
               <div className="rb-heading-actions">
-                {canCreate &&
+                {canCreate && (
                   <button
                     className="rb-primary"
                     onClick={() => go(`${base}/new`)}
@@ -974,7 +988,7 @@ export default function RequestBoard({
                     ＋ {user.accountType === "team" ? "개발 요청" : "고객 요청"}{" "}
                     작성
                   </button>
-                }
+                )}
               </div>
             </div>
             <div className="rb-stats rb-request-metrics">
@@ -1130,25 +1144,6 @@ export default function RequestBoard({
           </>
         ) : null}
       </main>
-      {suffix[1] === "conversation" && requestId && detail && !loading && (
-        <RequestConversation
-          key={requestId}
-          userId={user.id}
-          title={detail.request.title}
-          status={detail.request.status}
-          assignees={detail.request.assignees.map((m) => m.displayName)}
-          events={detail.events}
-          onClose={() => go(`${base}/${requestId}`)}
-          onSend={async (body) => {
-            await api(`${base}/${requestId}/comments`, { body });
-          }}
-          onLoad={async () => {
-            const latest = await api<Detail>(`${base}/${requestId}`);
-            if (window.location.pathname === path) setDetail(latest);
-            return latest.events;
-          }}
-        />
-      )}
     </div>
   );
 }

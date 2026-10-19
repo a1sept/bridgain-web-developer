@@ -1,5 +1,7 @@
+import { sequenceStages, isSequential as hasSequentialOrder, moveStage } from "./stage-order";
 import { useEffect, useState } from "react";
 import "./stage-workflow.css";
+import MemberPicker from "./MemberPicker";
 export type StagePlan = {
   id: string;
   name: string;
@@ -61,258 +63,76 @@ export function validStages(stages: StagePlan[] | undefined): boolean {
   return stages.every((s) => visit(s.id));
 }
 
-export default function StagePlanEditor({
-  value,
-  onChange,
-  members,
-  reviewers = members,
-  disabled = false,
-  projectId,
-}: {
-  projectId?: string;
-  value: StagePlan[];
-  onChange: (stages: StagePlan[]) => void;
-  members: Person[];
-  reviewers?: Person[];
-  disabled?: boolean;
+export default function StagePlanEditor({ value, onChange, members, reviewers = members, disabled = false, projectId }: {
+  projectId?: string; value: StagePlan[]; onChange: (stages: StagePlan[]) => void;
+  members: Person[]; reviewers?: Person[]; disabled?: boolean;
 }) {
-  const [settings, setSettings] = useState<{
-    stageTypes: {
-      id: string;
-      name: string;
-      completionMode: StagePlan["completionMode"];
-    }[];
-    presets: {
-      id: string;
-      name: string;
-      stages: Pick<StagePlan, "id" | "name" | "completionMode" | "dependsOn">[];
-    }[];
-  }>({ stageTypes: [], presets: [] });
+  const [types, setTypes] = useState<{ name: string; completionMode: StagePlan["completionMode"] }[]>([]);
+  const [collapsed, setCollapsed] = useState<string[]>([]);
+  const [dragged, setDragged] = useState<string | null>(null);
   useEffect(() => {
     if (!projectId) return;
     const controller = new AbortController();
-    fetch(`/api/workspace/projects/${projectId}/stage-settings`, {
-      credentials: "same-origin",
-      signal: controller.signal,
-    })
-      .then((r) => {
-        if (!r.ok) throw Error();
-        return r.json();
-      })
-      .then(setSettings)
-      .catch(() => {});
+    setTypes([]);
+    fetch(`/api/workspace/projects/${projectId}/stage-settings`, { credentials: "same-origin", signal: controller.signal })
+      .then(r => { if (!r.ok) throw Error(); return r.json(); })
+      .then(d => setTypes(d.stageTypes || [])).catch(() => {});
     return () => controller.abort();
   }, [projectId]);
-  const applyPreset = (id: string) => {
-    const p = settings.presets.find((p) => p.id === id);
-    if (!p) return;
-    const ids = Object.fromEntries(
-      p.stages.map((s) => [s.id, crypto.randomUUID()]),
-    );
-    onChange(
-      p.stages.map((s) => ({
-        ...newStage(s.name, s.completionMode),
-        id: ids[s.id],
-        dependsOn: s.dependsOn.map((id) => ids[id]),
-      })),
-    );
-  };
+  const categories = types.length ? types : [
+    { name: "기획", completionMode: "document" as const },
+    { name: "디자인", completionMode: "design" as const },
+    { name: "개발", completionMode: "code" as const },
+  ];
   const patch = (id: string, change: Partial<StagePlan>) =>
-    onChange(value.map((s) => (s.id === id ? { ...s, ...change } : s)));
-  const preset = () => {
-    const a = newStage("기획", "document"),
-      b = newStage("디자인", "design"),
-      c = newStage();
-    b.dependsOn = [a.id];
-    c.dependsOn = [b.id];
-    onChange([a, b, c]);
+    onChange(value.map(s => s.id === id ? { ...s, ...change } : s));
+  const ordered = sequenceStages<StagePlan>;
+  const isSequential = hasSequentialOrder(value);
+  const reorder = (from: number, to: number) => {
+    if (disabled || from === to || from < 0 || to < 0 || to >= value.length) return;
+    if (!isSequential && !window.confirm("기존 병렬·선행 연결이 있습니다. 변경한 순서대로 한 업무씩 진행하도록 바꿀까요?")) return;
+    onChange(moveStage(value, from, to));
   };
-  return (
-    <fieldset className="sw-editor" disabled={disabled}>
-      <legend>단계별 업무 계획</legend>
-      <p>
-        담당자 전원 작업 완료 후 지정 승인자 전원이 승인합니다. 선행 업무가
-        끝나면 다음 단계가 열립니다.
-      </p>
-      {!validStages(value) && (
-        <p role="status">
-          승인 요청에는 각 단계의 범위·담당자·승인자가 필요하며, 선행 업무를
-          순환 연결할 수 없습니다.
-        </p>
-      )}
-      <div className="sw-actions">
-        <button type="button" onClick={() => onChange([...value, newStage()])}>
-          단계 추가
-        </button>
-        <button type="button" onClick={preset}>
-          기획 → 디자인 → 개발 구성
-        </button>
-        {settings.presets.map((p) => (
-          <button type="button" key={p.id} onClick={() => applyPreset(p.id)}>
-            {p.name} 구성
-          </button>
-        ))}
-        {settings.stageTypes.length > 0 && (
-          <select
-            aria-label="단계 유형 추가"
-            value=""
-            onChange={(e) => {
-              const t = settings.stageTypes.find(
-                (t) => t.id === e.target.value,
-              );
-              if (t) onChange([...value, newStage(t.name, t.completionMode)]);
-            }}
-          >
-            <option value="">단계 유형에서 추가</option>
-            {settings.stageTypes.map((t) => (
-              <option key={t.id} value={t.id}>
-                {t.name}
-              </option>
-            ))}
-          </select>
-        )}
-      </div>
-      {value.map((s, i) => (
-        <section className="sw-stage" key={s.id}>
-          <header>
-            <strong>
-              {i + 1}. {s.name || "새 단계"}
-            </strong>
-            <button
-              type="button"
-              disabled={i === 0}
-              onClick={() => {
-                const next = [...value];
-                [next[i - 1], next[i]] = [next[i], next[i - 1]];
-                onChange(next);
-              }}
-            >
-              위로
-            </button>
-            <button
-              type="button"
-              disabled={i === value.length - 1}
-              onClick={() => {
-                const next = [...value];
-                [next[i], next[i + 1]] = [next[i + 1], next[i]];
-                onChange(next);
-              }}
-            >
-              아래로
-            </button>
-            <button
-              type="button"
-              onClick={() =>
-                onChange(
-                  value
-                    .filter((v) => v.id !== s.id)
-                    .map((v) => ({
-                      ...v,
-                      dependsOn: v.dependsOn.filter((id) => id !== s.id),
-                    })),
-                )
-              }
-            >
-              삭제
-            </button>
-          </header>
-          <div className="sw-grid">
-            <label>
-              단계 이름
-              <input
-                maxLength={60}
-                value={s.name}
-                onChange={(e) => patch(s.id, { name: e.target.value })}
-              />
-            </label>
-            <label>
-              업무 제목
-              <input
-                maxLength={160}
-                value={s.title}
-                onChange={(e) => patch(s.id, { title: e.target.value })}
-              />
-            </label>
-            <label>
-              완료 방식
-              <select
-                value={s.completionMode}
-                onChange={(e) =>
-                  patch(s.id, {
-                    completionMode: e.target
-                      .value as StagePlan["completionMode"],
-                  })
-                }
-              >
-                {Object.entries({
-                  document: "문서",
-                  design: "디자인",
-                  code: "코드 · 배포",
-                  test: "테스트",
-                  deploy: "배포 작업",
-                }).map(([k, v]) => (
-                  <option key={k} value={k}>
-                    {v}
-                  </option>
-                ))}
-              </select>
-            </label>
-          </div>
-          <label>
-            작업 범위 · 완료 기준
-            <textarea
-              value={s.brief}
-              onChange={(e) => patch(s.id, { brief: e.target.value })}
-            />
-          </label>
-          {(["assigneeIds", "reviewerIds"] as const).map((key) => (
-            <fieldset key={key}>
-              <legend>
-                {key === "assigneeIds"
-                  ? "담당자 (1명 이상)"
-                  : "작업 승인자 (전원 승인)"}
-              </legend>
-              {(key === "assigneeIds" ? members : reviewers).map((m) => (
-                <label className="sw-check" key={m.userId}>
-                  <input
-                    type="checkbox"
-                    checked={s[key].includes(m.userId)}
-                    onChange={(e) =>
-                      patch(s.id, {
-                        [key]: e.target.checked
-                          ? [...s[key], m.userId]
-                          : s[key].filter((id) => id !== m.userId),
-                      })
-                    }
-                  />
-                  {m.displayName}
-                </label>
-              ))}
-            </fieldset>
-          ))}
-          <fieldset>
-            <legend>선행 업무 · 병렬 작업은 선택하지 않음</legend>
-            {value
-              .filter((v) => v.id !== s.id)
-              .map((v) => (
-                <label className="sw-check" key={v.id}>
-                  <input
-                    type="checkbox"
-                    checked={s.dependsOn.includes(v.id)}
-                    onChange={(e) =>
-                      patch(s.id, {
-                        dependsOn: e.target.checked
-                          ? [...s.dependsOn, v.id]
-                          : s.dependsOn.filter((id) => id !== v.id),
-                      })
-                    }
-                  />
-                  {v.name} · {v.title}
-                </label>
-              ))}
-          </fieldset>
-        </section>
-      ))}
-    </fieldset>
-  );
+  return <fieldset className="sw-editor sw-task-editor" disabled={disabled}>
+    <legend>업무</legend>
+    {value.length > 0 && <div className="sw-flow" aria-label={isSequential ? "업무 순서" : "업무 목록 (기존 연결 유지)"}>{value.map((s, i) => <span key={s.id}>{isSequential && i > 0 && "→ "}{i + 1}. {s.title || "새 업무"}</span>)}</div>}
+    {!isSequential && <p>기존 병렬·선행 연결을 유지하고 있습니다. 순서를 변경할 때 순차 진행으로 전환할 수 있습니다.</p>}
+    {!value.length && <p>업무를 추가하고 담당자와 승인자를 지정하세요.</p>}
+    {value.map((s, i) => <section className="sw-stage" key={s.id}
+      onDragOver={e => { if (!disabled) e.preventDefault(); }}
+      onDrop={e => { e.preventDefault(); if (dragged) reorder(value.findIndex(v => v.id === dragged), i); setDragged(null); }}>
+      <header>
+        <button type="button" className="sw-drag" disabled={disabled} draggable={!disabled}
+          aria-label={`${i + 1}번 업무 순서 이동`} onDragStart={e => { setDragged(s.id); e.dataTransfer.setData("text/plain", s.id); }} onDragEnd={() => setDragged(null)}>≡</button>
+        <strong>{i + 1}. {s.title || "새 업무"}</strong><span className="sw-category">{s.name || "카테고리 미지정"}</span>
+        <button type="button" disabled={i === 0} aria-label={`${i + 1}번 업무 위로`} onClick={() => reorder(i, i - 1)}>↑</button>
+        <button type="button" disabled={i === value.length - 1} aria-label={`${i + 1}번 업무 아래로`} onClick={() => reorder(i, i + 1)}>↓</button>
+        <button type="button" aria-expanded={!collapsed.includes(s.id)} onClick={() => setCollapsed(v => v.includes(s.id) ? v.filter(id => id !== s.id) : [...v, s.id])}>{collapsed.includes(s.id) ? "펼치기" : "접기"}</button>
+        <button type="button" onClick={() => {
+          if ((s.title.trim() || s.brief.trim() || s.assigneeIds.length || s.reviewerIds.length) && !window.confirm("작성한 업무를 삭제할까요?")) return;
+          const next = value.filter(v => v.id !== s.id);
+          onChange(isSequential ? ordered(next) : next.map(v => ({ ...v, dependsOn: v.dependsOn.filter(id => id !== s.id) })));
+        }}>삭제</button>
+      </header>
+      {collapsed.includes(s.id) ? <p className="sw-help">담당: {s.assigneeIds.map(id => members.find(m => m.userId === id)?.displayName || "기존 멤버").join(", ") || "미지정"} · 승인: {s.reviewerIds.map(id => reviewers.find(m => m.userId === id)?.displayName || "기존 멤버").join(", ") || "미지정"}</p> : <>
+        <label>업무 제목<input maxLength={160} placeholder="무엇을 할 업무인가요?" value={s.title} onChange={e => patch(s.id, { title: e.target.value })} /></label>
+        <div className="sw-people-row">
+          <MemberPicker label="담당자" items={members} value={s.assigneeIds} disabled={disabled} onChange={ids => patch(s.id, { assigneeIds: ids })} />
+          <MemberPicker label="작업 승인자" items={reviewers} value={s.reviewerIds} disabled={disabled} onChange={ids => patch(s.id, { reviewerIds: ids })} />
+        </div>
+        <label>카테고리<select value={s.name} onChange={e => { const t = categories.find(t => t.name === e.target.value); if (t) patch(s.id, { name: t.name, completionMode: t.completionMode }); }}>
+          <option value="" disabled>선택하세요</option>
+          {!!s.name && !categories.some(t => t.name === s.name) && <option value={s.name}>{s.name}</option>}
+          {categories.map(t => <option key={t.name} value={t.name}>{t.name}</option>)}
+        </select></label>
+        <label>업무 내용<textarea rows={4} maxLength={10000} placeholder="해야 할 일과 전달할 내용을 작성하세요." value={s.brief} onChange={e => patch(s.id, { brief: e.target.value })} /></label>
+        <div className="sw-actions"><button type="button" onClick={() => setCollapsed(v => [...v, s.id])}>작성 마치기</button></div>
+      </>}
+    </section>)}
+    <button type="button" className="sw-add-task" onClick={() => {
+      const stage = { ...newStage(""), title: "", dependsOn: value.length ? [value[value.length - 1].id] : [] };
+      setCollapsed(value.map(s => s.id)); onChange([...value, stage]);
+    }}>＋ 업무 추가</button>
+    <p>업무를 끌거나 ↑ ↓ 버튼으로 순서를 정하세요. 앞 업무의 작업 승인 후 다음 업무가 열립니다.</p>
+  </fieldset>;
 }

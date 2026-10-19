@@ -1045,3 +1045,154 @@
     gap: 20px;
   }
 }
+
+/* Request detail: wide reading column and compact workflow sidebar. */
+.rb-request-detail {
+  grid-template-columns: minmax(0, 2fr) minmax(280px, 1fr);
+  align-items: start;
+}
+.rb-request-detail > div,
+.rd-connections {
+  min-width: 0;
+}
+.rd-connections {
+  display: grid;
+  gap: 18px;
+  padding-top: 38px;
+}
+.rd-connections .rb-panel {
+  margin: 0;
+}
+.rd-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px 24px;
+}
+.rd-summary-grid > div {
+  border: 0 !important;
+  padding: 0 !important;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.rd-actions {
+  position: relative;
+  flex-shrink: 0;
+  margin-top: 8px;
+}
+.rb-shell .rd-action-trigger {
+  min-height: 32px;
+  padding: 6px 10px;
+  font-size: 12px;
+  border-radius: 7px;
+}
+.rd-action-popover {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  z-index: 40;
+  width: 260px;
+  max-width: calc(100vw - 48px);
+  padding: 6px;
+  border: 1px solid #dfe6f0;
+  background: white;
+  border-radius: 10px;
+  box-shadow: 0 10px 32px #233a5922;
+}
+.rb-shell .rd-action-popover button {
+  display: grid;
+  gap: 5px;
+  width: 100%;
+  padding: 11px;
+  text-align: left;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+}
+.rd-action-popover button:hover {
+  background: #f1f5ff;
+}
+.rd-action-popover strong {
+  font-size: 13px;
+}
+.rd-action-popover small {
+  font-size: 11px;
+  color: #7c8ba0;
+  line-height: 1.6;
+}
+.rd-action-popover button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+.rd-meeting-link {
+  display: grid;
+  gap: 10px;
+  padding: 14px 0;
+  overflow-wrap: anywhere;
+}
+.rd-meeting-link + .rd-meeting-link {
+  border-top: 1px solid #e5eaf2;
+}
+.rd-meeting-link > span {
+  font-size: 12px;
+  color: #7c8ba0;
+}
+.rb-shell .rd-meeting-link button {
+  justify-self: start;
+  padding: 5px 0;
+  border: 0;
+  color: #426fe9;
+  background: transparent;
+  font-size: 12px;
+}
+.rd-connections .rb-linked-tasks li {
+  align-items: flex-start;
+  flex-wrap: wrap;
+}
+.rd-connections .rb-linked-tasks button {
+  font-size: 13px;
+  text-align: left;
+  overflow-wrap: anywhere;
+}
+.rd-connections .rb-linked-tasks small {
+  display: block;
+  width: 100%;
+}
+@media (max-width: 1000px) {
+  .rb-request-detail {
+    grid-template-columns: 1fr;
+  }
+  .rd-connections {
+    padding-top: 0;
+  }
+}
+@media (max-width: 600px) {
+  .rd-summary-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.rd-process-actions {
+  margin-top: 0;
+  width: 100%;
+}
+.rb-shell .rd-process-actions .rd-action-trigger {
+  width: 100%;
+  background: #426fe9;
+  border-color: #426fe9;
+  color: #fff;
+}
+.rb-shell .rd-process-actions .rd-action-trigger:hover,
+.rb-shell .rd-process-actions .rd-action-trigger[aria-expanded="true"] {
+  background: #345ad0;
+  border-color: #345ad0;
+}
+.rb-shell .rd-process-actions .rd-action-trigger:focus-visible {
+  outline: 3px solid #a8beff;
+  outline-offset: 3px;
+}
+.rd-process-actions .rd-action-popover {
+  left: 0;
+  right: 0;
+  width: auto;
+  max-width: none;
+}

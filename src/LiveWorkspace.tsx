@@ -621,9 +621,13 @@ export default function LiveWorkspace({
     const requestProject = data.projects.find((p) => p.id === requestProjectId);
     return shell(
       <RequestBoard
-        onMeetings={(rid) => {
+        onMeetings={(rid, meetingId) => {
           if (!requestProjectId) return;
-          window.sessionStorage.setItem("bridgain-meeting-request", rid);
+          window.sessionStorage.removeItem("bridgain-open-meeting");
+          window.sessionStorage.removeItem("bridgain-meeting-request");
+          if (meetingId)
+            window.sessionStorage.setItem("bridgain-open-meeting", meetingId);
+          else window.sessionStorage.setItem("bridgain-meeting-request", rid);
           openProject(requestProjectId, "meetings");
         }}
         onTasks={(rid) => {

@@ -1,3 +1,4 @@
+import MemberPicker from "./MemberPicker";
 import StagePlanEditor, {
   type StagePlan,
   validStages,
@@ -61,37 +62,20 @@ export function ApproverPicker({
   value,
   onChange,
   label,
+  disabled = false,
 }: {
   items: Approver[];
   value: string[];
   onChange: (ids: string[]) => void;
   label?: string;
+  disabled?: boolean;
 }) {
-  return (
-    <fieldset className="approval-picker">
-      <legend>{label || "필수 승인자 · 전원 승인 후 업무 생성"}</legend>
-      {items.map((item) => (
-        <label key={item.userId} style={{ display: "block" }}>
-          <input
-            type="checkbox"
-            checked={value.includes(item.userId)}
-            onChange={(e) =>
-              onChange(
-                e.target.checked
-                  ? [...value, item.userId]
-                  : value.filter((id) => id !== item.userId),
-              )
-            }
-          />
-          {item.displayName}
-        </label>
-      ))}
-      {!items.length && (
-        <p>선택 가능한 참여자가 없어요. 참여자 관리에서 확인해주세요.</p>
-      )}
-    </fieldset>
-  );
+  return <div className="approval-picker">
+    <MemberPicker label={label || "업무화 승인자 · 전원 승인 후 업무 생성"} items={items} value={value} onChange={onChange} disabled={disabled} />
+    {!items.length && <p>선택 가능한 참여자가 없어요. 참여자 관리에서 확인해주세요.</p>}
+  </div>;
 }
+
 type WorkApproval = {
   id: string;
   projectId: string;
