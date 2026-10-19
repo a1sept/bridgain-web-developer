@@ -121,3 +121,13 @@
   .sw-task-editor .sw-people-row .mp-picker { grid-template-columns: minmax(0, 1fr); gap: 8px; }
   .sw-task-editor .sw-people-row .mp-picker:last-child .mp-popover { left: auto; right: 0; }
 }
+
+.sw-task-editor .sw-stage { margin-top: 0; }
+.sw-task-insert { position: relative; display: flex; justify-content: center; align-items: center; height: 36px; }
+.sw-task-insert::before { content: ""; position: absolute; top: 50%; left: 0; right: 0; border-top: 1px solid #c9d8f8; opacity: 0; }
+.sw-task-editor .sw-task-insert > button { position: relative; width: 30px; height: 30px; padding: 0; border: 0; border-radius: 50%; font-size: 22px; line-height: 1; background: #426fe9; color: #fff; opacity: 0; }
+.sw-task-insert:hover::before, .sw-task-insert:focus-within::before,
+.sw-task-editor .sw-task-insert:hover > button, .sw-task-editor .sw-task-insert:focus-within > button { opacity: 1; }
+.sw-add-task-row { display: flex; justify-content: center; margin: 12px 0; }
+.sw-task-editor .sw-add-task-row .sw-add-task { margin-top: 0; }
+@media (hover: none), (pointer: coarse) { .sw-task-editor .sw-task-insert > button { opacity: 1; width: 36px; height: 36px; } .sw-task-insert { height: 44px; } }

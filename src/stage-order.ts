@@ -8,14 +8,44 @@ export function sequenceStages<T extends LinkedStage>(stages: T[]): T[] {
 }
 
 export function isSequential(stages: LinkedStage[]): boolean {
-  return stages.every((stage, index) => index
-    ? stage.dependsOn.length === 1 && stage.dependsOn[0] === stages[index - 1].id
-    : stage.dependsOn.length === 0);
+  return stages.every((stage, index) =>
+    index
+      ? stage.dependsOn.length === 1 &&
+        stage.dependsOn[0] === stages[index - 1].id
+      : stage.dependsOn.length === 0,
+  );
 }
 
-export function moveStage<T extends LinkedStage>(stages: T[], from: number, to: number): T[] {
-  if (from === to || from < 0 || to < 0 || from >= stages.length || to >= stages.length) return stages;
+export function moveStage<T extends LinkedStage>(
+  stages: T[],
+  from: number,
+  to: number,
+): T[] {
+  if (
+    from === to ||
+    from < 0 ||
+    to < 0 ||
+    from >= stages.length ||
+    to >= stages.length
+  )
+    return stages;
   const next = [...stages];
   next.splice(to, 0, next.splice(from, 1)[0]);
   return sequenceStages(next);
+}
+
+export function insertStage<T extends LinkedStage>(
+  stages: T[],
+  stage: T,
+  index: number,
+): T[] {
+  const at = Math.max(0, Math.min(index, stages.length));
+  const next = [
+    ...stages.slice(0, at),
+    { ...stage, dependsOn: at ? [stages[at - 1].id] : [] },
+    ...stages.slice(at),
+  ];
+  return isSequential(stages) || at < stages.length
+    ? sequenceStages(next)
+    : next;
 }
