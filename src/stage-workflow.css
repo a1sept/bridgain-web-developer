@@ -131,3 +131,11 @@
 .sw-add-task-row { display: flex; justify-content: center; margin: 12px 0; }
 .sw-task-editor .sw-add-task-row .sw-add-task { margin-top: 0; }
 @media (hover: none), (pointer: coarse) { .sw-task-editor .sw-task-insert > button { opacity: 1; width: 36px; height: 36px; } .sw-task-insert { height: 44px; } }
+
+.sw-task-editor .sw-stage-heading { display:flex; align-items:center; flex-wrap:wrap; gap:8px; min-width:0; flex:1; margin-right:auto; }
+.sw-task-editor .sw-stage-heading strong { margin-right:0; }
+.sw-task-editor .sw-stage-heading .sw-category { flex-shrink:0; white-space:nowrap; }
+.sw-task-editor .sw-stage > header .sw-icon-button { display:inline-flex; align-items:center; justify-content:center; flex-shrink:0; width:32px; height:32px; padding:0; border:1px solid transparent; border-radius:7px; background:transparent; color:#7b8ba7; }
+.sw-task-editor .sw-stage > header .sw-icon-button:hover:not(:disabled) { background:#eef2ff; color:#4260a3; }
+.sw-task-editor .sw-stage > header .sw-delete-task:hover:not(:disabled) { background:#fff0f0; color:#c84646; }
+.sw-task-editor .sw-stage > header .sw-icon-button:focus-visible { outline:2px solid #426fe9; outline-offset:2px; }

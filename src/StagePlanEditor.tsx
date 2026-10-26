@@ -210,10 +210,14 @@ export default function StagePlanEditor({
               >
                 ≡
               </button>
-              <strong>
-                {i + 1}. {s.title || "새 업무"}
-              </strong>
-              <span className="sw-category">{s.name || "카테고리 미지정"}</span>
+              <div className="sw-stage-heading">
+                <strong>
+                  {i + 1}. {s.title || "새 업무"}
+                </strong>
+                <span className="sw-category">
+                  {s.name || "카테고리 미지정"}
+                </span>
+              </div>
               <button
                 type="button"
                 disabled={i === 0}
@@ -232,6 +236,9 @@ export default function StagePlanEditor({
               </button>
               <button
                 type="button"
+                className="sw-icon-button"
+                aria-label={`${i + 1}번 업무 ${collapsed.includes(s.id) ? "펼치기" : "접기"}`}
+                title={collapsed.includes(s.id) ? "펼치기" : "접기"}
                 aria-expanded={!collapsed.includes(s.id)}
                 onClick={() =>
                   setCollapsed((v) =>
@@ -241,10 +248,31 @@ export default function StagePlanEditor({
                   )
                 }
               >
-                {collapsed.includes(s.id) ? "펼치기" : "접기"}
+                <svg
+                  width="18"
+                  height="18"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="1.8"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  aria-hidden="true"
+                >
+                  <path
+                    d={
+                      collapsed.includes(s.id)
+                        ? "m6 9 6 6 6-6"
+                        : "m6 15 6-6 6 6"
+                    }
+                  />
+                </svg>
               </button>
               <button
                 type="button"
+                className="sw-icon-button sw-delete-task"
+                aria-label={`${i + 1}번 업무 삭제`}
+                title="업무 삭제"
                 onClick={() => {
                   if (
                     (s.title.trim() ||
@@ -265,7 +293,19 @@ export default function StagePlanEditor({
                   );
                 }}
               >
-                삭제
+                <svg
+                  width="18"
+                  height="18"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="1.8"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  aria-hidden="true"
+                >
+                  <path d="M3 6h18M9 6V4h6v2M5 6l1 14h12l1-14M10 10v6M14 10v6" />
+                </svg>
               </button>
             </header>
             {collapsed.includes(s.id) ? (
