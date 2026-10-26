@@ -1,3 +1,4 @@
+import ProjectChannel from "./ProjectChannel";
 import WorkReview from "./WorkReview";
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import "./project-tasks.css";
@@ -813,684 +814,730 @@ export default function ProjectTasks({
         }}
       >
         {editing !== undefined && (
-          <form onSubmit={save}>
-            <header>
-              <div>
-                <small>{project.name}</small>
-                <h2>{editing ? "업무 상세" : "새 업무 만들기"}</h2>
-              </div>
-              <button
-                type="button"
-                aria-label="업무 상세 닫기"
-                disabled={saving}
-                onClick={close}
-              >
-                ×
-              </button>
-            </header>
-            <div className="pt-form-body">
-              {error && (
-                <p className="pt-error" role="alert">
-                  {error}
-                </p>
-              )}
-              {editing && (
+          <div className={editing ? "pt-detail-layout" : undefined}>
+            <form onSubmit={save}>
+              <header>
+                <div>
+                  <small>{project.name}</small>
+                  <h2>{editing ? "업무 상세" : "새 업무 만들기"}</h2>
+                </div>
                 <button
                   type="button"
+                  aria-label="업무 상세 닫기"
                   disabled={saving}
-                  onClick={() => void reloadEditing()}
+                  onClick={close}
                 >
-                  최신 업무 다시 불러오기
+                  ×
                 </button>
-              )}
-              <p className="pt-help">
-                승인된 범위·담당자는 변경할 수 없어요. 추가 변경은 새 요청으로
-                등록해주세요.
-              </p>
-              <label>
-                업무 제목
-                <input
-                  autoFocus
-                  required
-                  maxLength={160}
-                  readOnly={!!editing}
-                  value={draft.title}
-                  onChange={(event) =>
-                    setDraft({ ...draft, title: event.target.value })
-                  }
-                  placeholder="어떤 작업을 해야 하나요?"
-                />
-              </label>
-              <label>
-                업무 내용
-                <textarea
-                  rows={4}
-                  maxLength={10000}
-                  readOnly={!!editing}
-                  value={draft.description}
-                  onChange={(event) =>
-                    setDraft({ ...draft, description: event.target.value })
-                  }
-                  placeholder="작업 범위와 완료 기준을 적어주세요."
-                />
-              </label>
-              <div className="pt-form-grid">
-                <label>
-                  상태
-                  <select
-                    disabled={
-                      saving ||
-                      !canEditProgress ||
-                      (!!selectedTask?.stageKey &&
-                        !["todo", "in_progress"].includes(selectedTask.status))
-                    }
-                    value={draft.status}
-                    onChange={(event) =>
-                      setDraft({
-                        ...draft,
-                        status: event.target.value as Draft["status"],
-                      })
-                    }
+              </header>
+              <div className="pt-form-body">
+                {error && (
+                  <p className="pt-error" role="alert">
+                    {error}
+                  </p>
+                )}
+                {editing && (
+                  <button
+                    type="button"
+                    disabled={saving}
+                    onClick={() => void reloadEditing()}
                   >
-                    {Object.entries(statuses).map(([value, label]) => (
-                      <option
-                        value={value}
-                        key={value}
-                        disabled={
-                          selectedTask?.stageKey
-                            ? ![
-                                "todo",
-                                "in_progress",
-                                selectedTask.status,
-                              ].includes(value)
-                            : draft.mergeApprovalRequired &&
-                              value === "done" &&
-                              selectedTask?.status !== "done"
-                        }
-                      >
-                        {label}
-                      </option>
-                    ))}
-                  </select>
-                </label>
+                    최신 업무 다시 불러오기
+                  </button>
+                )}
+                <p className="pt-help">
+                  승인된 범위·담당자는 변경할 수 없어요. 추가 변경은 새 요청으로
+                  등록해주세요.
+                </p>
                 <label>
-                  우선순위
-                  <select
-                    disabled={!!editing || saving}
-                    value={draft.priority}
-                    onChange={(event) =>
-                      setDraft({
-                        ...draft,
-                        priority: event.target.value as Draft["priority"],
-                      })
-                    }
-                  >
-                    {Object.entries(priorities).map(([value, label]) => (
-                      <option value={value} key={value}>
-                        {label}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                <label>
-                  기한
+                  업무 제목
                   <input
-                    type="date"
+                    autoFocus
+                    required
+                    maxLength={160}
                     readOnly={!!editing}
-                    value={draft.dueDate}
+                    value={draft.title}
                     onChange={(event) =>
-                      setDraft({ ...draft, dueDate: event.target.value })
+                      setDraft({ ...draft, title: event.target.value })
                     }
+                    placeholder="어떤 작업을 해야 하나요?"
                   />
                 </label>
-              </div>
-              <fieldset disabled={saving || !canEditProgress}>
-                <legend>Git · 개발 진행</legend>
-                <p className="pt-help">
-                  작업 브랜치와 PR 링크를 기록하세요. 단계 업무는 작업 완료와
-                  전원 승인을 거쳐 배포 목록에서 처리합니다. 기존 업무의
-                  병합·배포는 실제 결과를 확인한 후 기록하세요. 승인이 필요한
-                  업무는 아래 검토·병합 절차를 이용하세요.
-                </p>
-                {(
-                  [
-                    ["repositoryUrl", "저장소 URL"],
-                    ["workBranch", "작업 브랜치"],
-                    ["liveBranch", "라이브 브랜치"],
-                    ["pullRequestUrl", "PR URL"],
-                    ["mergeCommit", "병합 커밋 SHA"],
-                    ["deploymentUrl", "배포 성공 확인 URL"],
-                  ] as const
-                ).map(([key, label]) => (
-                  <label key={key}>
-                    {label}
-                    <input
-                      type={key.endsWith("Url") ? "url" : "text"}
-                      maxLength={key.endsWith("Url") ? 2000 : 200}
-                      value={draft[key]}
-                      readOnly={!!selectedTask?.stageKey && (key === "mergeCommit" || (key === "deploymentUrl" && selectedTask.completionMode !== "deploy"))}
-                      onChange={(e) =>
-                        setDraft({ ...draft, [key]: e.target.value })
-                      }
-                    />
-                  </label>
-                ))}
-              </fieldset>
-              {!selectedTask?.stageKey && (
-                <fieldset disabled={saving}>
-                  <legend>병합 승인</legend>
+                <label>
+                  업무 내용
+                  <textarea
+                    rows={4}
+                    maxLength={10000}
+                    readOnly={!!editing}
+                    value={draft.description}
+                    onChange={(event) =>
+                      setDraft({ ...draft, description: event.target.value })
+                    }
+                    placeholder="작업 범위와 완료 기준을 적어주세요."
+                  />
+                </label>
+                <div className="pt-form-grid">
                   <label>
-                    <input
-                      type="checkbox"
-                      checked={draft.mergeApprovalRequired}
+                    상태
+                    <select
                       disabled={
-                        !project.canManage ||
-                        !isAssignee ||
-                        ["done", "released"].includes(
-                          selectedTask?.status || "",
-                        )
+                        saving ||
+                        !canEditProgress ||
+                        (!!selectedTask?.stageKey &&
+                          !["todo", "in_progress"].includes(
+                            selectedTask.status,
+                          ))
                       }
-                      onChange={(e) =>
+                      value={draft.status}
+                      onChange={(event) =>
                         setDraft({
                           ...draft,
-                          mergeApprovalRequired: e.target.checked,
-                          mergeReviewerId: e.target.checked
-                            ? draft.mergeReviewerId
-                            : "",
+                          status: event.target.value as Draft["status"],
                         })
                       }
-                    />
-                    이 업무는 병합 승인이 필요해요
-                  </label>
-                  {draft.mergeApprovalRequired && (
-                    <>
-                      <label>
-                        병합 승인자
-                        <select
-                          value={draft.mergeReviewerId}
+                    >
+                      {Object.entries(statuses).map(([value, label]) => (
+                        <option
+                          value={value}
+                          key={value}
                           disabled={
-                            !project.canManage ||
-                            !isAssignee ||
-                            ["done", "released"].includes(
-                              selectedTask?.status || "",
-                            )
-                          }
-                          onChange={(e) =>
-                            setDraft({
-                              ...draft,
-                              mergeReviewerId: e.target.value,
-                            })
+                            selectedTask?.stageKey
+                              ? ![
+                                  "todo",
+                                  "in_progress",
+                                  selectedTask.status,
+                                ].includes(value)
+                              : draft.mergeApprovalRequired &&
+                                value === "done" &&
+                                selectedTask?.status !== "done"
                           }
                         >
-                          <option value="">승인자 선택</option>
-                          {members
-                            .filter(
-                              (m) =>
-                                m.canApproveMerge &&
-                                !draft.assigneeIds.includes(m.userId),
-                            )
-                            .map((m) => (
-                              <option key={m.userId} value={m.userId}>
-                                {m.displayName}
-                              </option>
-                            ))}
-                          {draft.mergeReviewerId &&
-                            !members.some(
-                              (m) =>
-                                m.userId === draft.mergeReviewerId &&
-                                m.canApproveMerge &&
-                                !draft.assigneeIds.includes(m.userId),
-                            ) && (
-                              <option value={draft.mergeReviewerId}>
-                                기존 승인자 · 권한 또는 담당자 설정 확인 필요
-                              </option>
-                            )}
-                        </select>
-                      </label>
-                      <p className="pt-help">
-                        관리자가 팀의 승인 권한을 가진 프로젝트 참여자를
-                        지정해요. 담당자는 자신의 작업을 승인할 수 없어요.
-                      </p>
-                    </>
-                  )}
-                  {!selectedTask?.stageKey &&
-                    selectedTask?.mergeApprovalRequired && (
+                          {label}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <label>
+                    우선순위
+                    <select
+                      disabled={!!editing || saving}
+                      value={draft.priority}
+                      onChange={(event) =>
+                        setDraft({
+                          ...draft,
+                          priority: event.target.value as Draft["priority"],
+                        })
+                      }
+                    >
+                      {Object.entries(priorities).map(([value, label]) => (
+                        <option value={value} key={value}>
+                          {label}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <label>
+                    기한
+                    <input
+                      type="date"
+                      readOnly={!!editing}
+                      value={draft.dueDate}
+                      onChange={(event) =>
+                        setDraft({ ...draft, dueDate: event.target.value })
+                      }
+                    />
+                  </label>
+                </div>
+                <fieldset disabled={saving || !canEditProgress}>
+                  <legend>Git · 개발 진행</legend>
+                  <p className="pt-help">
+                    작업 브랜치와 PR 링크를 기록하세요. 단계 업무는 작업 완료와
+                    전원 승인을 거쳐 배포 목록에서 처리합니다. 기존 업무의
+                    병합·배포는 실제 결과를 확인한 후 기록하세요. 승인이 필요한
+                    업무는 아래 검토·병합 절차를 이용하세요.
+                  </p>
+                  {(
+                    [
+                      ["repositoryUrl", "저장소 URL"],
+                      ["workBranch", "작업 브랜치"],
+                      ["liveBranch", "라이브 브랜치"],
+                      ["pullRequestUrl", "PR URL"],
+                      ["mergeCommit", "병합 커밋 SHA"],
+                      ["deploymentUrl", "배포 성공 확인 URL"],
+                    ] as const
+                  ).map(([key, label]) => (
+                    <label key={key}>
+                      {label}
+                      <input
+                        type={key.endsWith("Url") ? "url" : "text"}
+                        maxLength={key.endsWith("Url") ? 2000 : 200}
+                        value={draft[key]}
+                        readOnly={
+                          !!selectedTask?.stageKey &&
+                          (key === "mergeCommit" ||
+                            (key === "deploymentUrl" &&
+                              selectedTask.completionMode !== "deploy"))
+                        }
+                        onChange={(e) =>
+                          setDraft({ ...draft, [key]: e.target.value })
+                        }
+                      />
+                    </label>
+                  ))}
+                </fieldset>
+                {!selectedTask?.stageKey && (
+                  <fieldset disabled={saving}>
+                    <legend>병합 승인</legend>
+                    <label>
+                      <input
+                        type="checkbox"
+                        checked={draft.mergeApprovalRequired}
+                        disabled={
+                          !project.canManage ||
+                          !isAssignee ||
+                          ["done", "released"].includes(
+                            selectedTask?.status || "",
+                          )
+                        }
+                        onChange={(e) =>
+                          setDraft({
+                            ...draft,
+                            mergeApprovalRequired: e.target.checked,
+                            mergeReviewerId: e.target.checked
+                              ? draft.mergeReviewerId
+                              : "",
+                          })
+                        }
+                      />
+                      이 업무는 병합 승인이 필요해요
+                    </label>
+                    {draft.mergeApprovalRequired && (
                       <>
-                        <p>
-                          현재 검토:{" "}
-                          <strong>
-                            {reviewStatuses[selectedTask.reviewStatus]}
-                          </strong>
-                        </p>
-                        {selectedTask.reviewHeadSha && (
-                          <p className="pt-help">
-                            검토 커밋: {selectedTask.reviewHeadSha}
-                          </p>
-                        )}
-                        <p className="pt-help">
-                          변경 요약·검증 결과·PR 링크를 저장한 뒤 검토를
-                          요청하세요. 승인 이후 코드가 바뀌면 재검토가 필요해요.
-                        </p>
-                        {dirty && (
-                          <p className="pt-help">
-                            수정 내용을 먼저 저장한 뒤 업무를 다시 열어주세요.
-                          </p>
-                        )}
-                        {selectedTask.status === "in_progress" && (
-                          <>
-                            <label>
-                              검토 의견 · 수정 요청 시 필수
-                              <textarea
-                                rows={3}
-                                maxLength={5000}
-                                value={reviewNote}
-                                onChange={(e) => setReviewNote(e.target.value)}
-                              />
-                            </label>
-                            <div className="pt-options">
-                              {isAssignee && (
-                                <button
-                                  type="button"
-                                  disabled={dirty || saving}
-                                  onClick={() => void review("request")}
-                                >
-                                  검토 요청 / 재요청
-                                </button>
+                        <label>
+                          병합 승인자
+                          <select
+                            value={draft.mergeReviewerId}
+                            disabled={
+                              !project.canManage ||
+                              !isAssignee ||
+                              ["done", "released"].includes(
+                                selectedTask?.status || "",
+                              )
+                            }
+                            onChange={(e) =>
+                              setDraft({
+                                ...draft,
+                                mergeReviewerId: e.target.value,
+                              })
+                            }
+                          >
+                            <option value="">승인자 선택</option>
+                            {members
+                              .filter(
+                                (m) =>
+                                  m.canApproveMerge &&
+                                  !draft.assigneeIds.includes(m.userId),
+                              )
+                              .map((m) => (
+                                <option key={m.userId} value={m.userId}>
+                                  {m.displayName}
+                                </option>
+                              ))}
+                            {draft.mergeReviewerId &&
+                              !members.some(
+                                (m) =>
+                                  m.userId === draft.mergeReviewerId &&
+                                  m.canApproveMerge &&
+                                  !draft.assigneeIds.includes(m.userId),
+                              ) && (
+                                <option value={draft.mergeReviewerId}>
+                                  기존 승인자 · 권한 또는 담당자 설정 확인 필요
+                                </option>
                               )}
-                              {isReviewer &&
-                                selectedTask.reviewStatus === "pending" && (
-                                  <>
-                                    <button
-                                      type="button"
-                                      disabled={dirty || saving}
-                                      onClick={() => void review("approve")}
-                                    >
-                                      승인
-                                    </button>
-                                    <button
-                                      type="button"
-                                      disabled={
-                                        dirty || saving || !reviewNote.trim()
-                                      }
-                                      onClick={() =>
-                                        void review("changes_requested")
-                                      }
-                                    >
-                                      수정 요청
-                                    </button>
-                                  </>
-                                )}
-                              <button
-                                type="button"
-                                disabled={dirty || saving}
-                                onClick={() => void review("refresh")}
-                              >
-                                최신 PR 확인
-                              </button>
-                              {(isAssignee || isReviewer) &&
-                                selectedTask.reviewStatus === "approved" && (
+                          </select>
+                        </label>
+                        <p className="pt-help">
+                          관리자가 팀의 승인 권한을 가진 프로젝트 참여자를
+                          지정해요. 담당자는 자신의 작업을 승인할 수 없어요.
+                        </p>
+                      </>
+                    )}
+                    {!selectedTask?.stageKey &&
+                      selectedTask?.mergeApprovalRequired && (
+                        <>
+                          <p>
+                            현재 검토:{" "}
+                            <strong>
+                              {reviewStatuses[selectedTask.reviewStatus]}
+                            </strong>
+                          </p>
+                          {selectedTask.reviewHeadSha && (
+                            <p className="pt-help">
+                              검토 커밋: {selectedTask.reviewHeadSha}
+                            </p>
+                          )}
+                          <p className="pt-help">
+                            변경 요약·검증 결과·PR 링크를 저장한 뒤 검토를
+                            요청하세요. 승인 이후 코드가 바뀌면 재검토가
+                            필요해요.
+                          </p>
+                          {dirty && (
+                            <p className="pt-help">
+                              수정 내용을 먼저 저장한 뒤 업무를 다시 열어주세요.
+                            </p>
+                          )}
+                          {selectedTask.status === "in_progress" && (
+                            <>
+                              <label>
+                                검토 의견 · 수정 요청 시 필수
+                                <textarea
+                                  rows={3}
+                                  maxLength={5000}
+                                  value={reviewNote}
+                                  onChange={(e) =>
+                                    setReviewNote(e.target.value)
+                                  }
+                                />
+                              </label>
+                              <div className="pt-options">
+                                {isAssignee && (
                                   <button
                                     type="button"
                                     disabled={dirty || saving}
-                                    onClick={() => void review("merge")}
+                                    onClick={() => void review("request")}
                                   >
-                                    승인된 PR 병합
+                                    검토 요청 / 재요청
                                   </button>
                                 )}
-                            </div>
-                          </>
-                        )}
-                      </>
-                    )}
-                  {selectedTask &&
-                    !selectedTask.stageKey &&
-                    !selectedTask.mergeApprovalRequired &&
-                    selectedTask.status === "in_progress" &&
-                    isAssignee && (
-                      <button
-                        type="button"
-                        disabled={dirty || saving}
-                        onClick={() => void review("merge")}
-                      >
-                        PR 병합
-                      </button>
-                    )}
-                  {historyError && <p role="alert">{historyError}</p>}
-                  {history.length > 0 && (
-                    <section aria-label="병합 검토 이력">
-                      <h3>검토 이력</h3>
-                      {history.map((item) => (
-                        <div key={item.id} className="pt-help">
-                          <strong>
-                            {reviewActions[item.action] || item.action} ·{" "}
-                            {item.actorName}
-                          </strong>
-                          <p>
-                            {new Date(item.createdAt).toLocaleString("ko-KR")} ·{" "}
-                            {item.headSha.slice(0, 12)}
-                          </p>
-                          {item.note && (
-                            <p style={{ whiteSpace: "pre-wrap" }}>
-                              {item.note}
-                            </p>
+                                {isReviewer &&
+                                  selectedTask.reviewStatus === "pending" && (
+                                    <>
+                                      <button
+                                        type="button"
+                                        disabled={dirty || saving}
+                                        onClick={() => void review("approve")}
+                                      >
+                                        승인
+                                      </button>
+                                      <button
+                                        type="button"
+                                        disabled={
+                                          dirty || saving || !reviewNote.trim()
+                                        }
+                                        onClick={() =>
+                                          void review("changes_requested")
+                                        }
+                                      >
+                                        수정 요청
+                                      </button>
+                                    </>
+                                  )}
+                                <button
+                                  type="button"
+                                  disabled={dirty || saving}
+                                  onClick={() => void review("refresh")}
+                                >
+                                  최신 PR 확인
+                                </button>
+                                {(isAssignee || isReviewer) &&
+                                  selectedTask.reviewStatus === "approved" && (
+                                    <button
+                                      type="button"
+                                      disabled={dirty || saving}
+                                      onClick={() => void review("merge")}
+                                    >
+                                      승인된 PR 병합
+                                    </button>
+                                  )}
+                              </div>
+                            </>
                           )}
-                        </div>
-                      ))}
-                    </section>
-                  )}
-                </fieldset>
-              )}
-              {selectedTask?.dependencies?.length ? (
-                <section className="sw-review" aria-label="선행 단계 결과물">
-                  <h3>선행 단계 결과물</h3>
-                  {selectedTask.dependencies.map((d) => (
-                    <article key={d.predecessorId || d.taskId}>
-                      <h4>
-                        {d.title} ·{" "}
-                        {statuses[d.status as keyof typeof statuses] ||
-                          d.status}
-                      </h4>
-                      {d.resultSummary && (
-                        <p style={{ whiteSpace: "pre-wrap" }}>
-                          {d.resultSummary}
-                        </p>
+                        </>
                       )}
-                      {d.verification && (
-                        <p
-                          style={{ whiteSpace: "pre-wrap" }}
-                          className="pt-help"
-                        >
-                          검증 결과: {d.verification}
-                        </p>
-                      )}
-                      {d.documentVersions?.map((doc) => (
+                    {selectedTask &&
+                      !selectedTask.stageKey &&
+                      !selectedTask.mergeApprovalRequired &&
+                      selectedTask.status === "in_progress" &&
+                      isAssignee && (
                         <button
                           type="button"
-                          key={doc.id}
-                          onClick={() => onDocument?.(doc.documentId, doc.id)}
-                          disabled={!onDocument}
+                          disabled={dirty || saving}
+                          onClick={() => void review("merge")}
                         >
-                          {doc.title} · 확정 문서 버전 열기
+                          PR 병합
                         </button>
-                      ))}
-                      {!d.resultSummary &&
-                        !d.verification &&
-                        !d.documentVersions?.length && (
-                          <p className="pt-help">등록된 결과물이 없습니다.</p>
-                        )}
-                    </article>
-                  ))}
-                </section>
-              ) : null}
-              {selectedTask?.stageKey && (
-                <>
-                  <div className="sw-flow">
-                    {selectedTask.dependencies?.map((d) => (
-                      <span key={d.predecessorId || d.taskId}>
-                        선행: {d.title} ·{" "}
-                        {statuses[d.status as keyof typeof statuses] ||
-                          d.status}
-                      </span>
-                    ))}
-                    <span>
-                      현재: {selectedTask.stageName} ·{" "}
-                      {statuses[selectedTask.status]}
-                    </span>
-                  </div>
-                  <WorkReview
-                    workRevision={selectedTask.workRevision}
-                    projectId={project.id}
-                    taskId={selectedTask.id}
-                    status={selectedTask.status}
-                    userId={userId}
-                    assignees={selectedTask.assignees}
-                    disabled={dirty || saving}
-                    onChanged={() => {
-                      setRevision((v) => v + 1);
-                      setEditing(undefined);
-                      onChanged?.();
-                    }}
-                  />
-                </>
-              )}
-              <fieldset disabled={saving || !canEditProgress}>
-                <legend>개발 결과 · 승인 시점 내용</legend>
-                {selectedTask?.mergeApprovalRequired &&
-                  ["done", "released"].includes(selectedTask.status) && (
-                    <p className="pt-help">
-                      승인된 결과는 보존돼요. 추가 설명은 아래 후속 기록에
-                      남겨주세요.
-                    </p>
-                  )}
-                {(
-                  [
-                    ["resultSummary", "변경 요약"],
-                    ["dbChanges", "DB 변경"],
-                    ["apiChanges", "API 변경"],
-                    ["frontendChanges", "프론트 변경"],
-                    ["verification", "검증 결과"],
-                  ] as const
-                ).map(([key, label]) => (
-                  <label key={key}>
-                    {label}
-                    <textarea
-                      rows={3}
-                      maxLength={10000}
-                      readOnly={
-                        !!selectedTask?.mergeApprovalRequired &&
-                        ["done", "released"].includes(selectedTask.status)
-                      }
-                      value={draft[key]}
-                      onChange={(e) =>
-                        setDraft({ ...draft, [key]: e.target.value })
-                      }
-                    />
-                  </label>
-                ))}
-              </fieldset>
-              {editing && (
-                <section aria-label="개발 결과 후속 기록">
-                  <h3>개발 결과 후속 기록</h3>
-                  {resultError && <p role="alert">{resultError}</p>}
-                  {resultEntries.map(({ entry, actorName }) => (
-                    <article key={entry.id}>
-                      <strong>{entry.changeSummary}</strong>
-                      <p>
-                        {actorName} ·{" "}
-                        {new Date(entry.createdAt).toLocaleString("ko-KR")}
-                      </p>
-                      {(
-                        [
-                          "resultSummary",
-                          "dbChanges",
-                          "apiChanges",
-                          "frontendChanges",
-                          "verification",
-                        ] as const
-                      ).map(
-                        (key) =>
-                          entry[key] && (
-                            <p key={key} style={{ whiteSpace: "pre-wrap" }}>
-                              {
-                                {
-                                  resultSummary: "변경 요약",
-                                  dbChanges: "DB",
-                                  apiChanges: "API",
-                                  frontendChanges: "프론트",
-                                  verification: "검증",
-                                }[key]
-                              }
-                              : {entry[key]}
-                            </p>
-                          ),
                       )}
-                    </article>
-                  ))}
-                  {selectedTask &&
+                    {historyError && <p role="alert">{historyError}</p>}
+                    {history.length > 0 && (
+                      <section aria-label="병합 검토 이력">
+                        <h3>검토 이력</h3>
+                        {history.map((item) => (
+                          <div key={item.id} className="pt-help">
+                            <strong>
+                              {reviewActions[item.action] || item.action} ·{" "}
+                              {item.actorName}
+                            </strong>
+                            <p>
+                              {new Date(item.createdAt).toLocaleString("ko-KR")}{" "}
+                              · {item.headSha.slice(0, 12)}
+                            </p>
+                            {item.note && (
+                              <p style={{ whiteSpace: "pre-wrap" }}>
+                                {item.note}
+                              </p>
+                            )}
+                          </div>
+                        ))}
+                      </section>
+                    )}
+                  </fieldset>
+                )}
+                {selectedTask?.dependencies?.length ? (
+                  <section className="sw-review" aria-label="선행 단계 결과물">
+                    <h3>선행 단계 결과물</h3>
+                    {selectedTask.dependencies.map((d) => (
+                      <article key={d.predecessorId || d.taskId}>
+                        <h4>
+                          {d.title} ·{" "}
+                          {statuses[d.status as keyof typeof statuses] ||
+                            d.status}
+                        </h4>
+                        {d.resultSummary && (
+                          <p style={{ whiteSpace: "pre-wrap" }}>
+                            {d.resultSummary}
+                          </p>
+                        )}
+                        {d.verification && (
+                          <p
+                            style={{ whiteSpace: "pre-wrap" }}
+                            className="pt-help"
+                          >
+                            검증 결과: {d.verification}
+                          </p>
+                        )}
+                        {d.documentVersions?.map((doc) => (
+                          <button
+                            type="button"
+                            key={doc.id}
+                            onClick={() => onDocument?.(doc.documentId, doc.id)}
+                            disabled={!onDocument}
+                          >
+                            {doc.title} · 확정 문서 버전 열기
+                          </button>
+                        ))}
+                        {!d.resultSummary &&
+                          !d.verification &&
+                          !d.documentVersions?.length && (
+                            <p className="pt-help">등록된 결과물이 없습니다.</p>
+                          )}
+                      </article>
+                    ))}
+                  </section>
+                ) : null}
+                {selectedTask?.stageKey && (
+                  <>
+                    <div className="sw-flow">
+                      {selectedTask.dependencies?.map((d) => (
+                        <span key={d.predecessorId || d.taskId}>
+                          선행: {d.title} ·{" "}
+                          {statuses[d.status as keyof typeof statuses] ||
+                            d.status}
+                        </span>
+                      ))}
+                      <span>
+                        현재: {selectedTask.stageName} ·{" "}
+                        {statuses[selectedTask.status]}
+                      </span>
+                    </div>
+                    <WorkReview
+                      workRevision={selectedTask.workRevision}
+                      projectId={project.id}
+                      taskId={selectedTask.id}
+                      status={selectedTask.status}
+                      userId={userId}
+                      assignees={selectedTask.assignees}
+                      disabled={dirty || saving}
+                      onChanged={() => {
+                        setRevision((v) => v + 1);
+                        setEditing(undefined);
+                        onChanged?.();
+                      }}
+                    />
+                  </>
+                )}
+                <fieldset disabled={saving || !canEditProgress}>
+                  <legend>개발 결과 · 승인 시점 내용</legend>
+                  {selectedTask?.mergeApprovalRequired &&
                     ["done", "released"].includes(selectedTask.status) && (
-                      <fieldset disabled={saving}>
-                        <p className="pt-help">
-                          완료·배포 상태와 기존 승인을 유지하면서 설명을
-                          추가해요. 실제 코드 변경은 새 요청을 등록하고 승인받은
-                          업무에서 진행하세요.
+                      <p className="pt-help">
+                        승인된 결과는 보존돼요. 추가 설명은 아래 후속 기록에
+                        남겨주세요.
+                      </p>
+                    )}
+                  {(
+                    [
+                      ["resultSummary", "변경 요약"],
+                      ["dbChanges", "DB 변경"],
+                      ["apiChanges", "API 변경"],
+                      ["frontendChanges", "프론트 변경"],
+                      ["verification", "검증 결과"],
+                    ] as const
+                  ).map(([key, label]) => (
+                    <label key={key}>
+                      {label}
+                      <textarea
+                        rows={3}
+                        maxLength={10000}
+                        readOnly={
+                          !!selectedTask?.mergeApprovalRequired &&
+                          ["done", "released"].includes(selectedTask.status)
+                        }
+                        value={draft[key]}
+                        onChange={(e) =>
+                          setDraft({ ...draft, [key]: e.target.value })
+                        }
+                      />
+                    </label>
+                  ))}
+                </fieldset>
+                {editing && (
+                  <section aria-label="개발 결과 후속 기록">
+                    <h3>개발 결과 후속 기록</h3>
+                    {resultError && <p role="alert">{resultError}</p>}
+                    {resultEntries.map(({ entry, actorName }) => (
+                      <article key={entry.id}>
+                        <strong>{entry.changeSummary}</strong>
+                        <p>
+                          {actorName} ·{" "}
+                          {new Date(entry.createdAt).toLocaleString("ko-KR")}
                         </p>
                         {(
                           [
-                            "changeSummary",
                             "resultSummary",
                             "dbChanges",
                             "apiChanges",
                             "frontendChanges",
                             "verification",
                           ] as const
-                        ).map((key) => (
-                          <label key={key}>
-                            {
-                              {
-                                changeSummary: "추가 기록 제목 · 필수",
-                                resultSummary: "변경 설명",
-                                dbChanges: "DB 설계 기록",
-                                apiChanges: "API 작업 기록",
-                                frontendChanges: "프론트 작업 기록",
-                                verification: "검증 기록",
-                              }[key]
-                            }
-                            <textarea
-                              rows={2}
-                              maxLength={key === "changeSummary" ? 1000 : 10000}
-                              value={resultEntry[key]}
-                              onChange={(e) =>
-                                setResultEntry({
-                                  ...resultEntry,
-                                  [key]: e.target.value,
-                                })
-                              }
-                            />
-                          </label>
-                        ))}
-                        <button
-                          type="button"
-                          disabled={
-                            saving || dirty || !resultEntry.changeSummary.trim()
-                          }
-                          onClick={() => void addResultEntry()}
-                        >
-                          후속 기록 추가
-                        </button>
-                        {dirty && (
-                          <p>
-                            업무 수정 내용을 먼저 저장하거나 최신 업무를 다시
-                            불러와주세요.
-                          </p>
-                        )}
-                      </fieldset>
-                    )}
-                </section>
-              )}
-              {editing && (
-                <section>
-                  <h3>연결된 문서 변경 버전</h3>
-                  {tasks
-                    .find((t) => t.id === editing)
-                    ?.documentVersions.map((v) => (
-                      <p key={v.id}>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            close();
-                            onDocument?.(v.documentId, v.id);
-                          }}
-                        >
-                          {v.title} · {v.changeSummary} ·{" "}
-                          {new Date(v.createdAt).toLocaleString("ko-KR")}
-                        </button>
-                      </p>
-                    ))}
-                </section>
-              )}
-              <fieldset>
-                <legend>승인된 담당자</legend>
-                <div className="pt-options">
-                  {members.map((member) => (
-                    <label key={member.userId}>
-                      <input
-                        type="checkbox"
-                        checked={draft.assigneeIds.includes(member.userId)}
-                        disabled={!!editing || saving}
-                        onChange={() =>
-                          setDraft({
-                            ...draft,
-                            assigneeIds: toggle(
-                              draft.assigneeIds,
-                              member.userId,
+                        ).map(
+                          (key) =>
+                            entry[key] && (
+                              <p key={key} style={{ whiteSpace: "pre-wrap" }}>
+                                {
+                                  {
+                                    resultSummary: "변경 요약",
+                                    dbChanges: "DB",
+                                    apiChanges: "API",
+                                    frontendChanges: "프론트",
+                                    verification: "검증",
+                                  }[key]
+                                }
+                                : {entry[key]}
+                              </p>
                             ),
-                          })
-                        }
-                      />
-                      <span>{member.displayName}</span>
-                    </label>
-                  ))}
-                  {!members.length && <p>배정할 개발팀 멤버가 없어요.</p>}
-                </div>
-              </fieldset>
-              <fieldset>
-                <legend>승인된 연결 요청</legend>
-                <div className="pt-options pt-request-options">
-                  {requests
-                    .filter((item) => draft.requestIds.includes(item.id))
-                    .map((item) => (
-                      <label key={item.id}>
+                        )}
+                      </article>
+                    ))}
+                    {selectedTask &&
+                      ["done", "released"].includes(selectedTask.status) && (
+                        <fieldset disabled={saving}>
+                          <p className="pt-help">
+                            완료·배포 상태와 기존 승인을 유지하면서 설명을
+                            추가해요. 실제 코드 변경은 새 요청을 등록하고
+                            승인받은 업무에서 진행하세요.
+                          </p>
+                          {(
+                            [
+                              "changeSummary",
+                              "resultSummary",
+                              "dbChanges",
+                              "apiChanges",
+                              "frontendChanges",
+                              "verification",
+                            ] as const
+                          ).map((key) => (
+                            <label key={key}>
+                              {
+                                {
+                                  changeSummary: "추가 기록 제목 · 필수",
+                                  resultSummary: "변경 설명",
+                                  dbChanges: "DB 설계 기록",
+                                  apiChanges: "API 작업 기록",
+                                  frontendChanges: "프론트 작업 기록",
+                                  verification: "검증 기록",
+                                }[key]
+                              }
+                              <textarea
+                                rows={2}
+                                maxLength={
+                                  key === "changeSummary" ? 1000 : 10000
+                                }
+                                value={resultEntry[key]}
+                                onChange={(e) =>
+                                  setResultEntry({
+                                    ...resultEntry,
+                                    [key]: e.target.value,
+                                  })
+                                }
+                              />
+                            </label>
+                          ))}
+                          <button
+                            type="button"
+                            disabled={
+                              saving ||
+                              dirty ||
+                              !resultEntry.changeSummary.trim()
+                            }
+                            onClick={() => void addResultEntry()}
+                          >
+                            후속 기록 추가
+                          </button>
+                          {dirty && (
+                            <p>
+                              업무 수정 내용을 먼저 저장하거나 최신 업무를 다시
+                              불러와주세요.
+                            </p>
+                          )}
+                        </fieldset>
+                      )}
+                  </section>
+                )}
+                {editing && (
+                  <section>
+                    <h3>연결된 문서 변경 버전</h3>
+                    {tasks
+                      .find((t) => t.id === editing)
+                      ?.documentVersions.map((v) => (
+                        <p key={v.id}>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              close();
+                              onDocument?.(v.documentId, v.id);
+                            }}
+                          >
+                            {v.title} · {v.changeSummary} ·{" "}
+                            {new Date(v.createdAt).toLocaleString("ko-KR")}
+                          </button>
+                        </p>
+                      ))}
+                  </section>
+                )}
+                <fieldset>
+                  <legend>승인된 담당자</legend>
+                  <div className="pt-options">
+                    {members.map((member) => (
+                      <label key={member.userId}>
                         <input
                           type="checkbox"
-                          checked={draft.requestIds.includes(item.id)}
-                          disabled
-
+                          checked={draft.assigneeIds.includes(member.userId)}
+                          disabled={!!editing || saving}
                           onChange={() =>
                             setDraft({
                               ...draft,
-                              requestIds: toggle(draft.requestIds, item.id),
+                              assigneeIds: toggle(
+                                draft.assigneeIds,
+                                member.userId,
+                              ),
                             })
                           }
                         />
-                        <span>{item.title}</span>
+                        <span>{member.displayName}</span>
                       </label>
                     ))}
-                  {!requests.length && <p>연결된 요청이 없어요.</p>}
-                </div>
-              </fieldset>
-              {!!editing && draft.requestIds.length > 0 && (
-                <div className="pt-source-links">
-                  {requests
-                    .filter((item) => draft.requestIds.includes(item.id))
-                    .map((item) => (
-                      <button
-                        type="button"
-                        key={item.id}
-                        disabled={saving}
-                        onClick={() => {
-                          close();
-                          onOpenRequest(item.id);
-                        }}
-                      >
-                        ↗ {item.title}
-                      </button>
-                    ))}
-                </div>
-              )}
-            </div>
-            <footer>
-              <button type="button" disabled={saving} onClick={close}>
-                취소
-              </button>
-              <button
-                type="submit"
-                className="pt-primary"
-                disabled={saving || !draft.title.trim() || !canEditProgress}
-              >
-                {saving ? "저장 중…" : editing ? "변경 저장" : "업무 만들기"}
-              </button>
-            </footer>
-          </form>
+                    {!members.length && <p>배정할 개발팀 멤버가 없어요.</p>}
+                  </div>
+                </fieldset>
+                <fieldset>
+                  <legend>승인된 연결 요청</legend>
+                  <div className="pt-options pt-request-options">
+                    {requests
+                      .filter((item) => draft.requestIds.includes(item.id))
+                      .map((item) => (
+                        <label key={item.id}>
+                          <input
+                            type="checkbox"
+                            checked={draft.requestIds.includes(item.id)}
+                            disabled
+
+                            onChange={() =>
+                              setDraft({
+                                ...draft,
+                                requestIds: toggle(draft.requestIds, item.id),
+                              })
+                            }
+                          />
+                          <span>{item.title}</span>
+                        </label>
+                      ))}
+                    {!requests.length && <p>연결된 요청이 없어요.</p>}
+                  </div>
+                </fieldset>
+                {!!editing && draft.requestIds.length > 0 && (
+                  <div className="pt-source-links">
+                    {requests
+                      .filter((item) => draft.requestIds.includes(item.id))
+                      .map((item) => (
+                        <button
+                          type="button"
+                          key={item.id}
+                          disabled={saving}
+                          onClick={() => {
+                            close();
+                            onOpenRequest(item.id);
+                          }}
+                        >
+                          ↗ {item.title}
+                        </button>
+                      ))}
+                  </div>
+                )}
+              </div>
+              <footer>
+                <button type="button" disabled={saving} onClick={close}>
+                  취소
+                </button>
+                <button
+                  type="submit"
+                  className="pt-primary"
+                  disabled={saving || !draft.title.trim() || !canEditProgress}
+                >
+                  {saving ? "저장 중…" : editing ? "변경 저장" : "업무 만들기"}
+                </button>
+              </footer>
+            </form>
+            {editing && (
+              <aside className="pt-detail-conversation">
+                {draft.requestIds.length > 0 && (
+                  <section className="pc-linked">
+                    <h3>연결된 요청</h3>
+                    {requests
+                      .filter((item) => draft.requestIds.includes(item.id))
+                      .map((item) => (
+                        <button
+                          type="button"
+                          key={item.id}
+                          disabled={saving}
+                          onClick={() => {
+                            close();
+                            onOpenRequest(item.id);
+                          }}
+                        >
+                          {item.title} ↗
+                        </button>
+                      ))}
+                  </section>
+                )}
+
+                <ProjectChannel
+                  key={editing}
+                  projectId={project.id}
+                  taskId={editing}
+                />
+              </aside>
+            )}
+          </div>
         )}
       </dialog>
     </section>

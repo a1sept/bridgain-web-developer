@@ -12,6 +12,7 @@ export type ProjectSection =
   | "meetings"
   | "documents"
   | "activity"
+  | "channel"
   | "members"
   | "settings"
   | "approvals";
@@ -269,6 +270,7 @@ export default function DeveloperShell(p: Props) {
                 ["deployments", "배포"],
                 ["approvals", "승인함"],
                 ["meetings", "회의실"],
+                ["channel", "채널"],
                 ["documents", "문서"],
                 ["activity", "활동 기록"],
                 ["members", "참여자 관리"],

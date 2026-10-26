@@ -1,3 +1,4 @@
+import ProjectChannel from "./ProjectChannel";
 import ProjectMembers from "./ProjectMembers";
 import Approvals, { workflowApi, type Approval } from "./Approvals";
 import type { RepositoryRelation } from "./RepositoryFields";
@@ -273,6 +274,7 @@ export default function LiveWorkspace({
           "meetings",
           "documents",
           "activity",
+          "channel",
           "members",
           "settings",
         ].includes(saved?.projectSection)
@@ -317,6 +319,7 @@ export default function LiveWorkspace({
       "meetings",
       "documents",
       "activity",
+      "channel",
       "members",
       "settings",
     ].includes(window.history.state?.projectSection)
@@ -859,6 +862,26 @@ export default function LiveWorkspace({
                     onTask={(tid) => {
                       window.sessionStorage.setItem("bridgain-task", tid);
                       openProject(project.id, "tasks");
+                    }}
+                  />
+                )}
+              {view === "projects" &&
+                project &&
+                projectSection === "channel" && (
+                  <ProjectChannel
+                    key={project.id}
+                    projectId={project.id}
+                    onOpen={(kind, id) => {
+                      if (kind === "task") {
+                        window.sessionStorage.setItem("bridgain-task", id);
+                        openProject(project.id, "tasks");
+                      } else {
+                        window.sessionStorage.setItem(
+                          "bridgain-open-meeting",
+                          id,
+                        );
+                        openProject(project.id, "meetings");
+                      }
                     }}
                   />
                 )}
