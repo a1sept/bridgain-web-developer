@@ -1,3 +1,5 @@
+import RichTextContent from "./editor/RichTextContent";
+import type { RichDocument } from "./editor/document";
 import ProjectChannel from "./ProjectChannel";
 import WorkReview from "./WorkReview";
 import { useEffect, useRef, useState, type FormEvent } from "react";
@@ -19,6 +21,7 @@ export type ProjectTask = {
   version: string;
   title: string;
   description: string;
+  descriptionDocument?: RichDocument | null;
   status:
     | "blocked"
     | "todo"
@@ -863,19 +866,13 @@ export default function ProjectTasks({
                     placeholder="어떤 작업을 해야 하나요?"
                   />
                 </label>
-                <label>
-                  업무 내용
-                  <textarea
-                    rows={4}
-                    maxLength={10000}
-                    readOnly={!!editing}
+                <div className="rt-field">
+                  <span>업무 내용</span>
+                  <RichTextContent
                     value={draft.description}
-                    onChange={(event) =>
-                      setDraft({ ...draft, description: event.target.value })
-                    }
-                    placeholder="작업 범위와 완료 기준을 적어주세요."
+                    document={selectedTask?.descriptionDocument}
                   />
-                </label>
+                </div>
                 <div className="pt-form-grid">
                   <label>
                     상태

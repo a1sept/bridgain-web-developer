@@ -21,7 +21,7 @@ export default function MemberPicker({ label, items, value, onChange, disabled =
   const matches = available.filter(p => p.displayName.toLocaleLowerCase().includes(query.toLocaleLowerCase()));
   return <div className="mp-picker" ref={ref} onKeyDown={e => {
     if (e.key === "Enter" && e.target instanceof HTMLInputElement) e.preventDefault();
-    if (e.key === "Escape") { e.stopPropagation(); setOpen(false); ref.current?.querySelector<HTMLButtonElement>(".mp-add")?.focus(); }
+    if (e.key === "Escape") { e.preventDefault(); e.stopPropagation(); setOpen(false); ref.current?.querySelector<HTMLButtonElement>(".mp-add")?.focus(); }
   }}>
     <span className="mp-label">{label}</span>
     <div className="mp-selected">

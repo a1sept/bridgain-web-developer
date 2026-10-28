@@ -1,3 +1,4 @@
+import RichTextContent from "./editor/RichTextContent";
 import MemberPicker from "./MemberPicker";
 import StagePlanEditor, {
   type StagePlan,
@@ -70,10 +71,20 @@ export function ApproverPicker({
   label?: string;
   disabled?: boolean;
 }) {
-  return <div className="approval-picker">
-    <MemberPicker label={label || "업무화 승인자 · 전원 승인 후 업무 생성"} items={items} value={value} onChange={onChange} disabled={disabled} />
-    {!items.length && <p>선택 가능한 참여자가 없어요. 참여자 관리에서 확인해주세요.</p>}
-  </div>;
+  return (
+    <div className="approval-picker">
+      <MemberPicker
+        label={label || "업무화 승인자 · 전원 승인 후 업무 생성"}
+        items={items}
+        value={value}
+        onChange={onChange}
+        disabled={disabled}
+      />
+      {!items.length && (
+        <p>선택 가능한 참여자가 없어요. 참여자 관리에서 확인해주세요.</p>
+      )}
+    </div>
+  );
 }
 
 type WorkApproval = {
@@ -301,7 +312,7 @@ export default function Approvals({
                   <strong>
                     {i + 1}. {s.name} · {s.title}
                   </strong>
-                  <p>{s.brief}</p>
+                  <RichTextContent value={s.brief} document={s.briefDocument} />
                   <p>
                     담당:{" "}
                     {s.assigneeIds.map((id) => names[id] || id).join(", ")} /

@@ -1,0 +1,548 @@
+.mm-dialog {
+  position: fixed;
+  inset: 0;
+  width: 100vw;
+  max-width: none;
+  height: 100dvh;
+  max-height: none;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: #f5f7fb;
+  color: #25354c;
+  font: inherit;
+}
+.mm-dialog::backdrop {
+  background: #f5f7fb;
+}
+.mm-shell {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+.mm-workspace button,
+.mm-workspace input,
+.mm-workspace textarea,
+.mm-workspace select {
+  font: inherit;
+}
+.mm-workspace button {
+  cursor: pointer;
+  padding: 9px 13px;
+  border: 1px solid #dce4f1;
+  border-radius: 8px;
+  background: white;
+  color: #51617b;
+}
+.mm-workspace button:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+.mm-workspace button:focus-visible,
+.mm-workspace input:focus-visible,
+.mm-workspace textarea:focus-visible,
+.mm-workspace select:focus-visible {
+  outline: 2px solid #436bf0;
+  outline-offset: 2px;
+}
+.mm-topbar {
+  display: flex;
+  justify-content: space-between;
+  gap: 20px;
+  align-items: center;
+  padding: 18px 28px;
+  background: white;
+  border-bottom: 1px solid #dfe6f1;
+  flex-shrink: 0;
+}
+.mm-topbar small,
+.mm-eyebrow {
+  color: #6c80a4;
+  font-size: 12px;
+}
+.mm-topbar h1 {
+  font-size: 20px;
+  margin: 5px 0;
+  overflow-wrap: anywhere;
+}
+.mm-top-actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+.mm-top-actions > span {
+  font-size: 12px;
+  color: #7888a1;
+}
+.mm-workspace .mm-primary {
+  background: #436bf0;
+  color: white;
+  border-color: #436bf0;
+}
+.mm-layout {
+  display: grid;
+  grid-template-columns: 240px minmax(0, 1fr);
+  flex: 1;
+  min-height: 0;
+}
+.mm-layout.mm-no-nav {
+  grid-template-columns: 1fr;
+}
+.mm-nav {
+  background: #17263e;
+  padding: 22px 14px;
+  overflow: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.mm-nav button {
+  border-color: transparent;
+  background: transparent;
+  color: #ced8e9;
+  text-align: left;
+  line-height: 1.6;
+}
+.mm-nav button[aria-current="page"] {
+  background: #2b4268;
+  border-color: #49638d;
+  color: white;
+}
+.mm-nav small {
+  display: block;
+  color: #9fb2d0;
+  font-size: 11px;
+}
+.mm-nav span {
+  display: block;
+}
+.mm-nav input {
+  width: 100%;
+  box-sizing: border-box;
+  min-width: 0;
+  padding: 10px;
+  border: 1px solid #3c506e;
+  background: #22344e;
+  color: white;
+  border-radius: 8px;
+}
+.mm-nav p {
+  color: #a3b4cf;
+  font-size: 13px;
+}
+.mm-overview {
+  overflow: auto;
+  padding: 36px 44px;
+}
+.mm-overview h2,
+.mm-request h2 {
+  font-size: 30px;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+  margin: 12px 0;
+}
+.mm-muted {
+  color: #7c8ba0;
+  font-size: 13px;
+  line-height: 1.7;
+}
+.mm-card {
+  display: block;
+  background: white;
+  border: 1px solid #dfe6f1;
+  border-radius: 12px;
+  padding: 24px;
+  margin: 22px 0;
+}
+.mm-card h3 {
+  font-size: 16px;
+  margin: 0 0 16px;
+}
+.mm-field {
+  display: grid;
+  gap: 10px;
+  font-size: 14px;
+  font-weight: 600;
+}
+.mm-field textarea,
+.mm-field select {
+  width: 100%;
+  box-sizing: border-box;
+  border: 1px solid #dce3ef;
+  border-radius: 8px;
+  padding: 12px;
+  background: white;
+  color: #35445c;
+  font-weight: 400;
+  line-height: 1.7;
+}
+.mm-field textarea {
+  resize: vertical;
+}
+.mm-agenda {
+  display: grid;
+  gap: 12px;
+}
+.mm-agenda button {
+  display: flex;
+  align-items: center;
+  text-align: left;
+  gap: 18px;
+  padding: 20px;
+  background: white;
+}
+.mm-agenda strong {
+  flex: 1;
+}
+.mm-agenda small {
+  color: #7f90a9;
+}
+.mm-detail {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(390px, 440px);
+  min-height: 0;
+  min-width: 0;
+}
+.mm-request {
+  overflow: auto;
+  padding: 30px;
+  min-width: 0;
+}
+.mm-description {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  line-height: 1.9;
+  font-size: 17px;
+}
+.mm-card figure {
+  margin: 18px 0;
+}
+.mm-card img {
+  max-width: 100%;
+  max-height: 65vh;
+  object-fit: contain;
+}
+.mm-card figcaption {
+  margin-top: 8px;
+  overflow-wrap: anywhere;
+}
+.mm-workspace a {
+  color: #436bf0;
+}
+.mm-priority {
+  display: inline-block;
+  background: #eaf0ff;
+  color: #4d6ba7;
+  border-radius: 6px;
+  padding: 5px 9px;
+  font-size: 12px;
+}
+.mm-pager {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: center;
+  margin: 26px 0;
+}
+.mm-decision {
+  padding: 24px;
+  overflow: auto;
+  background: #fff;
+  border-left: 1px solid #dfe6f1;
+  min-width: 0;
+}
+.mm-decision h2 {
+  font-size: 18px;
+  margin: 0 0 20px;
+}
+.mm-decision > fieldset {
+  border: 0;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 20px;
+}
+.mm-decision .sw-editor {
+  margin-top: 26px;
+}
+.mm-decision .sw-flow {
+  display: none;
+}
+.mm-decision .sw-task-editor .sw-people-row {
+  gap: 12px;
+}
+.mm-decision .sw-task-editor .sw-inline-field {
+  grid-template-columns: 70px minmax(0, 1fr);
+  gap: 8px;
+}
+.mm-decision .sw-task-editor .sw-stage {
+  padding: 14px;
+}
+.mm-decision .sw-task-editor .mp-picker {
+  display: block;
+}
+.mm-decision input,
+.mm-decision textarea,
+.mm-decision select {
+  box-sizing: border-box;
+  max-width: 100%;
+  padding: 9px;
+  border: 1px solid #dce3ef;
+  border-radius: 7px;
+  background: white;
+  color: #35445c;
+}
+.mm-decision .sw-stage > label:not(.sw-inline-field) {
+  display: grid;
+  gap: 8px;
+  margin: 16px 0;
+}
+.mm-error {
+  color: #a43a40;
+  background: #fff0f0;
+  padding: 12px 20px;
+  margin: 0;
+}
+.pr-meeting-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.pr-meeting-list {
+  display: grid;
+  gap: 14px;
+}
+.pr-meeting-list .pr-card {
+  padding: 22px;
+}
+.pr-editor-heading {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+  margin-bottom: 18px;
+}
+.pr-editor-heading h2 {
+  margin: 0;
+}
+.pr-editor-heading > div {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.pr-editor-heading small {
+  color: #7c8ba0;
+}
+.pr-editor[hidden] {
+  display: none;
+}
+@media (max-width: 1150px) {
+  .mm-layout {
+    grid-template-columns: 200px minmax(0, 1fr);
+  }
+  .mm-detail {
+    grid-template-columns: 1fr;
+    overflow: auto;
+  }
+  .mm-request,
+  .mm-decision {
+    overflow: visible;
+  }
+  .mm-decision {
+    border-left: 0;
+    border-top: 1px solid #dfe6f1;
+  }
+}
+@media (max-width: 700px) {
+  .mm-topbar {
+    padding: 12px;
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 8px;
+  }
+  .mm-topbar h1 {
+    font-size: 18px;
+  }
+  .mm-layout {
+    grid-template-columns: 150px minmax(0, 1fr);
+  }
+  .mm-nav {
+    padding: 12px 8px;
+  }
+  .mm-overview,
+  .mm-request,
+  .mm-decision {
+    padding: 18px;
+  }
+  .mm-overview h2,
+  .mm-request h2 {
+    font-size: 23px;
+  }
+  .mm-card {
+    padding: 16px;
+  }
+  .mm-agenda button {
+    flex-wrap: wrap;
+    gap: 10px;
+  }
+  .mm-agenda strong {
+    flex-basis: 65%;
+  }
+  .mm-pager {
+    flex-wrap: wrap;
+  }
+  .mm-top-actions > span {
+    width: 100%;
+  }
+}
+
+/* The preparation and presentation views share the same three-column workspace. */
+.mm-embedded {
+  height: min(780px, 80vh);
+  min-height: 560px;
+  margin: 24px 0;
+  border: 1px solid #dfe6f1;
+  border-radius: 12px;
+  overflow: hidden;
+  background: #f5f7fb;
+  container-type: inline-size;
+  color: #25354c;
+}
+.mm-workspace .mm-connector,
+.mm-workspace .mm-notes {
+  border: 0;
+  padding: 0;
+  margin: 0;
+  min-width: 0;
+}
+.mm-workspace .mm-nav .pr-request-anchor {
+  margin: 0;
+}
+.mm-workspace .mm-nav .pr-request-gap {
+  height: 20px;
+}
+.mm-workspace .mm-nav .pr-request-picker {
+  color: #25354c;
+  z-index: 100;
+}
+.mm-workspace .mm-nav .pr-request-picker button {
+  color: #51617b;
+  background: white;
+  border-color: #dce4f1;
+}
+.mm-workspace .mm-nav .pr-request-picker input {
+  color: #25354c;
+  background: white;
+  border-color: #dce4f1;
+}
+.mm-workspace .mm-nav .pr-request-picker span {
+  color: #8491a6;
+}
+.mm-workspace .mm-nav .pr-request-append > button,
+.mm-workspace .mm-nav .pr-request-empty-action > button {
+  width: 100%;
+  border: 1px dashed #607596;
+  text-align: center;
+  font-size: 12px;
+}
+.mm-workspace .mm-nav .pr-request-gap > button {
+  background: #436bf0;
+  color: white;
+}
+.mm-notes {
+  margin: 24px 0 !important;
+}
+.mm-embedded .mm-layout {
+  grid-template-columns: 180px minmax(0, 1fr);
+}
+.mm-embedded .mm-detail {
+  grid-template-columns: minmax(220px, 1fr) minmax(340px, 1fr);
+  overflow: hidden;
+}
+.mm-embedded .mm-request,
+.mm-embedded .mm-decision,
+.mm-embedded .mm-overview {
+  padding: 20px;
+  overflow: auto;
+}
+.mm-embedded .mm-request h2,
+.mm-embedded .mm-overview h2 {
+  font-size: 23px;
+}
+@container (max-width: 780px) {
+  .mm-embedded .mm-detail {
+    grid-template-columns: 1fr;
+    overflow: auto;
+  }
+  .mm-embedded .mm-request,
+  .mm-embedded .mm-decision,
+  .mm-embedded .mm-overview {
+    overflow: visible;
+  }
+  .mm-embedded .mm-decision {
+    border-left: 0;
+    border-top: 1px solid #dfe6f1;
+  }
+}
+@container (max-width: 500px) {
+  .mm-embedded .mm-layout {
+    grid-template-columns: 130px minmax(0, 1fr);
+  }
+  .mm-embedded .mm-request,
+  .mm-embedded .mm-decision,
+  .mm-embedded .mm-overview {
+    padding: 12px;
+  }
+}
+
+.mm-workspace,
+.mm-workspace * {
+  box-sizing: border-box;
+}
+.mm-workspace .mm-nav > button {
+  background: transparent;
+  color: #ced8e9;
+  border-color: transparent;
+}
+.mm-workspace .mm-nav > button[aria-current="page"] {
+  background: #2b4268;
+  border-color: #49638d;
+  color: white;
+}
+.mm-workspace .mm-nav > input {
+  background: #22344e;
+  color: white;
+  border-color: #3c506e;
+}
+.mm-workspace .mm-field {
+  margin: 18px 0;
+}
+.mm-workspace .pr-request-gap > button {
+  position: relative;
+  z-index: 1;
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  font-size: 22px;
+  line-height: 1;
+  opacity: 0;
+}
+.mm-workspace .pr-request-gap:hover > button,
+.mm-workspace .pr-request-gap:focus-within > button,
+.mm-workspace .pr-request-gap > button[aria-expanded="true"] {
+  opacity: 1;
+}
+@media (hover: none) {
+  .mm-workspace .pr-request-gap > button {
+    opacity: 1;
+  }
+}
+
+.mm-workspace .mm-nav .pr-request-append > button,
+.mm-workspace .mm-nav .pr-request-empty-action > button {
+  background: transparent;
+  color: #ced8e9;
+}

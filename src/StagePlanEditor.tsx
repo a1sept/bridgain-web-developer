@@ -1,3 +1,6 @@
+import RichTextEditor from "./editor/RichTextEditor";
+import RichTextContent from "./editor/RichTextContent";
+import type { RichDocument } from "./editor/document";
 import { createLocalId } from "./browser-id";
 import {
   sequenceStages,
@@ -13,6 +16,7 @@ export type StagePlan = {
   name: string;
   title: string;
   brief: string;
+  briefDocument?: RichDocument | null;
   completionMode: "document" | "design" | "code" | "test" | "deploy";
   assigneeIds: string[];
   reviewerIds: string[];
@@ -76,8 +80,14 @@ export default function StagePlanEditor({
   reviewers = members,
   disabled = false,
   projectId,
+  initiallyCollapsed = false,
+  collapsedIds,
+  onCollapsedChange,
 }: {
   projectId?: string;
+  initiallyCollapsed?: boolean;
+  collapsedIds?: string[];
+  onCollapsedChange?: (ids: string[]) => void;
   value: StagePlan[];
   onChange: (stages: StagePlan[]) => void;
   members: Person[];
@@ -87,7 +97,15 @@ export default function StagePlanEditor({
   const [types, setTypes] = useState<
     { name: string; completionMode: StagePlan["completionMode"] }[]
   >([]);
-  const [collapsed, setCollapsed] = useState<string[]>([]);
+  const [localCollapsed, setLocalCollapsed] = useState<string[]>(() =>
+    initiallyCollapsed ? value.map((s) => s.id) : [],
+  );
+  const collapsed = collapsedIds ?? localCollapsed;
+  function setCollapsed(next: string[] | ((ids: string[]) => string[])) {
+    const ids = typeof next === "function" ? next(collapsed) : next;
+    if (onCollapsedChange) onCollapsedChange(ids);
+    else setLocalCollapsed(ids);
+  }
   const [dragged, setDragged] = useState<string | null>(null);
   useEffect(() => {
     if (!projectId) return;
@@ -382,16 +400,23 @@ export default function StagePlanEditor({
                     ))}
                   </select>
                 </label>
-                <label>
-                  업무 내용
-                  <textarea
-                    rows={4}
-                    maxLength={10000}
-                    placeholder="해야 할 일과 전달할 내용을 작성하세요."
-                    value={s.brief}
-                    onChange={(e) => patch(s.id, { brief: e.target.value })}
-                  />
-                </label>
+                <div className="rt-field">
+                  <span>업무 내용</span>
+                  {disabled ? (
+                    <RichTextContent
+                      value={s.brief}
+                      document={s.briefDocument}
+                    />
+                  ) : (
+                    <RichTextEditor
+                      value={s.brief}
+                      document={s.briefDocument}
+                      onChange={(brief, briefDocument) =>
+                        patch(s.id, { brief, briefDocument })
+                      }
+                    />
+                  )}
+                </div>
                 <div className="sw-actions">
                   <button
                     type="button"
