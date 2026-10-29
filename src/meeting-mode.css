@@ -7,15 +7,17 @@
 .mm-shell { display:flex; flex-direction:column; flex:1; min-height:0; }
 .mm-tool-header { padding:16px 24px 12px; border-bottom:1px solid var(--mm-border); flex-shrink:0; }
 .mm-title-row { display:flex; align-items:center; gap:10px; }
-.mm-title-input { width:100%; min-width:0; line-height:1.5; font-family:inherit; font-size:24px; font-weight:600; border:1px solid transparent; border-radius:6px; padding:4px 6px; color:inherit; background:transparent; }
-.mm-title-input:hover:not(:disabled) { border-color:var(--mm-border); }
+.mm-back svg { transform:rotate(90deg); }
+.mm-page-title { margin:0; font-size:14px; line-height:1.5; font-weight:600; white-space:nowrap; }
+.mm-overview-title .mm-title-input { width:100%; min-width:0; line-height:1.3; font-family:inherit; font-size:32px; font-weight:700; letter-spacing:-.025em; border:0; border-radius:0; padding:0; color:inherit; background:transparent; box-shadow:none; }
+.mm-title-input::placeholder { color:var(--mm-muted); font-weight:600; }
 .mm-status,.mm-priority { display:inline-flex; border-radius:5px; padding:3px 7px; background:#f0edfc; color:#655aab; font-size:11px; white-space:nowrap; }
 .mm-save-status { margin-left:auto; font-size:11px; color:var(--mm-muted); white-space:nowrap; }
 .mm-action,.mm-pager button,.mm-request > button,.mm-top-actions button,.mm-request .mm-error button { display:inline-flex; align-items:center; justify-content:center; gap:6px; border:1px solid #e4e4eb; border-radius:7px; background:#fff; color:#555660; padding:7px 12px; min-height:34px; line-height:18px; font-family:inherit; font-size:12px; cursor:pointer; white-space:nowrap; }
 .mm-action:hover:not(:disabled),.mm-pager button:hover:not(:disabled) { background:#f5f4f9; }
 .mm-workspace .mm-primary { background:var(--mm-accent); color:white; border-color:var(--mm-accent); }
 .mm-workspace button:disabled { opacity:.5; cursor:default; }
-.mm-workspace :is(button,input,textarea,select,summary):focus-visible { outline:2px solid #9389e3; outline-offset:2px; }
+.mm-workspace :is(button,select,summary,input[type=checkbox],input[type=radio]):focus-visible { outline:2px solid #9389e3; outline-offset:2px; }
 .mm-overview-info { margin:18px 0 28px; }
 .mm-overview-title { display:grid; gap:8px; }
 .mm-overview-title > span { font-size:12px; color:var(--mm-muted); }
@@ -134,3 +136,19 @@
 .mm-decision .sw-task-editor .sw-people-row .mp-picker:last-child .mp-popover { left:auto; right:0; }
 
 @container (max-width:700px) { .mm-metadata { grid-template-columns:1fr; gap:14px; } .mm-metadata > label { flex-wrap:wrap; } .mm-metadata input[type=datetime-local] { flex-basis:100%; width:100%; } .mm-tooltip > span { left:auto; right:-12px; width:min(260px,55vw); } }
+
+/* Text fields in the meeting tool use only a subtle underline while editing. */
+.pr-meeting-tool .mm-workspace :is(input,textarea):not([type=checkbox],[type=radio]) {
+  border:0;
+  border-radius:0;
+  box-shadow:none;
+  outline:none;
+}
+.pr-meeting-tool .mm-workspace :is(input,textarea):not([type=checkbox],[type=radio]):focus {
+  outline:none;
+  box-shadow:inset 0 -1px 0 #c9c5d8;
+}
+
+.mm-memo-editor .rt-editor { border:0; border-radius:0; background:transparent; box-shadow:none; }
+.mm-memo-editor .rt-editor:focus-within { box-shadow:inset 0 -1px 0 #c9c5d8; }
+.mm-memo-editor .bn-editor:focus { outline:none; }

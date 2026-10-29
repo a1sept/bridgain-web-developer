@@ -8,6 +8,7 @@ export type RichTextEditorProps = {
   onChange: (text: string, document: RichDocument) => void;
   disabled?: boolean;
   label?: string;
+  maxLength?: number;
 };
 export default function RichTextEditor(props: RichTextEditorProps) {
   return (

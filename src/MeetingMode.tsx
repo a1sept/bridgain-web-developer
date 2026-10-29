@@ -1,3 +1,5 @@
+import RichTextEditor from "./editor/RichTextEditor";
+import type { RichDocument } from "./editor/document";
 import { Fragment, useEffect, useRef, useState, type ReactNode } from "react";
 import MeetingRequestForm from "./MeetingRequestForm";
 import StagePlanEditor, { type StagePlan } from "./StagePlanEditor";
@@ -6,6 +8,7 @@ export type MeetingRequestPlan = {
   discussionStatus?: "unreviewed" | "discussed" | "deferred";
   requestId: string;
   planning: string;
+  planningDocument?: RichDocument | null;
   priority: string;
   stages?: StagePlan[];
   assigneeIds: string[];
@@ -37,6 +40,7 @@ export default function MeetingMode({
   when,
   location,
   notes,
+  notesDocument,
   plans,
   requests,
   members,
@@ -72,6 +76,7 @@ export default function MeetingMode({
   when: string;
   location: string;
   notes: string;
+  notesDocument?: RichDocument | null;
   plans: MeetingRequestPlan[];
   requests: RequestInfo[];
   members: Person[];
@@ -80,7 +85,7 @@ export default function MeetingMode({
   busy: boolean;
   dirty: boolean;
   error: string;
-  onNotes: (s: string) => void;
+  onNotes: (s: string, document: RichDocument) => void;
   onPlan: (id: string, change: Partial<MeetingRequestPlan>) => void;
   onSave: () => void;
   onExit: () => void;
@@ -260,18 +265,11 @@ export default function MeetingMode({
                 {when ? new Date(when).toLocaleString("ko-KR") : "일시 미정"} ·{" "}
                 {location || "장소 미정"}
               </p></>}
-              <label className="mm-card mm-field">
-                회의 전체 메모
-                <textarea
-                  rows={5}
-                  maxLength={20000}
-                  aria-label="회의 전체 메모"
-                  value={notes}
-                  disabled={readOnly || busy}
-                  placeholder="회의 목적, 공통 전달사항, 전체 결론을 기록하세요."
-                  onChange={(e) => onNotes(e.target.value)}
-                />
-              </label>
+              <section className="mm-card mm-field mm-memo-editor">
+                <h3>회의 전체 메모</h3>
+                <RichTextEditor label="회의 전체 메모" value={notes} document={notesDocument}
+                  maxLength={20000} disabled={readOnly || busy} onChange={onNotes} />
+              </section>
               <div className="mm-summary"><span>요청 <strong>{plans.length}</strong></span><span>업무 <strong>{plans.reduce((n,p)=>n+(p.stages?.length || 0),0)}</strong></span><span>논의 완료 <strong>{plans.filter(p=>p.discussionStatus === "discussed").length}</strong></span></div><h3>연결된 요청</h3>
               <div className="mm-agenda">
                 {plans.map((p, i) => (
@@ -353,22 +351,12 @@ export default function MeetingMode({
                   </details>
                 </>
               )}
-              <fieldset disabled={readOnly || busy} className="mm-notes">
-                {" "}
-                <label className="mm-field">
-                  요청별 회의 메모
-                  <textarea
-                    rows={5}
-                    maxLength={10000}
-                    aria-label="요청별 회의 메모"
-                    value={plan.planning}
-                    onChange={(e) =>
-                      onPlan(plan.requestId, { planning: e.target.value })
-                    }
-                    placeholder="논의 내용, 합의한 범위, 추가 확인할 사항을 기록하세요."
-                  />
-                </label>
-              </fieldset>
+              <section className="mm-notes mm-field mm-memo-editor">
+                <h3>요청별 회의 메모</h3>
+                <RichTextEditor key={plan.requestId} label="요청별 회의 메모"
+                  value={plan.planning} document={plan.planningDocument} disabled={readOnly || busy}
+                  onChange={(planning, planningDocument) => onPlan(plan.requestId, { planning, planningDocument })} />
+              </section>
               {[plan.uiNotes, plan.apiNotes, plan.dbNotes].some((note) =>
                 note?.trim(),
               ) && (

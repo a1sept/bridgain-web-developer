@@ -33,16 +33,16 @@ export function plainDocument(text: string): RichDocument {
       })),
   };
 }
-export function documentProblem(doc: RichDocument): string | null {
+export function documentProblem(doc: RichDocument, maxLength = 10000): string | null {
   if (doc.version !== 1) return "지원하지 않는 문서 버전입니다.";
-  if (JSON.stringify(doc).length > 250000 || documentText(doc).length > 10000)
-    return "업무 내용은 10,000자 이내로 작성해주세요.";
+  if (JSON.stringify(doc).length > 250000 || documentText(doc).length > maxLength)
+    return `내용은 ${maxLength.toLocaleString("ko-KR")}자 이내로 작성해주세요.`;
   let count = 0;
   const visit = (items: RichBlock[], depth = 0): boolean =>
     depth <= 8 &&
     items.every((b) => ++count <= 200 && visit(b.children, depth + 1));
   if (!visit(doc.blocks))
-    return "업무 문서는 200개 블록, 8단계 들여쓰기까지 지원합니다.";
+    return "문서는 200개 블록, 8단계 들여쓰기까지 지원합니다.";
   const links = (items: RichInline[]): boolean =>
     items.every(
       (i) =>

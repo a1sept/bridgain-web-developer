@@ -31,6 +31,7 @@ export default function BlockEditor({
   disabled = false,
   label = "업무 내용",
   onChange,
+  maxLength = 10000,
 }: RichTextEditorProps) {
   const container = useRef<HTMLDivElement>(null);
   const [portal, setPortal] = useState<HTMLElement>();
@@ -88,7 +89,7 @@ export default function BlockEditor({
             version: 1,
             blocks: JSON.parse(JSON.stringify(editor.document)),
           } as RichDocument;
-          const problem = documentProblem(next);
+          const problem = documentProblem(next, maxLength);
           if (problem) {
             setError(problem);
             applying.current = true;

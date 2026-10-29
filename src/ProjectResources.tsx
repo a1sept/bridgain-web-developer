@@ -1,3 +1,4 @@
+import type { RichDocument } from "./editor/document";
 import ControlIcon from "./components/ControlIcon";
 import MeetingMode from "./MeetingMode";
 import {
@@ -24,6 +25,7 @@ type Plan = {
   stages?: StagePlan[];
   requestId: string;
   planning: string;
+  planningDocument?: RichDocument | null;
   uiNotes: string;
   apiNotes: string;
   dbNotes: string;
@@ -39,6 +41,7 @@ type Meeting = {
   finalApproverIds?: string[];
   location: string;
   notes: string;
+  notesDocument?: RichDocument | null;
   status: string;
   decisionStatus: "draft" | "pending" | "final";
   requests: Plan[];
@@ -153,6 +156,7 @@ export default function ProjectResources({
     [error, setError] = useState(""),
     [reload, setReload] = useState(0),
     [busy, setBusy] = useState(false);
+  const [notesDocument, setNotesDocument] = useState<RichDocument | null>(null);
   const [meetingMode, setMeetingMode] = useState(false);
   const [approverHelpOpen,setApproverHelpOpen] = useState(false);
   const [savedMeetingDraft, setSavedMeetingDraft] = useState("");
@@ -181,7 +185,7 @@ export default function ProjectResources({
   const [requestConnector, setRequestConnector] = useState("");
   const [requestPickerMode, setRequestPickerMode] = useState<"menu" | "existing">("menu");
   const [newRequestOpen, setNewRequestOpen] = useState(false);
-  const meetingDraft = JSON.stringify({title,content,when,duration,location,plans,selectedApprovers});
+  const meetingDraft = JSON.stringify({title,content,notesDocument,when,duration,location,plans,selectedApprovers});
   const meetingDirty = !!editing && section === "meetings" && meetingDraft !== savedMeetingDraft;
   useEffect(() => { if (section === "meetings" && editing) setSavedMeetingDraft(meetingDraft); }, [editing, section]);
   useEffect(() => {
@@ -370,6 +374,7 @@ export default function ProjectResources({
     setError("");
     setEditing(item?.id || "new");
     setTitle(item?.title || "");
+    setNotesDocument(item && "notes" in item ? item.notesDocument ?? null : null);
     setContent(item ? ("notes" in item ? item.notes : item.content) : "");
     setUrl(item && "url" in item ? item.url || "" : "");
     setCategory(item && "category" in item ? item.category : "plan");
@@ -475,7 +480,7 @@ export default function ProjectResources({
   async function persistMeeting() {
     if (!title.trim() || !when || !Number.isFinite(new Date(when).getTime()) || !Number.isFinite(duration) || duration < 15 || duration > 480) throw Error("회의 제목·시작 일시·소요 시간(15~480분)을 확인해주세요.");
     const saved = await api<{meeting: Meeting}>(`${base}/meetings${editing === "new" ? "" : `/${editing}`}`, {
-      title, scheduledAt: new Date(when).toISOString(), durationMinutes: duration, location, notes: content,
+      title, scheduledAt: new Date(when).toISOString(), durationMinutes: duration, location, notes: content, notesDocument,
       decisionStatus: "draft", transferFromMeetingIds: transfers, finalApproverIds: selectedApprovers,
       requests: plans.map(p => ({...p, stages: p.stages?.length ? p.stages : undefined})),
     }, editing === "new" ? "POST" : "PATCH");
@@ -841,7 +846,8 @@ export default function ProjectResources({
               newRequestOpen={newRequestOpen} onCancelRequest={() => setNewRequestOpen(false)} onCreateRequest={createMeetingRequest}
               header={<header className="mm-tool-header">
                 <div className="mm-title-row">
-                  <button type="button" className="mm-action" disabled={busy} onClick={closeEditor}>회의실</button>
+                  <button type="button" className="mm-action mm-back" disabled={busy} onClick={closeEditor}><ControlIcon name="chevron" />회의 목록으로</button>
+                  <h1 className="mm-page-title">{editing === "new" ? "회의 만들기" : meetingReadOnly ? "회의 상세" : "회의 수정"}</h1>
                   <span className="mm-status">{status === "completed" ? "완료" : status === "in_progress" ? "진행 중" : "예정"}</span>
                   <span className="mm-save-status" role="status">{meetingReadOnly ? "읽기 전용" : busy ? "저장 중…" : meetingDirty ? "미저장" : "저장됨"}</span>
                   <button type="button" className="mm-action" disabled={busy} aria-pressed={meetingMode} onClick={() => {setRequestPickerOpen(false);setMeetingMode(v=>!v);}}>{meetingMode ? "작성 보기" : "발표 보기"}</button>
@@ -867,7 +873,7 @@ export default function ProjectResources({
               </div></footer>}
               lifecycleLabel={editing !== "new" && canUpdate && status !== "completed" ? (status === "in_progress" ? "완전 마무리" : "회의 시작하기") : undefined}
               onLifecycle={() => void changeMeetingState(status === "in_progress" ? "complete" : "start")}
-              projectId={projectId} title={title} when={when} location={location} notes={content}
+              projectId={projectId} title={title} when={when} location={location} notes={content} notesDocument={notesDocument}
               plans={plans} requests={requests} members={members.filter(m => m.accountType === "team")} reviewers={workApprovers}
               readOnly={meetingReadOnly} busy={busy} dirty={meetingDirty} error={error}
               renderConnector={renderRequestConnector}
@@ -877,7 +883,7 @@ export default function ProjectResources({
                 setPlans(current=>current.filter(p=>p.requestId!==id));
                 setTransfers(current=>{const next={...current};delete next[id];return next;});
               }} onTask={onTask}
-              onNotes={setContent} onPlan={patchPlan} onSave={() => void saveDuringMeeting()}
+              onNotes={(text, document) => { setContent(text); setNotesDocument(document); }} onPlan={patchPlan} onSave={() => void saveDuringMeeting()}
               onExit={() => {setRequestPickerOpen(false);setMeetingMode(false);}} />}
             {section !== "meetings" && <footer><button type="button" disabled={busy} onClick={closeEditor}>취소</button><button type="submit" className="pr-primary" disabled={busy || !title.trim() || (editing === "new" ? !canCreate : !canUpdate)}>저장하기</button></footer>}
           </form>
