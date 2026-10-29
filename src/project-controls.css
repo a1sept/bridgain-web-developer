@@ -21,7 +21,7 @@
   .ds-shell .rb-shell .rb-submit button,
   .ds-shell .rb-shell .rb-segments button,
   .ds-shell .rb-shell .rb-pills button,
-  .ds-shell .pr-page button:not(.pr-document-title, .pr-text, h2 button),
+  .ds-shell .pr-page button:not(.pr-document-title, .pr-text, h2 button, .bg-filter-bar button, .ah-page button),
   .ds-shell .repo-fields button,
   .ds-shell .approvals-page button,
   .ds-shell .urgent-approval > button,

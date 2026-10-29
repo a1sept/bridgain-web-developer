@@ -6,6 +6,7 @@ import ProjectSettings from "./ProjectSettings";
 import ProjectTasks from "./ProjectTasks";
 import Deployments from "./Deployments";
 import ProjectResources from "./ProjectResources";
+import ActivityHistory from "./ActivityHistory";
 import ProjectOverview from "./ProjectOverview";
 import DeveloperShell, {
   type DeveloperView,
@@ -917,6 +918,9 @@ export default function LiveWorkspace({
                 (projectSection === "meetings" ||
                   projectSection === "documents" ||
                   projectSection === "activity") && (
+                  projectSection === "activity" ? (
+                    <ActivityHistory currentUser={user} refreshKey={dashboardRefresh} />
+                  ) : (
                   <ProjectResources
                     refreshKey={dashboardRefresh}
                     key={`${project.id}/${projectSection}`}
@@ -932,6 +936,7 @@ export default function LiveWorkspace({
                     section={projectSection}
                     onChanged={() => setDashboardRefresh((v) => v + 1)}
                   />
+                  )
                 )}
               {view === "projects" &&
                 project &&

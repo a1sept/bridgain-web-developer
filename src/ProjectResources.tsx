@@ -65,6 +65,8 @@ type Document = {
   versions: Version[];
 };
 type Event = {
+  title?: string;
+  origin?: string;
   id: string;
   kind: string;
   body: string;
@@ -929,19 +931,39 @@ export default function ProjectResources({
         !error && (
           <>
             {section === "activity" ? (
-              <div className="pr-events">
-                {events.map((e, i) => (
-                  <article key={`${e.id}-${i}`}>
-                    <div>
-                      <strong>{e.actorName}</strong>
-                      <p>{e.body}</p>
-                      <time>
-                        {new Date(e.createdAt).toLocaleString("ko-KR")}
-                      </time>
-                    </div>
-                  </article>
-                ))}
-                {!events.length && <p>아직 기록된 활동이 없어요.</p>}
+              <div className="pr-activity-feed" aria-label="프로젝트 활동 기록">
+                <div className="pr-activity-summary">
+                  <div><strong>프로젝트의 흐름을 한눈에</strong><p>새로 접수된 요청과 주요 변경 사항을 확인하세요.</p></div>
+                  <span>최근 기록 {events.length}개</span>
+                </div>
+                <ol className="pr-activity-list">
+                  {events.map((e) => {
+                    const customerRequest = e.kind === "request_created" && e.origin === "customer";
+                    const labels: Record<string, string> = {
+                      request_created: "새 요청 접수", request_status: "요청 상태 변경",
+                      request_assignment: "요청 담당자 변경", request_comment: "요청 댓글",
+                      request_attachment: "요청 첨부파일", request_transferred: "요청 회의 이동",
+                      task_created: "업무 생성", task_updated: "업무 수정", task_result_added: "작업 결과 등록",
+                      meeting_created: "회의 생성", meeting_updated: "회의 수정", meeting_completed: "회의 완료",
+                      document_created: "문서 생성", document_updated: "문서 수정",
+                    };
+                    const label = customerRequest ? "고객 요청 접수" : labels[e.kind] || "프로젝트 활동";
+                    return (
+                      <li key={`${e.kind}-${e.id}`} className={`pr-activity-item${customerRequest ? " is-customer-request" : ""}`}>
+                        <span className="pr-activity-marker" aria-hidden="true">
+                          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"><path d="M5 4h14v16H5zM9 8h6M9 12h6M9 16h3" /></svg>
+                        </span>
+                        <article className="pr-activity-card">
+                          <div className="pr-activity-card-top"><span className="pr-activity-badge">{label}</span><time dateTime={e.createdAt}>{new Date(e.createdAt).toLocaleString("ko-KR", { month: "long", day: "numeric", hour: "2-digit", minute: "2-digit" })}</time></div>
+                          <h2>{e.title || e.body}</h2>
+                          {e.title && e.body !== e.title && <p className="pr-activity-description">{e.body}</p>}
+                          <div className="pr-activity-person"><span aria-hidden="true">{e.actorName.slice(0, 1)}</span><strong>{e.actorName}</strong><span>{customerRequest ? "고객 · 요청 등록" : "활동 기록"}</span></div>
+                        </article>
+                      </li>
+                    );
+                  })}
+                </ol>
+                {!events.length && <div className="pr-activity-empty"><strong>프로젝트의 첫 소식을 기다리고 있어요</strong><p>고객 요청이 접수되면 이곳에서 확인할 수 있어요.</p></div>}
               </div>
             ) : (
               <>

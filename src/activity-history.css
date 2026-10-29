@@ -1,0 +1,141 @@
+.ah-page .ah-small {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 6px;
+  min-height: 28px;
+  font-size: 12px;
+  line-height: 18px;
+  background: transparent;
+  border: 0;
+  border-radius: 4px;
+  color: #73839a;
+}
+.ah-page .ah-small:hover {
+  background: #eef1f6;
+  color: #4d607a;
+}
+.ah-linked {
+  margin: 0 12px 14px 37px;
+  padding-left: 10px;
+  border-left: 1px solid #dce4ed;
+}
+.ah-page .ah-request-link {
+  display: block;
+  padding: 4px 6px;
+  min-height: 28px;
+  border: 0;
+  background: none;
+  text-align: left;
+  font-size: 12px;
+  line-height: 18px;
+  color: #63728b;
+  overflow-wrap: anywhere;
+}
+.ah-page .ah-request-link:hover {
+  color: #6655c6;
+  background: #f5f3fb;
+}
+.ah-up {
+  display: inline-flex;
+  transform: rotate(180deg);
+}
+.ah-section-title {
+  font-size: 13px;
+  margin: 20px 4px 10px;
+  color: #3a4e6c;
+}
+.ah-meeting-facts {
+  display: grid;
+  grid-template-columns: 65px 1fr;
+  font-size: 12px;
+  gap: 10px;
+  margin: 0 4px;
+  color: #63728b;
+}
+.ah-meeting-facts dt {
+  color: #7e8ba0;
+}
+.ah-meeting-facts dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+.ah-meeting-notes {
+  font-size: 12px;
+  line-height: 1.7;
+  color: #63728b;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  margin: 8px 4px;
+}
+.ah-accordion {
+  border-bottom: 1px solid #e4e8f0;
+}
+.ah-page .ah-request-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  width: 100%;
+  padding: 12px 4px;
+  text-align: left;
+  background: transparent;
+  border: 0;
+  border-radius: 4px;
+  color: #3a4e6c;
+  min-height: 0;
+}
+.ah-page .ah-request-toggle:hover {
+  background: #f5f6fa;
+}
+.ah-request-toggle small {
+  display: block;
+  font-size: 11px;
+  font-weight: 400;
+  color: #7e8ba0;
+  margin-bottom: 4px;
+}
+.ah-request-toggle strong {
+  font-size: 13px;
+  font-weight: 500;
+  overflow-wrap: anywhere;
+}
+.ah-history-caption {
+  font-size: 11px;
+  color: #7e8ba0;
+  margin: 8px 4px;
+}
+.ah-history-panel .ah-panel-header {
+  padding: 18px 20px;
+  border-top: 0;
+}
+.ah-history-panel .ah-panel-header h2 {
+  font-size: 16px;
+}
+.ah-project-timeline h3 {
+  font-size: 12px;
+  margin: 5px 0;
+}
+.ah-project-timeline footer {
+  font-size: 11px;
+  margin-top: 6px;
+}
+.ah-project-timeline p {
+  font-size: 11px;
+  margin-bottom: 5px;
+}
+.ah-project-timeline article {
+  padding: 9px;
+}
+.ah-selected-label {
+  font-size: 11px;
+}
+.ah-page [hidden] {
+  display: none;
+}
+@media (pointer: coarse) {
+  .ah-page .ah-small,
+  .ah-page .ah-request-link {
+    min-height: 44px;
+  }
+}
