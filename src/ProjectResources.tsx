@@ -842,20 +842,24 @@ export default function ProjectResources({
               header={<header className="mm-tool-header">
                 <div className="mm-title-row">
                   <button type="button" className="mm-action" disabled={busy} onClick={closeEditor}>회의실</button>
-                  <input className="mm-title-input" aria-label="회의 제목" placeholder="회의 제목을 입력하세요" required maxLength={160} value={title} disabled={busy || meetingReadOnly} onChange={e => setTitle(e.target.value)} />
                   <span className="mm-status">{status === "completed" ? "완료" : status === "in_progress" ? "진행 중" : "예정"}</span>
                   <span className="mm-save-status" role="status">{meetingReadOnly ? "읽기 전용" : busy ? "저장 중…" : meetingDirty ? "미저장" : "저장됨"}</span>
                   <button type="button" className="mm-action" disabled={busy} aria-pressed={meetingMode} onClick={() => {setRequestPickerOpen(false);setMeetingMode(v=>!v);}}>{meetingMode ? "작성 보기" : "발표 보기"}</button>
                   {!meetingReadOnly && <button type="submit" value="draft" className="mm-action mm-primary" disabled={busy || newRequestOpen || !title.trim()}>{editing === "new" ? "회의 생성하기" : "회의 저장"}</button>}
                 </div>
+                {(pendingApproval || finalized) && <p className="mm-notice">{pendingApproval ? "최종 승인 대기 중입니다. 수정하려면 승인함에서 승인 요청을 취소해주세요." : "최종 승인되어 업무가 생성된 회의입니다."}</p>}
+              </header>}
+              overviewInfo={<section className="mm-overview-info" aria-label="회의 기본 정보">
+                <label className="mm-overview-title"><span>회의 제목</span>
+                  <input className="mm-title-input" aria-label="회의 제목" placeholder="회의 제목을 입력하세요" required maxLength={160} value={title} disabled={busy || meetingReadOnly} onChange={e => setTitle(e.target.value)} />
+                </label>
                 <div className="mm-metadata">
                   <label>시작 일시<input aria-label="시작 일시" required type="datetime-local" value={when} disabled={busy || meetingReadOnly} onChange={e=>setWhen(e.target.value)} /></label>
                   <label>소요 시간<input aria-label="소요 시간 (분)" type="number" required min={15} max={480} value={duration} disabled={busy || meetingReadOnly} onChange={e=>setDuration(Number(e.target.value))} /><span>분</span></label>
                   <label className="mm-location">장소 / 링크<input aria-label="장소 / 회의 링크" placeholder="장소 또는 회의 링크" maxLength={1000} value={location} disabled={busy || meetingReadOnly} onChange={e=>setLocation(e.target.value)} /></label>
                   <div className="mm-final-approvers"><ApproverPicker label="최종 승인자" disabled={busy || meetingReadOnly} items={approvers} value={selectedApprovers} onChange={setSelectedApprovers} /><div className="mm-tooltip" data-open={approverHelpOpen} onKeyDown={e=>{if(e.key === "Escape") setApproverHelpOpen(false);}}><button type="button" aria-label="최종 승인자 역할 안내" aria-describedby="meeting-approver-help" onClick={()=>setApproverHelpOpen(v=>!v)}>ⓘ</button><span id="meeting-approver-help" role="tooltip">회의에서 정리한 업무의 생성을 승인하는 사람입니다. 업무 생성 승인 요청 후, 지정된 최종 승인자 전원이 승인하면 실제 업무가 생성됩니다. 각 업무의 결과물을 검토하는 작업 승인자와는 별도 역할입니다.</span></div></div>
                 </div>
-                {(pendingApproval || finalized) && <p className="mm-notice">{pendingApproval ? "최종 승인 대기 중입니다. 수정하려면 승인함에서 승인 요청을 취소해주세요." : "최종 승인되어 업무가 생성된 회의입니다."}</p>}
-              </header>}
+              </section>}
               footer={<footer className="mm-tool-footer"><span>{editing === "new" ? "회의 정보와 업무 초안을 저장합니다." : "최종 승인자 전원 승인 후 실제 업무가 생성됩니다."}</span><div>
                 {onApprovals && <button type="button" className="mm-action" onClick={onApprovals}>승인함</button>}
                 {editing !== "new" && canUpdate && status !== "completed" && <button type="button" className="mm-action" disabled={busy} onClick={() => void changeMeetingState(status === "in_progress" ? "complete" : "start")}>{status === "in_progress" ? "완전 마무리" : "회의 시작하기"}</button>}

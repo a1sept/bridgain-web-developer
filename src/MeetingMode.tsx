@@ -49,9 +49,10 @@ export default function MeetingMode({
   onPlan,
   onSave,
   onExit,
-  lifecycleLabel, onLifecycle, header, footer, newRequestOpen, onCancelRequest, onCreateRequest,
+  lifecycleLabel, onLifecycle, header, footer, overviewInfo, newRequestOpen, onCancelRequest, onCreateRequest,
 }: {
   header?: ReactNode;
+  overviewInfo?: ReactNode;
   footer?: ReactNode;
   newRequestOpen?: boolean;
   onCancelRequest?: () => void;
@@ -254,11 +255,11 @@ export default function MeetingMode({
           <div className="mm-detail mm-overview-layout">
             <main className="mm-overview">
               <p className="mm-eyebrow">오늘의 회의</p>
-              <h2>{title || "새 회의"}</h2>
+              {overviewInfo || <><h2>{title || "새 회의"}</h2>
               <p className="mm-muted">
                 {when ? new Date(when).toLocaleString("ko-KR") : "일시 미정"} ·{" "}
                 {location || "장소 미정"}
-              </p>
+              </p></>}
               <label className="mm-card mm-field">
                 회의 전체 메모
                 <textarea
