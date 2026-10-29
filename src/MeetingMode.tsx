@@ -1,8 +1,9 @@
 import { Fragment, useEffect, useRef, useState, type ReactNode } from "react";
-import { createPortal } from "react-dom";
+import MeetingRequestForm from "./MeetingRequestForm";
 import StagePlanEditor, { type StagePlan } from "./StagePlanEditor";
 import "./meeting-mode.css";
 export type MeetingRequestPlan = {
+  discussionStatus?: "unreviewed" | "discussed" | "deferred";
   requestId: string;
   planning: string;
   priority: string;
@@ -14,7 +15,7 @@ export type MeetingRequestPlan = {
   taskId?: string | null;
 };
 type Person = { userId: string; displayName: string };
-type RequestInfo = { id: string; title: string };
+type RequestInfo = { id: string; title: string; description?: string };
 type Detail = {
   request: { title: string; description: string };
   attachments: { id: string; name: string; mimeType: string; url: string }[];
@@ -48,7 +49,15 @@ export default function MeetingMode({
   onPlan,
   onSave,
   onExit,
+  lifecycleLabel, onLifecycle, header, footer, newRequestOpen, onCancelRequest, onCreateRequest,
 }: {
+  header?: ReactNode;
+  footer?: ReactNode;
+  newRequestOpen?: boolean;
+  onCancelRequest?: () => void;
+  onCreateRequest?: (draft: { title: string; description: string; priority: string; type: string }) => Promise<void>;
+  lifecycleLabel?: string;
+  onLifecycle?: () => void;
   presentation?: boolean;
   isNew?: boolean;
   renderConnector?: (
@@ -75,8 +84,7 @@ export default function MeetingMode({
   onSave: () => void;
   onExit: () => void;
 }) {
-  const dialog = useRef<HTMLDialogElement>(null),
-    exitButton = useRef<HTMLButtonElement>(null);
+  const exitButton = useRef<HTMLButtonElement>(null);
   const [selected, setSelected] = useState<string | null>(null),
     [hideNav, setHideNav] = useState(false),
     [query, setQuery] = useState("");
@@ -91,19 +99,6 @@ export default function MeetingMode({
     plan = plans[index];
   const requestTitle = (id: string) =>
     requests.find((r) => r.id === id)?.title || "연결된 요청";
-  useEffect(() => {
-    if (!presentation) return;
-    const trigger = document.activeElement as HTMLElement | null;
-    dialog.current?.showModal();
-    exitButton.current?.focus();
-    const overflow = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
-    return () => {
-      document.body.style.overflow = overflow;
-      dialog.current?.close();
-      trigger?.focus();
-    };
-  }, [presentation]);
   useEffect(() => {
     setDetail(null);
     setDetailError("");
@@ -148,7 +143,8 @@ export default function MeetingMode({
   }
   const shell = (
     <div className="mm-shell">
-      {presentation && (
+      {header}
+      {!header && presentation && (
         <header className="mm-topbar">
           <div>
             <small>회의 모드</small>
@@ -181,6 +177,7 @@ export default function MeetingMode({
                 {isNew ? "회의 생성하기" : "회의 저장"}
               </button>
             )}
+            {lifecycleLabel && <button type="button" disabled={busy} onClick={onLifecycle}>{lifecycleLabel}</button>}
             <button
               type="button"
               ref={exitButton}
@@ -253,8 +250,8 @@ export default function MeetingMode({
             {!plans.length && <p>요청을 연결한 뒤 업무를 추가하세요.</p>}
           </nav>
         )}
-        {!plan ? (
-          <div className="mm-detail">
+        {newRequestOpen && onCreateRequest ? <MeetingRequestForm busy={busy} onCancel={onCancelRequest!} onCreate={onCreateRequest} /> : !plan ? (
+          <div className="mm-detail mm-overview-layout">
             <main className="mm-overview">
               <p className="mm-eyebrow">오늘의 회의</p>
               <h2>{title || "새 회의"}</h2>
@@ -274,7 +271,7 @@ export default function MeetingMode({
                   onChange={(e) => onNotes(e.target.value)}
                 />
               </label>
-              <h3>오늘 다룰 요청</h3>
+              <div className="mm-summary"><span>요청 <strong>{plans.length}</strong></span><span>업무 <strong>{plans.reduce((n,p)=>n+(p.stages?.length || 0),0)}</strong></span><span>논의 완료 <strong>{plans.filter(p=>p.discussionStatus === "discussed").length}</strong></span></div><h3>연결된 요청</h3>
               <div className="mm-agenda">
                 {plans.map((p, i) => (
                   <button
@@ -283,9 +280,9 @@ export default function MeetingMode({
                     onClick={() => setSelected(p.requestId)}
                   >
                     <span>{String(i + 1).padStart(2, "0")}</span>
-                    <strong>{requestTitle(p.requestId)}</strong>
+                    <span className="mm-agenda-title"><strong>{requestTitle(p.requestId)}</strong><small>{requests.find(r=>r.id===p.requestId)?.description?.replace(/\s+/g," ").slice(0,100) || "요청을 열어 내용을 확인하세요."}</small></span>
                     <small>
-                      {priorities[p.priority]} · 업무 {p.stages?.length || 0}개
+                      {priorities[p.priority]} · {p.discussionStatus === "discussed" ? "논의 완료" : p.discussionStatus === "deferred" ? "보류" : "미논의"}<br />업무 {p.stages?.length || 0}개 · {(p.stages || []).some(s=>!s.assigneeIds.length) ? "담당자 미지정" : p.stages?.length ? "담당자 지정됨" : "업무 미작성"}
                     </small>
                     <span>→</span>
                   </button>
@@ -300,18 +297,7 @@ export default function MeetingMode({
                 </div>
               )}
             </main>
-            <aside className="mm-decision">
-              <h2>업무</h2>
-              <p className="mm-muted">
-                왼쪽에서 요청을 선택하면 연결된 업무를 확인하고 추가할 수
-                있습니다.
-              </p>
-              <p>
-                연결된 요청 {plans.length}개 · 업무{" "}
-                {plans.reduce((count, p) => count + (p.stages?.length || 0), 0)}
-                개
-              </p>
-            </aside>
+
           </div>
         ) : (
           <div className="mm-detail">
@@ -320,7 +306,7 @@ export default function MeetingMode({
                 요청 {index + 1} / {plans.length}
               </p>
               <h2>{requestTitle(plan.requestId)}</h2>
-              <span className="mm-priority">{priorities[plan.priority]}</span>
+              <div className="mm-request-meta"><span className="mm-priority">{priorities[plan.priority]}</span><select aria-label="논의 상태" disabled={readOnly || busy} value={plan.discussionStatus || "unreviewed"} onChange={e=>onPlan(plan.requestId,{discussionStatus:e.target.value as MeetingRequestPlan["discussionStatus"]})}><option value="unreviewed">미논의</option><option value="discussed">논의 완료</option><option value="deferred">보류</option></select></div>
               {loading && <p role="status">요청 내용을 불러오는 중…</p>}
               {detailError && (
                 <p role="alert" className="mm-error">
@@ -436,7 +422,7 @@ export default function MeetingMode({
               </div>
             </main>
             <aside className="mm-decision" aria-label="회의 결정">
-              <h2>회의 결정</h2>
+              <h2>업무</h2>
               {readOnly && (
                 <p className="mm-muted">
                   승인 대기·확정된 회의 또는 수정 권한이 없는 회의는 조회만
@@ -460,6 +446,7 @@ export default function MeetingMode({
                   </select>
                 </label>
               </fieldset>
+              <p className="mm-muted">요청 우선순위가 업무에도 동일하게 적용됩니다.</p>
               <StagePlanEditor
                 key={plan.requestId}
                 collapsedIds={
@@ -494,24 +481,5 @@ export default function MeetingMode({
       </div>
     </div>
   );
-  return presentation ? (
-    createPortal(
-      <dialog
-        ref={dialog}
-        className="mm-dialog mm-workspace"
-        aria-label="회의 모드"
-        onCancel={(e) => {
-          e.preventDefault();
-          if (!busy) onExit();
-        }}
-      >
-        {shell}
-      </dialog>,
-      document.body,
-    )
-  ) : (
-    <section className="mm-workspace mm-embedded" aria-label="회의 작성">
-      {shell}
-    </section>
-  );
+  return <section className={`mm-workspace mm-embedded ${presentation ? "mm-presentation" : ""}`} aria-label={presentation ? "회의 발표" : "회의 작성"}>{shell}{footer}</section>;
 }
