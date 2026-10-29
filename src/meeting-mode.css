@@ -4,6 +4,7 @@
 .mm-form { margin:0; }
 .mm-workspace { --mm-border:#e9e9ee; --mm-muted:#777985; --mm-accent:#6257cc; height:calc(100dvh - 49px); min-height:600px; display:flex; flex-direction:column; container-type:inline-size; background:#fff; font-size:13px; }
 .mm-workspace,.mm-workspace * { box-sizing:border-box; }
+.pr-meeting-tool .mm-workspace.mm-presentation { height:100dvh; }
 .mm-shell { display:flex; flex-direction:column; flex:1; min-height:0; }
 .mm-tool-header { padding:16px 24px 12px; border-bottom:1px solid var(--mm-border); flex-shrink:0; }
 .mm-title-row { display:flex; align-items:center; gap:10px; }
@@ -150,5 +151,6 @@
 }
 
 .mm-memo-editor .rt-editor { border:0; border-radius:0; background:transparent; box-shadow:none; }
-.mm-memo-editor .rt-editor:focus-within { box-shadow:inset 0 -1px 0 #c9c5d8; }
 .mm-memo-editor .bn-editor:focus { outline:none; }
+
+.mm-approval-guidance{display:grid;gap:3px;max-width:440px;font-size:12px;color:#777985;overflow-wrap:anywhere}.mm-tool-footer .mm-approval-fix{font:inherit;border:0;padding:0;text-align:left;background:transparent;color:#6257cc;text-decoration:underline;text-underline-offset:3px;cursor:pointer;white-space:normal}.mm-approval-guidance small{font-size:11px}.mm-decision>h2:focus{outline:2px solid #d9d4f0;outline-offset:4px}.mm-tool-footer>div{align-items:center}

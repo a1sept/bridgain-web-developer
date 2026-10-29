@@ -1,0 +1,12 @@
+.meeting-approval-status { display:flex; align-items:center; flex-wrap:wrap; gap:8px; min-width:0; width:100%; color:#777985; font-size:12px; }
+.meeting-approval-person { display:inline-flex; align-items:center; flex-wrap:wrap; gap:6px; color:#393945; }
+.meeting-approval-badge { display:inline-flex; align-items:center; padding:2px 7px; border-radius:5px; font-size:11px; line-height:18px; background:#f0f1f5; color:#686a76; }
+.meeting-approval-badge.approved { background:#e9f7f1; color:#248269; }
+.meeting-approval-badge.pending { background:#f2effc; color:#7160b9; }
+.meeting-approval-badge.rejected { background:#fff0ef; color:#b94c48; }
+.meeting-approval-total { margin-left:auto; }
+.meeting-approval-note { font-size:11px; max-width:100%; overflow-wrap:anywhere; }
+.meeting-approval-help { position:relative; display:inline-flex; }
+.meeting-approval-help > button { border:0; background:transparent; padding:2px; color:#858592; font-size:12px; cursor:help; }
+.meeting-approval-help [role=tooltip] { display:none; position:absolute; left:0; top:100%; width:min(260px,60vw); padding:10px 12px; z-index:10; border:1px solid #e9e9ee; border-radius:6px; background:#fff; color:#555660; box-shadow:0 4px 16px #20203014; line-height:1.6; }
+.meeting-approval-help:hover [role=tooltip],.meeting-approval-help:focus-within [role=tooltip] { display:block; }

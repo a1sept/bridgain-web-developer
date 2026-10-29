@@ -257,7 +257,7 @@ export default function LiveWorkspace({
       setRequestPath(window.location.pathname);
       const saved = window.history.state;
       setView(
-        ["dashboard", "projects", "invitations", "teams", "approvals"].includes(
+        ["dashboard", "projects", "activity", "invitations", "teams", "approvals"].includes(
           saved?.developerView,
         )
           ? saved.developerView
@@ -305,7 +305,7 @@ export default function LiveWorkspace({
   }, [inviteDetail]);
 
   const [view, setView] = useState<DeveloperView>(() =>
-    ["dashboard", "projects", "invitations", "teams", "approvals"].includes(
+    ["dashboard", "projects", "activity", "invitations", "teams", "approvals"].includes(
       window.history.state?.developerView,
     )
       ? window.history.state.developerView
@@ -680,9 +680,9 @@ export default function LiveWorkspace({
       />,
     );
   return shell(
-    <div className="pw-shell lw-shell">
+    <div className={`pw-shell lw-shell${view === "activity" || (view === "projects" && project && projectSection === "activity") ? " lw-activity-shell" : ""}`}>
       <div className="pw-body">
-        {!(view === "projects" && project) && (
+        {view !== "activity" && !(view === "projects" && project) && (
           <header className="pw-topbar">
             <div className="project-page-title">
               <strong>
@@ -736,6 +736,7 @@ export default function LiveWorkspace({
             </section>
           ) : (
             <>
+              {view === "activity" && <ActivityHistory currentUser={user} refreshKey={dashboardRefresh} />}
               {view === "approvals" && (
                 <Approvals
                   onTask={(pid, tid) => {
@@ -908,6 +909,7 @@ export default function LiveWorkspace({
                     window.dispatchEvent(new PopStateEvent("popstate"));
                   }}
                   onApprovals={() => openProject(project.id, "approvals")}
+                  onDeployments={() => openProject(project.id, "deployments")}
                   initialRequestId={taskRequestId}
                   onOpenRequest={(rid) => openRequest(project.id, rid)}
                   onChanged={() => setDashboardRefresh((v) => v + 1)}
@@ -919,7 +921,7 @@ export default function LiveWorkspace({
                   projectSection === "documents" ||
                   projectSection === "activity") && (
                   projectSection === "activity" ? (
-                    <ActivityHistory currentUser={user} refreshKey={dashboardRefresh} />
+                    <ActivityHistory currentUser={user} refreshKey={dashboardRefresh} project={{id:project.id,name:project.name}} />
                   ) : (
                   <ProjectResources
                     refreshKey={dashboardRefresh}

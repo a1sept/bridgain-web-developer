@@ -1,10 +1,16 @@
+import MeetingApprovalStatus from "./MeetingApprovalStatus";
+import type { ProjectTask } from "./ProjectTasks";
+import MeetingMode, { type MeetingRequestPlan } from "./MeetingMode";
+import type { RichDocument } from "./editor/document";
+import FilterBar from "./components/FilterBar";
+import { createPortal } from "react-dom";
 import RichTextContent from "./editor/RichTextContent";
 import MemberPicker from "./MemberPicker";
 import StagePlanEditor, {
   type StagePlan,
   validStages,
 } from "./StagePlanEditor";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import "./approvals.css";
 export async function workflowApi<T>(
   path: string,
@@ -106,6 +112,16 @@ export default function Approvals({
   onChanged?: () => void;
   onTask?: (projectId: string, taskId: string) => void;
 }) {
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [selectedWork, setSelectedWork] = useState<WorkApproval | null>(null);
+  const dialog = useRef<HTMLDialogElement>(null);
+  const modalOpen = !!selectedId || !!selectedWork;
+  useEffect(() => {
+    if (modalOpen) dialog.current?.showModal();
+    else dialog.current?.close();
+  }, [modalOpen]);
+  useEffect(() => { setSelectedId(null); setSelectedWork(null); }, [projectId]);
+  function closeDetail() { if (!busy) { setSelectedId(null); setSelectedWork(null); } }
   const [names, setNames] = useState<Record<string, string>>({});
   useEffect(() => {
     workflowApi<{ projects: { members: Approver[] }[] }>("")
@@ -149,6 +165,7 @@ export default function Approvals({
     };
   }, [projectId, revision]);
   async function act(item: Approval, action: string) {
+    if (busy) return;
     const note =
       action === "reject" ? window.prompt("반려 사유를 입력해주세요.") : "";
     if (action === "reject" && !note?.trim()) return;
@@ -203,22 +220,9 @@ export default function Approvals({
         </h2>
         {workItems.length ? (
           workItems.map((item) => (
-            <article className="approval-card" key={item.id}>
-              <p className="pw-muted">
-                {item.projectName} · {item.stageName}
-              </p>
-              <h3>{item.title}</h3>
-              <p>
-                담당자 전원이 완료한 작업입니다. 결과를 확인하고 승인 또는
-                재작업을 요청해주세요.
-              </p>
-              <button
-                className="pw-primary"
-                onClick={() => onTask?.(item.projectId, item.id)}
-              >
-                업무 열고 검토
-              </button>
-            </article>
+            <button type="button" className="approval-row" key={item.id} onClick={() => setSelectedWork(item)}>
+              <strong>{item.title}</strong><span>{item.projectName}</span><span>{item.stageName}</span><span className="approval-status pending">작업 승인 대기</span>
+            </button>
           ))
         ) : (
           <p className="pw-muted">검토할 작업 승인이 없습니다.</p>
@@ -226,52 +230,12 @@ export default function Approvals({
       </section>
       <h2>업무화 승인</h2>
       <div className="approvals-filters">
-        <select
-          aria-label="승인 상태"
-          value={filter}
-          onChange={(e) => setFilter(e.target.value)}
-        >
-          <option value="">전체 상태</option>
-          {Object.entries(labels).map(([v, t]) => (
-            <option key={v} value={v}>
-              {t}
-            </option>
-          ))}
-        </select>
-        {!projectId && (
-          <select
-            aria-label="프로젝트"
-            value={projectFilter}
-            onChange={(e) => setProjectFilter(e.target.value)}
-          >
-            <option value="">전체 프로젝트</option>
-            {Array.from(
-              new Map(items.map((i) => [i.projectId, i.projectName])),
-            ).map(([id, name]) => (
-              <option key={id} value={id}>
-                {name}
-              </option>
-            ))}
-          </select>
-        )}
-        <select
-          aria-label="승인 출처"
-          value={source}
-          onChange={(e) => setSource(e.target.value)}
-        >
-          <option value="">모든 출처</option>
-          <option value="meeting">회의</option>
-          <option value="urgent">긴급</option>
-        </select>
-        <select
-          aria-label="요청 종류"
-          value={origin}
-          onChange={(e) => setOrigin(e.target.value)}
-        >
-          <option value="">모든 요청</option>
-          <option value="customer">고객 요청</option>
-          <option value="development">개발 요청</option>
-        </select>
+        <FilterBar filters={[
+          { id: "status", label: "승인 상태", options: Object.entries(labels).map(([value, label]) => ({value, label})), values: filter ? [filter] : [], onChange: v => setFilter(v[0] || "") },
+          ...(!projectId ? [{ id: "project", label: "프로젝트", options: Array.from(new Map(items.map(i => [i.projectId, i.projectName]))).map(([value, label]) => ({value, label})), values: projectFilter ? [projectFilter] : [], onChange: (v: string[]) => setProjectFilter(v[0] || "") }] : []),
+          { id: "source", label: "승인 출처", options: [{value: "meeting", label: "회의"}, {value: "urgent", label: "긴급"}], values: source ? [source] : [], onChange: v => setSource(v[0] || "") },
+          { id: "origin", label: "요청 종류", options: [{value: "customer", label: "고객 요청"}, {value: "development", label: "개발 요청"}], values: origin ? [origin] : [], onChange: v => setOrigin(v[0] || "") },
+        ]} onClear={() => {setFilter("");setProjectFilter("");setSource("");setOrigin("");}} />
         <button
           className="pw-secondary"
           onClick={() => setRevision((v) => v + 1)}
@@ -279,9 +243,20 @@ export default function Approvals({
           새로고침
         </button>
       </div>
-      {visibleItems.map((item) => (
-        <article key={item.id} className="approval-card">
-          <header className="approval-card-heading">
+      <div className="approval-list" aria-label="업무화 승인 목록">
+        {visibleItems.map(item => <button type="button" className="approval-row" key={item.id} onClick={() => setSelectedId(item.id)}>
+          <strong>{item.title}<small>{item.source === "meeting" ? "회의" : "긴급"} · 요청 {item.plans.length}건</small></strong>
+          <span>{item.projectName}</span><span>요청자 {item.requesterName}</span>
+          <span className={`approval-status ${item.status}`}>{labels[item.status] || item.status}</span>
+        </button>)}
+      </div>
+      {createPortal(<dialog ref={dialog} className={`approval-dialog ${items.find(i => i.id === selectedId)?.source === "meeting" ? "approval-dialog-meeting" : ""}`}
+        aria-label="승인 요청 상세" onCancel={e => {e.preventDefault();closeDetail();}} onClose={() => {setSelectedId(null);setSelectedWork(null);}}>
+        <div className="approval-dialog-toolbar"><nav aria-label="승인 요청 위치">{items.find(i => i.id === selectedId)?.source === "meeting" ? <>회의실 <span aria-hidden="true">›</span> <strong>{items.find(i => i.id === selectedId)?.title}</strong></> : "승인 요청 상세"}</nav><button type="button" className="pw-secondary" disabled={busy} onClick={closeDetail}>닫기</button></div>
+        {error && <p className="approvals-error" role="alert">{error}</p>}
+      {items.filter(item => item.id === selectedId).map((item) => (
+        <article key={item.id} className="approval-detail">
+          {item.source !== "meeting" && <><header className="approval-card-heading">
             <h2>{item.title}</h2>
             <span className={`approval-status ${item.status}`}>
               {labels[item.status] || item.status}
@@ -290,8 +265,8 @@ export default function Approvals({
           <p className="approval-meta">
             {item.projectName} · {item.source === "meeting" ? "회의" : "긴급"} ·
             요청자 {item.requesterName}
-          </p>
-          {item.plans.map((p) => (
+          </p></>}
+          {item.source === "meeting" ? <ApprovalMeeting key={item.id} item={item} names={names} /> : item.plans.map((p) => (
             <div key={p.requestId} className="approval-plan">
               <h3>{p.title}</h3>
               <p style={{ whiteSpace: "pre-wrap" }}>{p.planning}</p>
@@ -336,14 +311,14 @@ export default function Approvals({
               </p>
             </div>
           ))}
-          <ul className="approval-reviewers">
+          {item.source !== "meeting" && <ul className="approval-reviewers">
             {item.approvers.map((a) => (
               <li key={a.userId}>
                 {a.displayName}: {labels[a.status] || a.status}
                 {a.note && ` · ${a.note}`}
               </li>
             ))}
-          </ul>
+          </ul>}
           <footer className="approval-actions">
             {item.canApprove && (
               <>
@@ -375,6 +350,8 @@ export default function Approvals({
           </footer>
         </article>
       ))}
+        {selectedWork && <article className="approval-detail"><h2>{selectedWork.title}</h2><p className="approval-meta">{selectedWork.projectName} · {selectedWork.stageName}</p><ApprovalWorkDetail key={selectedWork.id} item={selectedWork} /><button type="button" className="pw-primary" onClick={() => {closeDetail();onTask?.(selectedWork.projectId, selectedWork.id);}}>업무 열고 검토</button></article>}
+      </dialog>, document.body)}
       {!visibleItems.length && (
         <div className="approvals-empty">
           <span aria-hidden="true">✓</span>
@@ -392,6 +369,64 @@ export default function Approvals({
       )}
     </section>
   );
+}
+function ApprovalWorkDetail({item}: {item: WorkApproval}) {
+  const [task, setTask] = useState<ProjectTask | null>(null);
+  const [error, setError] = useState("");
+  const [retry, setRetry] = useState(0);
+  useEffect(() => {
+    let live = true;
+    setError("");
+    workflowApi<{tasks: ProjectTask[]}>(`/projects/${item.projectId}/tasks`)
+      .then(data => {if (live) {const found = data.tasks.find(t => t.id === item.id);setTask(found || null);if (!found) setError("업무를 찾을 수 없습니다.");}})
+      .catch(e => {if (live) setError(e.message);});
+    return () => {live = false;};
+  }, [item.id, item.projectId, retry]);
+  if (error) return <p role="alert">{error} <button onClick={() => setRetry(v => v + 1)}>다시 시도</button></p>;
+  if (!task) return <p role="status">업무 내용을 불러오는 중…</p>;
+  return <><RichTextContent value={task.description} document={task.descriptionDocument} /><p>담당자: {task.assignees.map(a => a.displayName).join(", ")}</p>{[["작업 결과", task.resultSummary], ["검증", task.verification], ["DB 변경", task.dbChanges], ["API 변경", task.apiChanges], ["화면 변경", task.frontendChanges]].map(([label, value]) => value && <section className="approval-plan" key={label}><h3>{label}</h3><p>{value}</p></section>)}</>;
+}
+type ApprovalMeetingInfo = {
+  id: string; title: string; scheduledAt: string; durationMinutes: number;
+  location: string; notes: string; notesDocument?: RichDocument | null;
+  requests: MeetingRequestPlan[];
+};
+function ApprovalMeeting({item, names}: {item: Approval; names: Record<string, string>}) {
+  const [meeting, setMeeting] = useState<ApprovalMeetingInfo | null>(null);
+  const [error, setError] = useState("");
+  const [loading, setLoading] = useState(true);
+  const [retry, setRetry] = useState(0);
+  useEffect(() => {
+    let live = true;
+    setLoading(true);setError("");
+    if (!item.meetingId) {setLoading(false);return;}
+    workflowApi<{meetings: ApprovalMeetingInfo[]}>(`/projects/${item.projectId}/meetings`)
+      .then(data => {if (live) {const found = data.meetings.find(m => m.id === item.meetingId);setMeeting(found || null);if (!found) setError("연결된 회의를 찾을 수 없습니다. 아래에서 승인 요청 내용을 확인하세요.");}})
+      .catch(e => {if (live) setError(e.message);})
+      .finally(() => {if (live) setLoading(false);});
+    return () => {live = false;};
+  }, [item.projectId, item.meetingId, retry]);
+  const people = Object.entries(names).map(([userId, displayName]) => ({userId, displayName}));
+  return <>
+    {loading && <p role="status">회의 정보를 불러오는 중…</p>}
+    {error && <p className="approvals-error" role="alert">{error} <button type="button" onClick={() => setRetry(v => v + 1)}>다시 시도</button></p>}
+    {!item.meetingId && <p className="approval-meta">연결된 회의가 삭제되어 승인 요청 당시의 내용을 표시합니다.</p>}
+    <MeetingMode presentation={false} header={<></>}
+      projectId={item.projectId} title={meeting?.title || item.title} when={meeting?.scheduledAt || ""} location={meeting?.location || ""}
+      overviewInfo={<section className="mm-overview-info" aria-label="회의 기본 정보">
+        <label className="mm-overview-title"><span>회의 제목</span><input className="mm-title-input" aria-label="회의 제목" value={meeting?.title || item.title} disabled /></label>
+        <div className="mm-metadata">
+          <label>시작 일시<input aria-label="시작 일시" value={meeting?.scheduledAt ? new Date(meeting.scheduledAt).toLocaleString("ko-KR") : "일시 미정"} disabled /></label>
+          <label>소요 시간<input aria-label="소요 시간" value={meeting ? `${meeting.durationMinutes}분` : ""} disabled /></label>
+          <label className="mm-location">장소 / 링크<input aria-label="장소 / 링크" value={meeting?.location || ""} disabled /></label>
+          <div className="mm-final-approvers"><MeetingApprovalStatus status={item.status} approvers={item.approvers} /></div>
+        </div>
+      </section>}
+      notes={meeting?.notes || ""} notesDocument={meeting?.notesDocument}
+      plans={item.plans.map(p => ({...p, priority: p.priority || "normal", assigneeIds: p.assigneeIds || [], planningDocument: meeting?.requests.find(r => r.requestId === p.requestId && r.planning === p.planning)?.planningDocument}))}
+      requests={item.plans.map(p => ({id: p.requestId, title: p.title}))} members={people} reviewers={people}
+      readOnly busy={false} dirty={false} error="" onNotes={() => {}} onPlan={() => {}} onSave={() => {}} onExit={() => {}} />
+  </>;
 }
 export function UrgentApproval({
   projectId,

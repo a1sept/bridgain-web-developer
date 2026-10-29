@@ -1,3 +1,4 @@
+import { prepareTaskWorkspace } from "./task-workspace.mjs";
 import { projectTool } from "./project-files.mjs";
 import { mkdir, readFile, writeFile, rename, realpath } from "node:fs/promises";
 import { join } from "node:path";
@@ -24,6 +25,7 @@ export class DesktopRuntime {
     chooseFolder,
     openAuth,
     openCodex,
+    openPath,
     emit,
     executable = process.execPath,
   }) {
@@ -31,10 +33,12 @@ export class DesktopRuntime {
       directory,
       api,
       chooseFolder,
+      openPath,
       openAuth,
       emit,
       executable,
     });
+    this.taskLocks = new Set();
     this.instances = new Map();
     this.runs = new Map();
     this.starting = new Set();
@@ -192,6 +196,57 @@ export class DesktopRuntime {
     delete owner.settings.folders[identifier(pid)];
     await this.save();
     await this.syncProjects();
+  }
+  async taskWorkspace(pid, id, action = "state", options = {}) {
+    pid = identifier(pid); id = identifier(id);
+    const owner = await this.owner();
+    const { tasks } = await this.api(`/api/workspace/projects/${pid}/tasks`);
+    const task = tasks.find(t => t.id === id);
+    if (!task) throw Error("업무를 찾을 수 없습니다.");
+    owner.settings.taskWorkspaces ??= {};
+    const key = `${pid}:${id}`;
+    const folder = owner.settings.folders[pid];
+    const binding = owner.settings.taskWorkspaces[key];
+    if (action === "state") return { folder, binding };
+    await this.assertOwner(owner.key);
+    if (action === "open") {
+      const target = binding?.path || folder;
+      if (!target) throw Error("로컬 폴더를 연결해주세요.");
+      const error = await this.openPath(await realpath(target));
+      if (error) throw Error(error);
+      return { folder, binding };
+    }
+    if (action !== "start" || !folder) throw Error("로컬 폴더를 연결해주세요.");
+    if (!task.assignees.some(a => a.userId === owner.user.id) ||
+        !["todo", "in_progress"].includes(task.status) || task.assignees.some(a => a.completedAt))
+      throw Error("진행 가능한 업무의 담당자만 브랜치를 연결할 수 있습니다.");
+    if (task.workBranch && task.workBranch !== options.branch)
+      throw Error("업무에 이미 연결된 브랜치를 사용해주세요.");
+    const lock = `${owner.key}:${pid}`;
+    if (this.taskLocks.has(lock)) throw Error("다른 브랜치 연결이 진행 중입니다.");
+    this.taskLocks.add(lock);
+    try {
+      const snapshot = await this.api("/api/workspace");
+      const project = snapshot.projects?.find(p => p.id === pid);
+      if (!project) throw Error("프로젝트 접근 권한을 확인해주세요.");
+      const prepared = await prepareTaskWorkspace({ folder,
+        allowedRepositories: project.repositoryUrls || [],
+        path: binding?.path || join(this.directory, "worktrees", owner.key, pid, id),
+        branch: options.branch, baseBranch: options.baseBranch,
+        existing: !!options.existing, repositoryUrl: task.repositoryUrl });
+      owner.settings.taskWorkspaces[key] = prepared;
+      await this.save();
+      await this.assertOwner(owner.key);
+      try {
+        await this.api(`/api/workspace/projects/${pid}/tasks/${id}`, {
+          expectedVersion: task.version, status: "in_progress",
+          workBranch: prepared.branch, repositoryUrl: prepared.repositoryUrl,
+        }, "PATCH");
+      } catch (error) {
+        throw Error(`로컬 작업 폴더는 준비됐지만 업무 연결에 실패했습니다. 다시 시작하면 기존 폴더를 재사용합니다. ${error.message}`);
+      }
+      return { folder, binding: prepared };
+    } finally { this.taskLocks.delete(lock); }
   }
   async syncProjects() {
     let owner;

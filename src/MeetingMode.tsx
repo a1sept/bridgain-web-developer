@@ -4,6 +4,7 @@ import { Fragment, useEffect, useRef, useState, type ReactNode } from "react";
 import MeetingRequestForm from "./MeetingRequestForm";
 import StagePlanEditor, { type StagePlan } from "./StagePlanEditor";
 import "./meeting-mode.css";
+export type MeetingFocus = { requestId: string | null; field: "tasks" | "approvers" | "title" | "requests" };
 export type MeetingRequestPlan = {
   discussionStatus?: "unreviewed" | "discussed" | "deferred";
   requestId: string;
@@ -41,6 +42,7 @@ export default function MeetingMode({
   location,
   notes,
   notesDocument,
+  focusTarget,
   plans,
   requests,
   members,
@@ -56,6 +58,7 @@ export default function MeetingMode({
   lifecycleLabel, onLifecycle, header, footer, overviewInfo, newRequestOpen, onCancelRequest, onCreateRequest,
 }: {
   header?: ReactNode;
+  focusTarget?: MeetingFocus | null;
   overviewInfo?: ReactNode;
   footer?: ReactNode;
   newRequestOpen?: boolean;
@@ -90,6 +93,8 @@ export default function MeetingMode({
   onSave: () => void;
   onExit: () => void;
 }) {
+  const shellRef = useRef<HTMLDivElement>(null);
+  const handledFocus = useRef<MeetingFocus | null>(null);
   const exitButton = useRef<HTMLButtonElement>(null);
   const [selected, setSelected] = useState<string | null>(null),
     [hideNav, setHideNav] = useState(false),
@@ -143,12 +148,27 @@ export default function MeetingMode({
     if (selected && !plans.some((p) => p.requestId === selected))
       setSelected(null);
   }, [plans, selected]);
+  useEffect(() => {
+    if (!focusTarget) return;
+    setSelected(focusTarget.requestId);
+    setHideNav(false);
+    if (focusTarget.requestId) setCollapsedByRequest(current=>({...current,[focusTarget.requestId!]:[]}));
+  }, [focusTarget]);
+  useEffect(() => {
+    if (!focusTarget || handledFocus.current === focusTarget || selected !== focusTarget.requestId) return;
+    const frame=requestAnimationFrame(()=>{
+      const selector=focusTarget.field === "tasks" ? ".mm-decision > h2" : focusTarget.field === "approvers" ? ".mm-final-approvers button" : focusTarget.field === "title" ? ".mm-title-input" : ".mm-nav .pr-request-anchor button";
+      const element=shellRef.current?.querySelector<HTMLElement>(selector);
+      if(element){element.scrollIntoView({block:"nearest"});element.focus({preventScroll:true});handledFocus.current=focusTarget;}
+    });
+    return ()=>cancelAnimationFrame(frame);
+  },[focusTarget,selected]);
   function next(offset: number) {
     const p = plans[index + offset];
     if (p) setSelected(p.requestId);
   }
   const shell = (
-    <div className="mm-shell">
+    <div className="mm-shell" ref={shellRef}>
       {header}
       {!header && presentation && (
         <header className="mm-topbar">
@@ -411,7 +431,7 @@ export default function MeetingMode({
               </div>
             </main>
             <aside className="mm-decision" aria-label="회의 결정">
-              <h2>업무</h2>
+              <h2 tabIndex={-1}>업무</h2>
               {readOnly && (
                 <p className="mm-muted">
                   승인 대기·확정된 회의 또는 수정 권한이 없는 회의는 조회만
@@ -438,6 +458,8 @@ export default function MeetingMode({
               <p className="mm-muted">요청 우선순위가 업무에도 동일하게 적용됩니다.</p>
               <StagePlanEditor
                 key={plan.requestId}
+                detailModal
+                detailFocus={focusTarget?.requestId === plan.requestId && focusTarget.field === "tasks" ? focusTarget : undefined}
                 collapsedIds={
                   readOnly
                     ? []

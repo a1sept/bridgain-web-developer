@@ -139,3 +139,32 @@
     min-height: 44px;
   }
 }
+
+/* Keep navigation and filters stationary; only the feed and detail body scroll. */
+.ds-content .lw-activity-shell {
+  min-height: 0;
+}
+.ds-content .lw-activity-shell .pw-main {
+  padding: 0;
+}
+.lw-activity-shell .ah-page {
+  height: calc(100dvh - var(--history-page-top, 0px));
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+}
+.lw-activity-shell .ah-page > :not(.ah-feed) {
+  flex-shrink: 0;
+}
+.lw-activity-shell .ah-feed {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+  overflow-anchor: none;
+}
+.ah-panel-scroll {
+  overflow-anchor: none;
+}

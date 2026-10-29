@@ -8,7 +8,7 @@ import {
   moveStage,
   insertStage,
 } from "./stage-order";
-import { Fragment, useEffect, useState } from "react";
+import { Fragment, useEffect, useRef, useState } from "react";
 import "./stage-workflow.css";
 import MemberPicker from "./MemberPicker";
 export type StagePlan = {
@@ -16,6 +16,7 @@ export type StagePlan = {
   name: string;
   title: string;
   brief: string;
+  dueDate?: string | null;
   briefDocument?: RichDocument | null;
   completionMode: "document" | "design" | "code" | "test" | "deploy";
   assigneeIds: string[];
@@ -81,10 +82,14 @@ export default function StagePlanEditor({
   disabled = false,
   projectId,
   initiallyCollapsed = false,
+  detailModal = false,
+  detailFocus,
   collapsedIds,
   onCollapsedChange,
 }: {
   projectId?: string;
+  detailModal?: boolean;
+  detailFocus?: object;
   initiallyCollapsed?: boolean;
   collapsedIds?: string[];
   onCollapsedChange?: (ids: string[]) => void;
@@ -106,6 +111,20 @@ export default function StagePlanEditor({
     if (onCollapsedChange) onCollapsedChange(ids);
     else setLocalCollapsed(ids);
   }
+  const [openedId, setOpenedId] = useState<string | null>(null);
+  const detailDialog = useRef<HTMLDialogElement>(null);
+  const opened = value.find((s) => s.id === openedId);
+  useEffect(() => {
+    if (opened) detailDialog.current?.showModal();
+    else detailDialog.current?.close();
+  }, [opened?.id]);
+  useEffect(() => {
+    if (detailModal && detailFocus)
+      setOpenedId(
+        (value.find((s) => !validStages([{ ...s, dependsOn: [] }])) || value[0])
+          ?.id ?? null,
+      );
+  }, [detailFocus]);
   const [dragged, setDragged] = useState<string | null>(null);
   useEffect(() => {
     if (!projectId) return;
@@ -159,6 +178,7 @@ export default function StagePlanEditor({
     const stage = { ...newStage(""), title: "" };
     setCollapsed(value.map((s) => s.id));
     onChange(insertStage(value, stage, index));
+    if (detailModal) setOpenedId(stage.id);
   };
   const insertionPoint = (index: number) => (
     <div className="sw-task-insert">
@@ -171,8 +191,100 @@ export default function StagePlanEditor({
       </button>
     </div>
   );
+  const renderDetails = (s: StagePlan) => (
+    <>
+      <div className="sw-people-row">
+        <MemberPicker
+          label="담당자"
+          items={members}
+          value={s.assigneeIds}
+          disabled={disabled}
+          onChange={(ids) => patch(s.id, { assigneeIds: ids })}
+        />
+        <MemberPicker
+          label="작업 승인자"
+          items={reviewers}
+          value={s.reviewerIds}
+          disabled={disabled}
+          onChange={(ids) => patch(s.id, { reviewerIds: ids })}
+        />
+      </div>
+      <label className="sw-inline-field">
+        <span>업무 제목</span>
+        <input
+          maxLength={160}
+          placeholder="무엇을 할 업무인가요?"
+          value={s.title}
+          onChange={(e) => patch(s.id, { title: e.target.value })}
+        />
+      </label>
+      <label className="sw-inline-field">
+        <span>카테고리</span>
+        <select
+          value={s.name}
+          onChange={(e) => {
+            const t = categories.find((t) => t.name === e.target.value);
+            if (t)
+              patch(s.id, {
+                name: t.name,
+                completionMode: t.completionMode,
+              });
+          }}
+        >
+          <option value="" disabled>
+            선택하세요
+          </option>
+          {!!s.name && !categories.some((t) => t.name === s.name) && (
+            <option value={s.name}>{s.name}</option>
+          )}
+          {categories.map((t) => (
+            <option key={t.name} value={t.name}>
+              {t.name}
+            </option>
+          ))}
+        </select>
+      </label>
+      <label className="sw-inline-field">
+        <span>기한</span>
+        <input
+          type="date"
+          aria-label="업무 기한"
+          value={s.dueDate || ""}
+          onChange={(e) => patch(s.id, { dueDate: e.target.value || null })}
+        />
+      </label>
+      <div className="rt-field">
+        <span>업무 내용</span>
+        {disabled ? (
+          <RichTextContent value={s.brief} document={s.briefDocument} />
+        ) : (
+          <RichTextEditor
+            value={s.brief}
+            document={s.briefDocument}
+            onChange={(brief, briefDocument) =>
+              patch(s.id, { brief, briefDocument })
+            }
+          />
+        )}
+      </div>
+      <div className="sw-actions">
+        <button
+          type="button"
+          className={detailModal ? "mm-action" : undefined}
+          onClick={() =>
+            detailModal ? setOpenedId(null) : setCollapsed((v) => [...v, s.id])
+          }
+        >
+          작성 마치기
+        </button>
+      </div>
+    </>
+  );
   return (
-    <fieldset className="sw-editor sw-task-editor" disabled={disabled}>
+    <fieldset
+      className="sw-editor sw-task-editor"
+      disabled={!detailModal && disabled}
+    >
       <legend>업무</legend>
       {value.length > 0 && (
         <div
@@ -228,17 +340,44 @@ export default function StagePlanEditor({
               >
                 ≡
               </button>
-              <div className="sw-stage-heading">
-                <strong>
-                  {i + 1}. {s.title || "새 업무"}
-                </strong>
-                <span className="sw-category">
-                  {s.name || "카테고리 미지정"}
-                </span>
-              </div>
+              {detailModal ? (
+                <button
+                  type="button"
+                  className="sw-card-open"
+                  aria-haspopup="dialog"
+                  onClick={() => setOpenedId(s.id)}
+                >
+                  <strong>
+                    {i + 1}. {s.title || "새 업무"}
+                  </strong>
+                  <span className="sw-category">
+                    {s.name || "카테고리 미지정"}
+                  </span>
+                  <span className="sw-card-meta">
+                    담당:{" "}
+                    {s.assigneeIds
+                      .map(
+                        (id) =>
+                          members.find((m) => m.userId === id)?.displayName ||
+                          "기존 멤버",
+                      )
+                      .join(", ") || "미지정"}{" "}
+                    · {s.dueDate || "기한 없음"}
+                  </span>
+                </button>
+              ) : (
+                <div className="sw-stage-heading">
+                  <strong>
+                    {i + 1}. {s.title || "새 업무"}
+                  </strong>
+                  <span className="sw-category">
+                    {s.name || "카테고리 미지정"}
+                  </span>
+                </div>
+              )}
               <button
                 type="button"
-                disabled={i === 0}
+                disabled={disabled || i === 0}
                 aria-label={`${i + 1}번 업무 위로`}
                 onClick={() => reorder(i, i - 1)}
               >
@@ -246,49 +385,52 @@ export default function StagePlanEditor({
               </button>
               <button
                 type="button"
-                disabled={i === value.length - 1}
+                disabled={disabled || i === value.length - 1}
                 aria-label={`${i + 1}번 업무 아래로`}
                 onClick={() => reorder(i, i + 1)}
               >
                 ↓
               </button>
-              <button
-                type="button"
-                className="sw-icon-button"
-                aria-label={`${i + 1}번 업무 ${collapsed.includes(s.id) ? "펼치기" : "접기"}`}
-                title={collapsed.includes(s.id) ? "펼치기" : "접기"}
-                aria-expanded={!collapsed.includes(s.id)}
-                onClick={() =>
-                  setCollapsed((v) =>
-                    v.includes(s.id)
-                      ? v.filter((id) => id !== s.id)
-                      : [...v, s.id],
-                  )
-                }
-              >
-                <svg
-                  width="18"
-                  height="18"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="1.8"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  aria-hidden="true"
+              {!detailModal && (
+                <button
+                  type="button"
+                  className="sw-icon-button"
+                  aria-label={`${i + 1}번 업무 ${collapsed.includes(s.id) ? "펼치기" : "접기"}`}
+                  title={collapsed.includes(s.id) ? "펼치기" : "접기"}
+                  aria-expanded={!collapsed.includes(s.id)}
+                  onClick={() =>
+                    setCollapsed((v) =>
+                      v.includes(s.id)
+                        ? v.filter((id) => id !== s.id)
+                        : [...v, s.id],
+                    )
+                  }
                 >
-                  <path
-                    d={
-                      collapsed.includes(s.id)
-                        ? "m6 9 6 6 6-6"
-                        : "m6 15 6-6 6 6"
-                    }
-                  />
-                </svg>
-              </button>
+                  <svg
+                    width="18"
+                    height="18"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="1.8"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    aria-hidden="true"
+                  >
+                    <path
+                      d={
+                        collapsed.includes(s.id)
+                          ? "m6 9 6 6 6-6"
+                          : "m6 15 6-6 6 6"
+                      }
+                    />
+                  </svg>
+                </button>
+              )}
               <button
                 type="button"
                 className="sw-icon-button sw-delete-task"
+                disabled={disabled}
                 aria-label={`${i + 1}번 업무 삭제`}
                 title="업무 삭제"
                 onClick={() => {
@@ -326,7 +468,7 @@ export default function StagePlanEditor({
                 </svg>
               </button>
             </header>
-            {collapsed.includes(s.id) ? (
+            {detailModal ? null : collapsed.includes(s.id) ? (
               <p className="sw-help">
                 담당:{" "}
                 {s.assigneeIds
@@ -346,86 +488,7 @@ export default function StagePlanEditor({
                   .join(", ") || "미지정"}
               </p>
             ) : (
-              <>
-                <div className="sw-people-row">
-                  <MemberPicker
-                    label="담당자"
-                    items={members}
-                    value={s.assigneeIds}
-                    disabled={disabled}
-                    onChange={(ids) => patch(s.id, { assigneeIds: ids })}
-                  />
-                  <MemberPicker
-                    label="작업 승인자"
-                    items={reviewers}
-                    value={s.reviewerIds}
-                    disabled={disabled}
-                    onChange={(ids) => patch(s.id, { reviewerIds: ids })}
-                  />
-                </div>
-                <label className="sw-inline-field">
-                  <span>업무 제목</span>
-                  <input
-                    maxLength={160}
-                    placeholder="무엇을 할 업무인가요?"
-                    value={s.title}
-                    onChange={(e) => patch(s.id, { title: e.target.value })}
-                  />
-                </label>
-                <label className="sw-inline-field">
-                  <span>카테고리</span>
-                  <select
-                    value={s.name}
-                    onChange={(e) => {
-                      const t = categories.find(
-                        (t) => t.name === e.target.value,
-                      );
-                      if (t)
-                        patch(s.id, {
-                          name: t.name,
-                          completionMode: t.completionMode,
-                        });
-                    }}
-                  >
-                    <option value="" disabled>
-                      선택하세요
-                    </option>
-                    {!!s.name && !categories.some((t) => t.name === s.name) && (
-                      <option value={s.name}>{s.name}</option>
-                    )}
-                    {categories.map((t) => (
-                      <option key={t.name} value={t.name}>
-                        {t.name}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                <div className="rt-field">
-                  <span>업무 내용</span>
-                  {disabled ? (
-                    <RichTextContent
-                      value={s.brief}
-                      document={s.briefDocument}
-                    />
-                  ) : (
-                    <RichTextEditor
-                      value={s.brief}
-                      document={s.briefDocument}
-                      onChange={(brief, briefDocument) =>
-                        patch(s.id, { brief, briefDocument })
-                      }
-                    />
-                  )}
-                </div>
-                <div className="sw-actions">
-                  <button
-                    type="button"
-                    onClick={() => setCollapsed((v) => [...v, s.id])}
-                  >
-                    작성 마치기
-                  </button>
-                </div>
-              </>
+              renderDetails(s)
             )}
           </section>
         </Fragment>
@@ -441,6 +504,43 @@ export default function StagePlanEditor({
             ＋ 업무 추가
           </button>
         </div>
+      )}
+      {detailModal && (
+        <dialog
+          ref={detailDialog}
+          className="sw-detail-dialog"
+          aria-label="업무 상세"
+          onCancel={(e) => {
+            e.preventDefault();
+            setOpenedId(null);
+          }}
+        >
+          {opened && (
+            <>
+              <header className="sw-detail-header">
+                <div>
+                  <small>회의 업무 초안</small>
+                  <h2>업무 상세</h2>
+                </div>
+                <button
+                  type="button"
+                  className="mm-action"
+                  onClick={() => setOpenedId(null)}
+                >
+                  닫기
+                </button>
+              </header>
+              <fieldset className="sw-detail-body" disabled={disabled}>
+                {renderDetails(opened)}
+              </fieldset>
+              <p className="sw-detail-notice">
+                {disabled
+                  ? "읽기 전용입니다."
+                  : "변경 내용은 회의 초안에 반영됩니다. 서버에 저장하려면 회의 저장을 눌러주세요."}
+              </p>
+            </>
+          )}
+        </dialog>
       )}
       <p>
         업무를 끌거나 ↑ ↓ 버튼으로 순서를 정하세요. 앞 업무의 작업 승인 후 다음

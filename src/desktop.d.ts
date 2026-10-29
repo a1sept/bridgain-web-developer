@@ -1,3 +1,4 @@
+export type TaskWorkspace = { folder?: string; binding?: { path: string; branch: string; baseBranch: string; repositoryUrl: string } };
 export type AiProviderName = "codex" | "claude";
 export type Connection = {
   connected: boolean;
@@ -29,6 +30,8 @@ export type DesktopEvent = {
   name?: string;
 };
 export type DesktopBridge = {
+  taskWorkspace: (projectId: string, taskId: string, action?: "state" | "start" | "open",
+    options?: { branch: string; baseBranch: string; existing: boolean }) => Promise<TaskWorkspace>;
   connectServer: (url: string) => Promise<void>;
   state: () => Promise<DesktopState>;
   syncProjects?: () => Promise<CodexSync>;

@@ -3,7 +3,7 @@ import { useAi } from "./ai/AiWorkspace";
 import "./developer-shell.css";
 import "./project-controls.css";
 export type DeveloperView =
-  "dashboard" | "projects" | "invitations" | "teams" | "approvals";
+  "dashboard" | "projects" | "activity" | "invitations" | "teams" | "approvals";
 export type ProjectSection =
   | "overview"
   | "requests"
@@ -35,6 +35,7 @@ type Props = {
 const labels = {
   dashboard: "대시보드",
   projects: "프로젝트",
+  activity: "활동 기록",
   invitations: "받은 초대",
   teams: "팀 관리",
   approvals: "승인함",
@@ -61,6 +62,8 @@ function Icon({ name }: { name: DeveloperView }) {
         </>
       ) : name === "projects" ? (
         <path d="M3 7V5a2 2 0 0 1 2-2h5l3 4h6a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7Z" />
+      ) : name === "activity" ? (
+        <><path d="M3 12a9 9 0 1 0 3-6.7L3 8" /><path d="M3 3v5h5M12 7v5l3 2" /></>
       ) : name === "invitations" ? (
         <>
           <rect x="3" y="5" width="18" height="14" rx="3" />
@@ -134,7 +137,7 @@ export default function DeveloperShell(p: Props) {
         >
           ☰
         </button>
-        <strong>{selected?.name || labels[p.active]}</strong>
+        <strong>{p.active === "projects" ? selected?.name || labels.projects : labels[p.active]}</strong>
         <span>bridgain.</span>
       </header>
       {open && (
@@ -158,6 +161,7 @@ export default function DeveloperShell(p: Props) {
             .map((v) => (
               <button
                 key={v}
+                aria-label={labels[v]}
                 aria-current={p.active === v ? "page" : undefined}
                 aria-expanded={
                   v === "projects" && p.active === "projects"
@@ -266,10 +270,9 @@ export default function DeveloperShell(p: Props) {
               [
                 ["overview", "개요"],
                 ["requests", "요청"],
+                ["meetings", "회의실"],
                 ["tasks", "업무"],
                 ["deployments", "배포"],
-                ["approvals", "승인함"],
-                ["meetings", "회의실"],
                 ["channel", "채널"],
                 ["documents", "문서"],
                 ["activity", "활동 기록"],

@@ -56,6 +56,8 @@ const labels: Record<string, string> = {
   meeting_scheduled: "회의 예정 등록",
   meeting_started: "회의 시작",
   meeting_completed: "회의 완료",
+  meeting_reopened: "회의 완료 취소",
+  meeting_deleted: "회의 삭제",
   request_linked: "요청 연결",
   request_unlinked: "요청 연결 해제",
   request_transferred: "요청의 회의 이동",
@@ -120,16 +122,17 @@ function errorText(e: unknown) {
 function Timeline({
   requestId,
   selectedId,
+  projectId,
 }: {
   requestId: string;
   selectedId: string;
+  projectId?: string;
 }) {
   const [page, setPage] = useState<Page>({ events: [], nextCursor: null });
   const [busy, setBusy] = useState(true);
   const [error, setError] = useState("");
   const [retry, setRetry] = useState(0);
   const controller = useRef<AbortController | null>(null);
-  const selected = useRef<HTMLLIElement>(null);
   const load = async (cursor?: string) => {
     controller.current?.abort();
     const c = new AbortController();
@@ -138,7 +141,7 @@ function Timeline({
     setError("");
     try {
       const next = await get<Page>(
-        `?${new URLSearchParams({ requestId, order: "asc", ...(cursor ? { cursor } : {}) })}`,
+        `?${new URLSearchParams({ requestId, ...(projectId ? {projectIds:projectId} : {}), order: "asc", ...(cursor ? { cursor } : {}) })}`,
         c.signal,
       );
       if (!c.signal.aborted)
@@ -156,16 +159,7 @@ function Timeline({
     setPage({ events: [], nextCursor: null });
     void load();
     return () => controller.current?.abort();
-  }, [requestId, retry]);
-  useEffect(() => {
-    const scroller = selected.current?.closest(".ah-panel-scroll");
-    if (selected.current && scroller) {
-      const delta =
-        selected.current.getBoundingClientRect().top -
-        scroller.getBoundingClientRect().top;
-      scroller.scrollTop += delta - Math.min(180, scroller.clientHeight / 3);
-    }
-  }, [page.events.length, selectedId]);
+  }, [requestId, projectId, retry]);
   return (
     <>
       <p className="ah-history-caption">진행 이력 · 과거 → 현재</p>
@@ -173,7 +167,6 @@ function Timeline({
         {page.events.map((e) => (
           <li
             key={e.id}
-            ref={e.id === selectedId ? selected : undefined}
             className={e.id === selectedId ? "is-current" : ""}
             aria-current={e.id === selectedId ? "step" : undefined}
           >
@@ -222,13 +215,16 @@ function Timeline({
     </>
   );
 }
-export default function ActivityHistory({
-  currentUser,
-  refreshKey,
-}: {
+type ActivityHistoryProps = {
   currentUser: { id: string; displayName: string };
   refreshKey: number;
-}) {
+  project?: {id: string; name: string};
+};
+export default function ActivityHistory(props: ActivityHistoryProps) {
+  // Reset filters, detail and in-flight requests when the navigation scope changes.
+  return <ActivityHistoryView key={props.project?.id || "all-projects"} {...props} />;
+}
+function ActivityHistoryView({currentUser, refreshKey, project}: ActivityHistoryProps) {
   const [projects, setProjects] = useState<string[]>([]),
     [request, setRequest] = useState(""),
     [assignee, setAssignee] = useState(""),
@@ -253,8 +249,9 @@ export default function ActivityHistory({
     heading = useRef<HTMLHeadingElement>(null),
     trigger = useRef<HTMLButtonElement | null>(null),
     listController = useRef<AbortController | null>(null);
+  const projectIds = project ? project.id : projects.join(",");
   const query = new URLSearchParams({
-    ...(projects.length ? { projectIds: projects.join(",") } : {}),
+    ...(projectIds ? { projectIds } : {}),
     ...(request ? { requestId: request } : {}),
     ...(assignee ? { assigneeId: assignee } : {}),
     ...(category ? { category } : {}),
@@ -292,10 +289,11 @@ export default function ActivityHistory({
     const c = new AbortController();
     setOptionError("");
     get<Options>(
-      `/options?${new URLSearchParams({ projectIds: projects.join(",") })}`,
+      `/options?${new URLSearchParams({ projectIds })}`,
       c.signal,
     )
       .then((next) => {
+        if (c.signal.aborted) return;
         setOptions(next);
         setRequest((old) =>
           next.requests.some((r) => r.id === old) ? old : "",
@@ -311,14 +309,14 @@ export default function ActivityHistory({
         }
       });
     return () => c.abort();
-  }, [projects.join(","), retry, refreshKey]);
+  }, [projectIds, retry, refreshKey]);
   useEffect(() => {
     if (!selected) return;
     const c = new AbortController();
     setDetail(null);
     setDetailError("");
     get<Detail>("/" + selected.id, c.signal)
-      .then(setDetail)
+      .then(next => { if (!c.signal.aborted) setDetail(next); })
       .catch((e) => {
         if (!c.signal.aborted) setDetailError(errorText(e));
       });
@@ -329,33 +327,34 @@ export default function ActivityHistory({
     trigger.current?.focus({ preventScroll: true });
   }
   useLayoutEffect(() => {
-    if (!selected) return;
     const node = root.current,
       content = node?.closest(".ds-content"),
-      tabs = content?.querySelector(".ds-project-tabs");
-    if (!node || !content || !tabs) return;
+      tabs = content?.querySelector(".ds-project-tabs") || content?.querySelector(".pw-topbar"),
+      mobileBar = document.querySelector(".ds-mobile-bar");
+    if (!node || !content) return;
     const update = () => {
+      node.style.setProperty("--history-page-top", `${node.getBoundingClientRect().top + window.scrollY}px`);
       node.style.setProperty(
         "--history-panel-top",
-        `${Math.max(0, tabs.getBoundingClientRect().bottom)}px`,
+        `${Math.max(0, tabs?.getBoundingClientRect().bottom || 0, mobileBar?.getBoundingClientRect().bottom || 0)}px`,
       );
       node.style.setProperty(
         "--history-content-left",
         `${Math.max(0, content.getBoundingClientRect().left)}px`,
       );
     };
+    window.scrollTo({top: 0, behavior: "instant"});
     update();
     const observer = new ResizeObserver(update);
-    observer.observe(tabs);
+    if (tabs) observer.observe(tabs);
+    if (mobileBar) observer.observe(mobileBar);
     observer.observe(content);
     window.addEventListener("resize", update);
-    window.addEventListener("scroll", update, { capture: true, passive: true });
     return () => {
       observer.disconnect();
       window.removeEventListener("resize", update);
-      window.removeEventListener("scroll", update, true);
     };
-  }, [selected?.id]);
+  }, [project?.id]);
   useEffect(() => {
     if (!selected) return;
     heading.current?.focus({ preventScroll: true });
@@ -388,15 +387,15 @@ export default function ActivityHistory({
     >
       <header className="pr-heading">
         <div>
-          <span>WORKSPACE HISTORY</span>
+          <span>{project ? "PROJECT HISTORY" : "WORKSPACE HISTORY"}</span>
           <h1>활동 기록</h1>
-          <p>요청부터 회의, 업무와 배포까지 연결된 흐름을 확인하세요.</p>
+          <p>{project ? `${project.name}의 요청·회의·업무·배포 이력을 확인하세요.` : "접근 가능한 모든 프로젝트의 활동을 모아 확인하세요."}</p>
         </div>
       </header>
       <FilterBar
         label="활동 기록 필터"
         filters={[
-          {
+          ...(!project ? [{
             id: "project",
             label: "프로젝트",
             multiple: true,
@@ -405,8 +404,8 @@ export default function ActivityHistory({
               value: p.id,
               label: p.name,
             })),
-            onChange: (ids) => setProjects(ids),
-          },
+            onChange: (ids: string[]) => setProjects(ids),
+          }] : []),
           {
             id: "request",
             label: "요청",
@@ -457,11 +456,11 @@ export default function ActivityHistory({
       )}
       <div className="ah-results" aria-live="polite">
         <strong>
-          {projects.length ? `${projects.length}개 프로젝트` : "전체 프로젝트"}
+          {project ? project.name : projects.length ? `${projects.length}개 프로젝트` : "전체 프로젝트"}
         </strong>
         <span>{page.events.length}개 기록 불러옴 · 최신순</span>
       </div>
-      <section className="ah-feed" aria-label="전체 활동 목록">
+      <section className="ah-feed" aria-label={project ? "프로젝트 활동 목록" : "전체 활동 목록"}>
         <ol className="ah-feed-list">
           {page.events.map((e) => (
             <li key={e.id} style={color(e.projectId)}>
@@ -656,6 +655,7 @@ export default function ActivityHistory({
                     {expanded === r.id && (
                       <div id={`history-${r.id}`}>
                         <Timeline
+                          projectId={project?.id}
                           key={r.id}
                           requestId={r.id}
                           selectedId={selected.id}

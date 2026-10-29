@@ -389,9 +389,13 @@ export default function AiWorkspace({
         {children}
       </div>
       {panel === "closed" ? (
-        <button className="ai-launch" onClick={openPanel}>
-          AI 채팅
-        </button>
+        <>
+          {/* AI 채팅 도입 전까지 플로팅 버튼을 숨깁니다.
+          <button className="ai-launch" onClick={openPanel}>
+            AI 채팅
+          </button>
+          */}
+        </>
       ) : panel === "collapsed" ? (
         <button className="ai-launch" onClick={() => setPanel("open")}>
           AI 채팅 펼치기 {running.length > 0 && `· ${running.length}개 실행 중`}

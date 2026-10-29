@@ -8,6 +8,7 @@ contextBridge.exposeInMainWorld(
   "bridgainDesktop",
   Object.freeze({
     connectServer: (url) => call("connect-server", url),
+    taskWorkspace: (pid, id, action, options) => call("task-workspace", pid, id, action, options),
     state: () => call("state"),
     syncProjects: () => call("sync-projects"),
     openCodex: (sessionId) => call("open-codex", sessionId),

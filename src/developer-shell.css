@@ -33,6 +33,10 @@
 .ds-context-back span { float:right; }
 .ds-context-empty { font-size:11px; line-height:1.8; color:#8a99ad; }
 .ds-content { margin-left:var(--ds-rail); min-width:0; }
+/* Meeting presentation fills the app while keeping the editor mounted. */
+.ds-shell:has(.pr-meeting-tool .mm-presentation) > :is(.ds-rail,.ds-context,.ds-mobile-bar,.ds-scrim),
+.ds-shell:has(.pr-meeting-tool .mm-presentation) > .ds-content > .ds-project-tabs { display:none; }
+.ds-shell:has(.pr-meeting-tool .mm-presentation) > .ds-content { margin-left:0; }
 .ds-with-context .ds-content { margin-left:calc(var(--ds-rail) + var(--ds-context)); }
 .ds-content .pw-shell { display:block; min-height:100dvh; }
 .ds-content .pw-body { width:100%; min-width:0; }

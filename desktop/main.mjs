@@ -137,6 +137,7 @@ async function main() {
       });
       return result.canceled ? null : result.filePaths[0];
     },
+    openPath: (path) => shell.openPath(path),
     openCodex: (url) => shell.openExternal(url),
     openAuth: (url, provider = "claude") =>
       shell.openExternal(authUrl(url, provider)),
@@ -146,6 +147,7 @@ async function main() {
   });
   await runtime.load();
   handle("connect-server", connectServer, true);
+  handle("task-workspace", (pid, id, action, options) => runtime.taskWorkspace(pid, id, action, options));
   handle("state", () => runtime.state());
   handle("sync-projects", () => runtime.syncProjects());
   handle("open-codex", (id) => runtime.openCodex(id));

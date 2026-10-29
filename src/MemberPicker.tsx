@@ -21,7 +21,7 @@ export default function MemberPicker({ label, items, value, onChange, disabled =
   const matches = available.filter(p => p.displayName.toLocaleLowerCase().includes(query.toLocaleLowerCase()));
   return <div className="mp-picker" ref={ref} onKeyDown={e => {
     if (e.key === "Enter" && e.target instanceof HTMLInputElement) e.preventDefault();
-    if (e.key === "Escape") { e.preventDefault(); e.stopPropagation(); setOpen(false); ref.current?.querySelector<HTMLButtonElement>(".mp-add")?.focus(); }
+    if (e.key === "Escape" && open) { e.preventDefault(); e.stopPropagation(); setOpen(false); ref.current?.querySelector<HTMLButtonElement>(".mp-add")?.focus(); }
   }}>
     <span className="mp-label">{label}</span>
     <div className="mp-selected">
@@ -40,7 +40,7 @@ export default function MemberPicker({ label, items, value, onChange, disabled =
         value={query} onChange={e => setQuery(e.target.value)} />}
       <div aria-live="polite">
         {matches.slice(0, 5).map(p => <button className="mp-person" type="button" key={p.userId}
-          onClick={() => onChange([...value, p.userId])}><span className="mp-avatar" aria-hidden="true">{p.displayName.slice(0, 1)}</span>{p.displayName}<span className="mp-plus" aria-hidden="true">＋</span></button>)}
+          onClick={() => { onChange([...value, p.userId]); ref.current?.querySelector<HTMLButtonElement>(".mp-add")?.focus(); }}><span className="mp-avatar" aria-hidden="true">{p.displayName.slice(0, 1)}</span>{p.displayName}<span className="mp-plus" aria-hidden="true">＋</span></button>)}
         {!matches.length && <p>{available.length ? "검색 결과가 없어요." : "추가할 수 있는 멤버가 없어요."}</p>}
       </div>
       <small>프로젝트 멤버 {items.length}명{matches.length > 5 ? " · 나머지 멤버는 검색하세요." : ""}</small>

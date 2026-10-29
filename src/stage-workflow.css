@@ -139,3 +139,20 @@
 .sw-task-editor .sw-stage > header .sw-icon-button:hover:not(:disabled) { background:#eef2ff; color:#4260a3; }
 .sw-task-editor .sw-stage > header .sw-delete-task:hover:not(:disabled) { background:#fff0f0; color:#c84646; }
 .sw-task-editor .sw-stage > header .sw-icon-button:focus-visible { outline:2px solid #426fe9; outline-offset:2px; }
+
+/* Meeting draft details use a native modal, preserving the editor draft. */
+.sw-stage header > .sw-card-open { flex:1; min-width:0; display:flex; flex-direction:column; align-items:flex-start; gap:8px; text-align:left; border:0; background:transparent; padding:10px 4px; color:inherit; }
+.sw-card-open strong { overflow-wrap:anywhere; }
+.sw-card-meta { font-size:12px; color:#777985; }
+.sw-detail-dialog { width:min(1000px,calc(100vw - 32px)); max-height:calc(100dvh - 40px); padding:0; border:1px solid #e9e9ee; border-radius:14px; color:#292a32; background:#fff; box-shadow:0 24px 100px #17243e30; }
+.sw-detail-dialog::backdrop { background:#17243e60; }
+.sw-detail-header { display:flex; align-items:center; justify-content:space-between; gap:16px; padding:20px 24px; border-bottom:1px solid #e9e9ee; }
+.sw-detail-header small { color:#777985; font-size:12px; }
+.sw-detail-header h2 { font-size:20px; margin:6px 0 0; }
+.sw-detail-body { display:grid; gap:20px; min-width:0; border:0; margin:0; padding:24px; }
+.sw-detail-body .sw-people-row { display:flex; gap:24px; flex-wrap:wrap; }
+.sw-detail-body .sw-inline-field { display:grid; grid-template-columns:100px minmax(0,1fr); align-items:center; gap:16px; margin:0; }
+.sw-detail-body .rt-field { min-width:0; }
+.sw-detail-body .rt-editor { min-height:220px; }
+.sw-detail-notice { padding:12px 24px 20px; margin:0; color:#777985; font-size:12px; }
+@media(max-width:600px) { .sw-detail-dialog { width:calc(100vw - 16px); max-height:calc(100dvh - 16px); } .sw-detail-header,.sw-detail-body { padding:16px; } .sw-detail-body .sw-inline-field { grid-template-columns:70px minmax(0,1fr); gap:10px; } }

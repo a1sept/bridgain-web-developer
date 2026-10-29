@@ -1,6 +1,8 @@
+import MeetingApprovalStatus from "./MeetingApprovalStatus";
+import MeetingList from "./MeetingList";
 import type { RichDocument } from "./editor/document";
 import ControlIcon from "./components/ControlIcon";
-import MeetingMode from "./MeetingMode";
+import MeetingMode, { type MeetingFocus } from "./MeetingMode";
 import {
   type StagePlan,
   validStages,
@@ -157,6 +159,7 @@ export default function ProjectResources({
     [reload, setReload] = useState(0),
     [busy, setBusy] = useState(false);
   const [notesDocument, setNotesDocument] = useState<RichDocument | null>(null);
+  const [meetingFocus, setMeetingFocus] = useState<MeetingFocus | null>(null);
   const [meetingMode, setMeetingMode] = useState(false);
   const [approverHelpOpen,setApproverHelpOpen] = useState(false);
   const [savedMeetingDraft, setSavedMeetingDraft] = useState("");
@@ -207,6 +210,8 @@ export default function ProjectResources({
     const popup = requestPopupRef.current;
     const trigger = requestTriggerRef.current;
     if (!popup || !trigger) return;
+    // Top-layer positioning escapes the meeting sidebar overflow and containment.
+    if (!popup.matches(":popover-open")) popup.showPopover();
     let frame = 0;
     const position = () => {
       const viewport = window.visualViewport;
@@ -280,7 +285,7 @@ export default function ProjectResources({
       window.visualViewport?.removeEventListener("resize", schedule);
       window.visualViewport?.removeEventListener("scroll", schedule);
     };
-  }, [requestPickerOpen, requestConnector, requestQuery]);
+  }, [requestPickerOpen, requestConnector, requestQuery, requestPickerMode]);
   const requestTriggerRef = useRef<HTMLButtonElement>(null);
   const closeRequestPicker = () => {
     setRequestPickerOpen(false);
@@ -365,6 +370,7 @@ export default function ProjectResources({
   const canCreate = !permissions || permissions.includes(`${section}.create`);
   const canUpdate = !permissions || permissions.includes(`${section}.update`);
   function edit(item?: Meeting | Document, present = false) {
+    setMeetingFocus(null);
     setMeetingMode(present);
     setRequestQuery("");
     setRequestPickerOpen(false);
@@ -458,14 +464,49 @@ export default function ProjectResources({
   const finalized =
     section === "meetings" &&
     meetings.find((m) => m.id === editing)?.decisionStatus === "final";
+  const meetingApproval = pendingApproval || approvalItems.find(a => a.meetingId === editing && a.status === "approved") || approvalItems.find(a => a.meetingId === editing);
   const locked = finalized || !!pendingApproval;
-  async function changeMeetingState(action: "start" | "complete") {
+  async function deleteListedMeeting(id: string) {
+    if (saveLock.current || !canUpdate) return;
+    const meeting = meetings.find(m => m.id === id);
+    if (!meeting || !window.confirm(`'${meeting.title}' 회의를 삭제할까요?\n회의 메모와 업무 초안이 삭제되며 복구할 수 없습니다. 연결된 원래 요청은 삭제되지 않습니다.`)) return;
+    saveLock.current=true;setBusy(true);setError("");
+    try {
+      await api(`${base}/meetings/${id}`, {}, "DELETE");
+      setMeetings(current=>current.filter(m=>m.id!==id));onChanged?.();
+    } catch(cause) { setError(cause instanceof Error ? cause.message : "회의를 삭제하지 못했습니다."); }
+    finally {saveLock.current=false;setBusy(false);}
+  }
+  async function startListedMeeting(id: string) {
+    if (saveLock.current || !canUpdate) return;
+    const current = meetings.find(m => m.id === id);
+    if (!current) return;
+    saveLock.current = true; setBusy(true); setError("");
+    try {
+      const result = await api<{meeting: Meeting}>(`${base}/meetings/${id}/actions`, {action:"start"});
+      const updated = {...current,...result.meeting,requests:current.requests};
+      setMeetings(items=>items.map(m=>m.id===id?updated:m));
+      edit(updated,true); onChanged?.();
+    } catch(cause) { setError(cause instanceof Error ? cause.message : "회의를 시작하지 못했습니다."); }
+    finally {saveLock.current=false;setBusy(false);}
+  }
+  async function rescheduleMeeting(id: string, scheduledAt: string) {
+    if (saveLock.current || !canUpdate) return false;
+    saveLock.current=true;setBusy(true);setError("");
+    try {
+      const result=await api<{meeting:Meeting}>(`${base}/meetings/${id}`,{scheduledAt},"PATCH");
+      setMeetings(items=>items.map(m=>m.id===id?result.meeting:m));onChanged?.();return true;
+    } catch(cause) {setError(cause instanceof Error?cause.message:"일정을 변경하지 못했습니다.");return false;}
+    finally {saveLock.current=false;setBusy(false);}
+  }
+  async function changeMeetingState(action: "start" | "complete" | "reopen") {
     if (saveLock.current || !editing || editing === "new") return;
     saveLock.current = true; setBusy(true); setError("");
     try {
       if (meetingDirty && !meetingReadOnly) await persistMeeting();
       const result = await api<{meeting: Meeting}>(`${base}/meetings/${editing}/actions`, { action });
       setStatus(result.meeting.status);
+      if (action === "start") setMeetingMode(true);
       setMeetings(current => current.map(m => m.id === editing ? {...m,...result.meeting} : m));
       onChanged?.();
     } catch (cause) {setError(cause instanceof Error ? cause.message : "회의 상태를 변경하지 못했습니다.");}
@@ -477,6 +518,29 @@ export default function ProjectResources({
     );
   }
   const meetingReadOnly = locked || (editing === "new" ? !canCreate : !canUpdate);
+  const approvalIssues: {label:string;target?:MeetingFocus}[] = [];
+  if (!title.trim()) approvalIssues.push({label:"회의 제목을 입력해주세요.",target:{requestId:null,field:"title"}});
+  if (!canAssign) approvalIssues.push({label:"업무 배정 권한이 필요합니다. 프로젝트 관리자에게 문의해주세요."});
+  if (!plans.length) approvalIssues.push({label:"요청을 연결하고 업무를 추가해주세요.",target:{requestId:null,field:"requests"}});
+  for (const [requestIndex, plan] of plans.entries()) {
+    const requestName=requests.find(r=>r.id===plan.requestId)?.title || `${requestIndex+1}번째 요청`;
+    const target:MeetingFocus={requestId:plan.requestId,field:"tasks"};
+    if (!plan.stages?.length) {approvalIssues.push({label:`${requestName}: 업무를 추가해주세요.`,target});continue;}
+    const before=approvalIssues.length;
+    for (const [stageIndex,stage] of plan.stages.entries()) {
+      const missing=[!stage.title.trim()&&"제목",!stage.name.trim()&&"카테고리",!stage.brief.trim()&&"업무 내용",!stage.assigneeIds.length&&"담당자",!stage.reviewerIds.length&&"작업 승인자"].filter(Boolean);
+      if (missing.length) approvalIssues.push({label:`${requestName} · ${stage.title.trim() || `${stageIndex+1}번 업무`}: ${missing.join("·")}를 입력해주세요.`,target});
+    }
+    if(before===approvalIssues.length&&!validStages(plan.stages))approvalIssues.push({label:`${requestName}: 업무 순서와 선행 업무 연결을 확인해주세요.`,target});
+  }
+  if (!selectedApprovers.length) approvalIssues.push({label:"최종 승인자를 지정해주세요.",target:{requestId:null,field:"approvers"}});
+  function focusAssignment(id:string) {
+    const meeting=meetings.find(m=>m.id===id);
+    if(!meeting || busy)return;
+    edit(meeting);
+    const plan=meeting.requests.find(p=>!validStages(p.stages)) || meeting.requests[0];
+    setMeetingFocus({requestId:plan?.requestId ?? null,field:plan?"tasks":"requests"});
+  }
   async function persistMeeting() {
     if (!title.trim() || !when || !Number.isFinite(new Date(when).getTime()) || !Number.isFinite(duration) || duration < 15 || duration > 480) throw Error("회의 제목·시작 일시·소요 시간(15~480분)을 확인해주세요.");
     const saved = await api<{meeting: Meeting}>(`${base}/meetings${editing === "new" ? "" : `/${editing}`}`, {
@@ -514,11 +578,10 @@ export default function ProjectResources({
     if (
       section === "meetings" &&
       decision === "pending" &&
-      plans.some((p) => !validStages(p.stages))
+      approvalIssues.length > 0
     ) {
-      setError(
-        "모든 업무의 제목·카테고리·내용·담당자·작업 승인자를 지정해주세요.",
-      );
+      setError(approvalIssues[0].label);
+      if(approvalIssues[0].target)setMeetingFocus({...approvalIssues[0].target});
       return;
     }
     saveLock.current = true;
@@ -602,9 +665,12 @@ export default function ProjectResources({
         {active && (
           <section
             className="pr-request-picker"
+            popover="manual"
             ref={requestPopupRef}
             style={{
               position: "fixed",
+              inset: "auto",
+              margin: 0,
               right: "auto",
               transform: "none",
               ...requestPopupPosition,
@@ -718,14 +784,14 @@ export default function ProjectResources({
     finally { saveLock.current = false; setBusy(false); }
   }
   return (
-    <div className={editing && section === "meetings" ? "pr-meeting-tool" : "pr-page"}>
+    <div className={editing && section === "meetings" ? "pr-meeting-tool" : section === "meetings" ? "pr-meetings-page" : "pr-page"}>
       {!(editing && section === "meetings") && <header className="pr-heading">
         <div>
           <span>PROJECT WORKSPACE</span>
           <h1>{label}</h1>
           <p>
             {section === "meetings"
-              ? "회의를 만들고 요청과 업무를 준비하세요. 회의 모드에서 안건을 함께 검토할 수 있습니다."
+              ? "함께 논의하고, 다음 할 일을 정리하세요."
               : section === "documents"
                 ? "최신 설계와 업무별 변경 이력을 관리하세요."
                 : "프로젝트의 최근 변경 내역이에요."}
@@ -733,18 +799,18 @@ export default function ProjectResources({
         </div>
         {section !== "activity" && !editing && canCreate && (
           <button
-            className="pr-primary"
+            className={section === "meetings" ? "ml-action ml-primary" : "pr-primary"}
             disabled={loading || busy}
             onClick={() => edit()}
           >
-            ＋ {section === "meetings" ? "회의 생성" : "새 문서"}
+            {section === "meetings" ? <><ControlIcon name="plus" />회의 만들기</> : "＋ 새 문서"}
           </button>
         )}
       </header>}
-      {section === "meetings" && !editing && onApprovals && (
-        <button onClick={onApprovals}>
-          프로젝트 승인함 · 대기{" "}
-          {approvalItems.filter((a) => a.status === "pending").length}건 →
+      {section === "meetings" && !editing && onApprovals && approvalItems.some(a=>a.meetingId && a.status === "pending") && (
+        <button className="ml-action ml-approval-link" onClick={onApprovals}>
+          업무 생성 승인 대기{" "}
+          {approvalItems.filter((a) => a.meetingId && a.status === "pending").length}건 →
         </button>
       )}
       {error && !(editing && section === "meetings") && (
@@ -842,16 +908,17 @@ export default function ProjectResources({
             </fieldset>
             </>}
             {section === "meetings" && <MeetingMode
-              presentation={meetingMode} isNew={editing === "new"}
+              presentation={meetingMode} isNew={editing === "new"} focusTarget={meetingFocus}
               newRequestOpen={newRequestOpen} onCancelRequest={() => setNewRequestOpen(false)} onCreateRequest={createMeetingRequest}
               header={<header className="mm-tool-header">
                 <div className="mm-title-row">
                   <button type="button" className="mm-action mm-back" disabled={busy} onClick={closeEditor}><ControlIcon name="chevron" />회의 목록으로</button>
-                  <h1 className="mm-page-title">{editing === "new" ? "회의 만들기" : meetingReadOnly ? "회의 상세" : "회의 수정"}</h1>
+                  <h1 className="mm-page-title">{editing === "new" ? "회의 만들기" : status === "in_progress" ? "회의 진행" : status === "completed" || meetingReadOnly ? "회의 상세" : "회의 준비"}</h1>
                   <span className="mm-status">{status === "completed" ? "완료" : status === "in_progress" ? "진행 중" : "예정"}</span>
                   <span className="mm-save-status" role="status">{meetingReadOnly ? "읽기 전용" : busy ? "저장 중…" : meetingDirty ? "미저장" : "저장됨"}</span>
-                  <button type="button" className="mm-action" disabled={busy} aria-pressed={meetingMode} onClick={() => {setRequestPickerOpen(false);setMeetingMode(v=>!v);}}>{meetingMode ? "작성 보기" : "발표 보기"}</button>
-                  {!meetingReadOnly && <button type="submit" value="draft" className="mm-action mm-primary" disabled={busy || newRequestOpen || !title.trim()}>{editing === "new" ? "회의 생성하기" : "회의 저장"}</button>}
+                  <button type="button" className="mm-action" disabled={busy} aria-pressed={meetingMode} onClick={() => {setRequestPickerOpen(false);setMeetingMode(v=>!v);}}>{meetingMode ? "작성 보기로 돌아가기" : "발표 보기"}</button>
+                  {!meetingReadOnly && <button type="submit" value="draft" className={`mm-action ${editing === "new" ? "mm-primary" : ""}`} disabled={busy || newRequestOpen || !title.trim()}>{editing === "new" ? "회의 생성하기" : "회의 저장"}</button>}
+                  {editing !== "new" && canUpdate && <button type="button" className={`mm-action ${status === "completed" ? "" : "mm-primary"}`} disabled={busy || newRequestOpen} onClick={() => void changeMeetingState(status === "completed" ? "reopen" : status === "in_progress" ? "complete" : "start")}>{status === "completed" ? "완료 취소" : status === "in_progress" ? "회의 완료" : "회의 시작"}</button>}
                 </div>
                 {(pendingApproval || finalized) && <p className="mm-notice">{pendingApproval ? "최종 승인 대기 중입니다. 수정하려면 승인함에서 승인 요청을 취소해주세요." : "최종 승인되어 업무가 생성된 회의입니다."}</p>}
               </header>}
@@ -863,16 +930,21 @@ export default function ProjectResources({
                   <label>시작 일시<input aria-label="시작 일시" required type="datetime-local" value={when} disabled={busy || meetingReadOnly} onChange={e=>setWhen(e.target.value)} /></label>
                   <label>소요 시간<input aria-label="소요 시간 (분)" type="number" required min={15} max={480} value={duration} disabled={busy || meetingReadOnly} onChange={e=>setDuration(Number(e.target.value))} /><span>분</span></label>
                   <label className="mm-location">장소 / 링크<input aria-label="장소 / 회의 링크" placeholder="장소 또는 회의 링크" maxLength={1000} value={location} disabled={busy || meetingReadOnly} onChange={e=>setLocation(e.target.value)} /></label>
-                  <div className="mm-final-approvers"><ApproverPicker label="최종 승인자" disabled={busy || meetingReadOnly} items={approvers} value={selectedApprovers} onChange={setSelectedApprovers} /><div className="mm-tooltip" data-open={approverHelpOpen} onKeyDown={e=>{if(e.key === "Escape") setApproverHelpOpen(false);}}><button type="button" aria-label="최종 승인자 역할 안내" aria-describedby="meeting-approver-help" onClick={()=>setApproverHelpOpen(v=>!v)}>ⓘ</button><span id="meeting-approver-help" role="tooltip">회의에서 정리한 업무의 생성을 승인하는 사람입니다. 업무 생성 승인 요청 후, 지정된 최종 승인자 전원이 승인하면 실제 업무가 생성됩니다. 각 업무의 결과물을 검토하는 작업 승인자와는 별도 역할입니다.</span></div></div>
+                  <div className="mm-final-approvers">{meetingApproval && locked ? <MeetingApprovalStatus status={meetingApproval.status} approvers={meetingApproval.approvers} /> : <><ApproverPicker label="최종 승인자" disabled={busy || meetingReadOnly} items={approvers} value={selectedApprovers} onChange={setSelectedApprovers} /><div className="mm-tooltip" data-open={approverHelpOpen} onKeyDown={e=>{if(e.key === "Escape") setApproverHelpOpen(false);}}><button type="button" aria-label="최종 승인자 역할 안내" aria-describedby="meeting-approver-help" onClick={()=>setApproverHelpOpen(v=>!v)}>ⓘ</button><span id="meeting-approver-help" role="tooltip">회의에서 정리한 업무의 생성을 승인하는 사람입니다. 업무 생성 승인 요청 후, 지정된 최종 승인자 전원이 승인하면 실제 업무가 생성됩니다. 각 업무의 결과물을 검토하는 작업 승인자와는 별도 역할입니다.</span></div></>}</div>
                 </div>
               </section>}
-              footer={<footer className="mm-tool-footer"><span>{editing === "new" ? "회의 정보와 업무 초안을 저장합니다." : "최종 승인자 전원 승인 후 실제 업무가 생성됩니다."}</span><div>
-                {onApprovals && <button type="button" className="mm-action" onClick={onApprovals}>승인함</button>}
-                {editing !== "new" && canUpdate && status !== "completed" && <button type="button" className="mm-action" disabled={busy} onClick={() => void changeMeetingState(status === "in_progress" ? "complete" : "start")}>{status === "in_progress" ? "완전 마무리" : "회의 시작하기"}</button>}
-                {editing !== "new" && !meetingReadOnly && <button type="submit" className="mm-action" value="pending" disabled={busy || newRequestOpen || !title.trim() || !canAssign || !selectedApprovers.length || !plans.length || plans.some(p=>!validStages(p.stages))}>업무 생성 승인 요청</button>}
+              footer={<footer className="mm-tool-footer"><span>{editing === "new" ? "회의 정보와 업무 초안을 저장합니다." : status === "in_progress" ? "목록으로 돌아가도 진행 중입니다. 회의 완료와 업무 생성 승인은 별개입니다." : "최종 승인자 전원 승인 후 실제 업무가 생성됩니다."}</span><div>
+                {onApprovals && pendingApproval && <button type="button" className="mm-action" onClick={onApprovals}>승인 현황 보기</button>}
+
+                {editing !== "new" && !meetingReadOnly && <>
+                  <div className="mm-approval-guidance" id="meeting-approval-requirements" aria-live="polite">
+                    {approvalIssues.length ? <>{approvalIssues[0].target ? <button type="button" className="mm-approval-fix" disabled={busy} onClick={()=>{setNewRequestOpen(false);setMeetingFocus({...approvalIssues[0].target!});}}>{approvalIssues[0].label}</button> : <span>{approvalIssues[0].label}</span>}{approvalIssues.length>1&&<small>외 {approvalIssues.length-1}개 항목 확인 필요</small>}</> : <span>업무 배정 준비가 완료되었습니다. 승인을 요청하세요.</span>}
+                  </div>
+                  <button type="submit" className="mm-action mm-primary" value="pending" aria-describedby="meeting-approval-requirements" disabled={busy || newRequestOpen || !!approvalIssues.length}>업무 생성 승인 요청</button>
+                </>}
               </div></footer>}
-              lifecycleLabel={editing !== "new" && canUpdate && status !== "completed" ? (status === "in_progress" ? "완전 마무리" : "회의 시작하기") : undefined}
-              onLifecycle={() => void changeMeetingState(status === "in_progress" ? "complete" : "start")}
+              lifecycleLabel={editing !== "new" && canUpdate ? (status === "completed" ? "완료 취소" : status === "in_progress" ? "회의 완료" : "회의 시작") : undefined}
+              onLifecycle={() => void changeMeetingState(status === "completed" ? "reopen" : status === "in_progress" ? "complete" : "start")}
               projectId={projectId} title={title} when={when} location={location} notes={content} notesDocument={notesDocument}
               plans={plans} requests={requests} members={members.filter(m => m.accountType === "team")} reviewers={workApprovers}
               readOnly={meetingReadOnly} busy={busy} dirty={meetingDirty} error={error}
@@ -938,7 +1010,7 @@ export default function ProjectResources({
       ) : loading ? (
         <p role="status">불러오는 중…</p>
       ) : (
-        !error && (
+        (!error || section === "meetings") && (
           <>
             {section === "activity" ? (
               <div className="pr-activity-feed" aria-label="프로젝트 활동 기록">
@@ -977,7 +1049,7 @@ export default function ProjectResources({
               </div>
             ) : (
               <>
-                <div className="pr-toolbar">
+                {section !== "meetings" && <div className="pr-toolbar">
                   <input
                     aria-label={`${label} 검색`}
                     placeholder="제목 검색"
@@ -1003,37 +1075,12 @@ export default function ProjectResources({
                       </>
                     )}
                   </select>
-                </div>
+                </div>}
                 {section === "meetings" ? (
-                  <div className="pr-meeting-list">
-                    {meetings
-                      .filter(
-                        (m) =>
-                          m.title.toLowerCase().includes(query.toLowerCase()) &&
-                          (!filter || m.status === filter),
-                      )
-                      .map((m) => (
-                        <article className="pr-card" key={m.id}>
-                          <span>
-                            {m.decisionStatus === "final"
-                              ? "최종안"
-                              : "작성 중"}{" "}
-                            · 요청 {m.requests.length}개
-                          </span>
-                          <h2>
-                            <button onClick={() => edit(m)}>{m.title}</button>
-                          </h2>
-                          <time>
-                            {new Date(m.scheduledAt).toLocaleString("ko-KR")}
-                          </time>
-                          <p>
-                            {m.durationMinutes}분 · {m.location || "장소 미정"}
-                          </p>
-                          <div className="pr-notes">{m.notes}</div>
-                          <div className="pr-meeting-actions"><button onClick={() => edit(m)}>회의 열기 · 수정</button><button className="pr-primary" onClick={() => edit(m, true)}>회의 모드</button></div>
-                        </article>
-                      ))}
-                  </div>
+                  <MeetingList key={projectId} meetings={meetings} busy={busy} canUpdate={canUpdate}
+                    pendingIds={approvalItems.filter(a=>a.status==="pending"&&a.meetingId).map(a=>a.meetingId!)}
+                    onOpen={(id,present)=>{const meeting=meetings.find(m=>m.id===id);if(meeting)edit(meeting,present);}}
+                    onAssign={focusAssignment} onDelete={id=>void deleteListedMeeting(id)} onStart={id=>void startListedMeeting(id)} onReschedule={rescheduleMeeting} />
                 ) : (
                   <div className="pr-documents">
                     {documents

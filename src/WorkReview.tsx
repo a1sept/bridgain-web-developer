@@ -50,7 +50,7 @@ export default function WorkReview({
     return () => {
       active = false;
     };
-  }, [path, status]);
+  }, [path, status, workRevision]);
   async function action(action: string) {
     setBusy(true);
     setError("");
@@ -78,6 +78,11 @@ export default function WorkReview({
         작업 완료는 자동 승인이 아닙니다. 재작업 요청 시 전원 완료와 승인이
         초기화됩니다.
       </p>
+      {["todo", "in_progress"].includes(status) && data.events.some((event) => event.action === "predecessor_changed") && (
+        <p className="sw-help" role="status">
+          선행 업무 변경 이력이 있습니다. 아래 작업 이력과 선행 업무 내용을 확인하고 진행해주세요.
+        </p>
+      )}
       <ul>
         {(data.assignees || assignees).map((a) => (
           <li key={a.userId}>
