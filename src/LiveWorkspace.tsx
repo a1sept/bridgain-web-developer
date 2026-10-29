@@ -1,6 +1,6 @@
 import ProjectChannel from "./ProjectChannel";
 import ProjectMembers from "./ProjectMembers";
-import Approvals, { workflowApi, type Approval } from "./Approvals";
+import Approvals, { workflowApi } from "./Approvals";
 import type { RepositoryRelation } from "./RepositoryFields";
 import ProjectSettings from "./ProjectSettings";
 import ProjectTasks from "./ProjectTasks";
@@ -493,20 +493,17 @@ export default function LiveWorkspace({
     }
   }
   const project = data?.projects.find((p) => p.id === projectId);
-  const [approvalItems, setApprovalItems] = useState<Approval[]>([]);
   const [approvalPending, setApprovalPending] = useState(0);
   const [eligibleApproval, setEligibleApproval] = useState(false);
   useEffect(() => {
     let live = true;
     const load = () =>
       workflowApi<{
-        approvals: Approval[];
         pendingCount: number;
         canApproveTasks: boolean;
       }>("/approvals")
         .then((d) => {
           if (live) {
-            setApprovalItems(d.approvals);
             setApprovalPending(d.pendingCount);
             setEligibleApproval(d.canApproveTasks);
           }
@@ -748,44 +745,6 @@ export default function LiveWorkspace({
                     void reload();
                   }}
                 />
-              )}
-              {view === "dashboard" &&
-                approvalItems.some(
-                  (a) =>
-                    a.requestedBy === user.id &&
-                    ["approved", "rejected"].includes(a.status),
-                ) && (
-                  <section className="pw-panel">
-                    <h2>내 승인 요청 결과</h2>
-                    {approvalItems
-                      .filter(
-                        (a) =>
-                          a.requestedBy === user.id &&
-                          ["approved", "rejected"].includes(a.status),
-                      )
-                      .slice(0, 5)
-                      .map((a) => (
-                        <p key={a.id}>
-                          <button
-                            onClick={() =>
-                              openProject(a.projectId, "approvals")
-                            }
-                          >
-                            {a.projectName} · {a.title} ·{" "}
-                            {a.status === "approved" ? "승인 완료" : "반려"}
-                          </button>
-                        </p>
-                      ))}
-                  </section>
-                )}
-              {view === "dashboard" && showApprovals && (
-                <section className="pw-panel">
-                  <h2>내 승인 대기</h2>
-                  <p>{approvalPending}건</p>
-                  <button onClick={() => navigate("approvals")}>
-                    승인함 보기 →
-                  </button>
-                </section>
               )}
               {view === "dashboard" && (
                 <DeveloperDashboard
