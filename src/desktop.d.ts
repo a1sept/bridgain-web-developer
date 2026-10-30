@@ -32,6 +32,7 @@ export type DesktopEvent = {
   name?: string;
 };
 export type DesktopBridge = {
+  connectGithub?: () => Promise<void>;
   cloneProject?: (pid: string, repositoryUrl: string) => Promise<RepositoryState | null>;
   repositoryState?: (pid: string) => Promise<RepositoryState | null>;
   taskGit?: (pid: string, id: string, action?: string, options?: Record<string, unknown>) => Promise<any>;

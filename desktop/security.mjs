@@ -18,6 +18,15 @@ export function serverOrigin(value) {
     throw Error("HTTPS 또는 로컬 서버 주소를 사용해주세요.");
   return url.origin;
 }
+export function githubBrowserUrl(value) {
+  const url = new URL(value);
+  if (!["https:", "http:"].includes(url.protocol) || url.username || url.password ||
+      url.pathname !== "/" || url.search ||
+      !/^#github-connect=[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i.test(url.hash))
+    throw Error("GitHub 연결 페이지 주소를 확인해주세요.");
+  // The authenticated server supplies its configured public frontend, including development HTTP.
+  return url.href;
+}
 export function providerName(value) {
   if (!["codex", "claude"].includes(value))
     throw Error("지원하지 않는 AI입니다.");

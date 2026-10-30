@@ -3,7 +3,7 @@ import { join } from "node:path";
 import { pathToFileURL } from "node:url";
 import { readFile, writeFile, mkdir } from "node:fs/promises";
 import { DesktopRuntime } from "./runtime.mjs";
-import { serverOrigin, providerName, authUrl } from "./security.mjs";
+import { serverOrigin, providerName, authUrl, githubBrowserUrl } from "./security.mjs";
 // Complete ESM evaluation before waiting for Electron to emit ready.
 async function main() {
   if (!app.requestSingleInstanceLock()) {
@@ -148,6 +148,10 @@ async function main() {
   });
   await runtime.load();
   handle("connect-server", connectServer, true);
+  handle("connect-github", async () => {
+    const result = await api("/api/workspace/github/desktop-connect", {});
+    await shell.openExternal(githubBrowserUrl(result.url));
+  });
   handle("task-workspace", (pid, id, action, options) => runtime.taskWorkspace(pid, id, action, options));
   handle("task-git", (pid, id, action, options) => runtime.taskGit(pid, id, action, options));
   handle("clone-project", (pid, url) => runtime.cloneProject(pid, url));
