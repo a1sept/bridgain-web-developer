@@ -58,6 +58,8 @@
 .repo-fields .repo-url-entry label{margin:0;display:grid;gap:6px;font-size:12px;font-weight:600}
 .repo-fields .repo-url-entry input{box-sizing:border-box;width:100%;min-width:0;border:1px solid #dce4ef;border-radius:7px;padding:7px 10px;font:inherit;font-size:12px;line-height:18px;background:#fff;color:#27354b}
 .repo-personal-picker{border-top:1px solid #e5eaf2;margin-top:14px;padding-top:12px}
-.repo-personal-picker>summary{cursor:pointer;font-size:12px;font-weight:600;color:#46566f}
-.repo-personal-picker>summary small{font-size:11px;font-weight:400;color:#65748b;margin-left:6px}
+.repo-personal-picker>h4{margin:0;font-size:12px;font-weight:600;color:#46566f}
+.repo-personal-picker>h4 small{font-size:11px;font-weight:400;color:#65748b;margin-left:6px}
 @media(max-width:480px){.repo-url-entry{align-items:stretch;flex-direction:column}.repo-url-entry>button{align-self:flex-start}}
+
+.repo-card-submodules{flex-basis:100%;min-width:0;border-top:1px solid #edf0f5;padding-top:8px}

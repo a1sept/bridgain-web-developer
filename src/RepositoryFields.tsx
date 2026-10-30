@@ -87,7 +87,6 @@ export default function RepositoryFields({
   connectionOnly?: boolean;
 }) {
   const [status, setStatus] = useState<Status | null>(null);
-  const [optionalOpen, setOptionalOpen] = useState(false);
   const [urlInput, setUrlInput] = useState("");
   const [urlError, setUrlError] = useState("");
   function addUrl() {
@@ -117,7 +116,7 @@ export default function RepositoryFields({
     Record<string, { data?: Discovery; error?: string }>
   >({});
   useEffect(() => {
-    if (!onRelationsChange || disabled || !optionalOpen || !status?.connected)
+    if (!onRelationsChange || disabled || !status?.connected)
       return;
     let active = true;
     for (const url of value) {
@@ -142,7 +141,6 @@ export default function RepositoryFields({
     value.join("|"),
     !!onRelationsChange,
     disabled,
-    optionalOpen,
     status?.connected,
   ]);
   function changeUrls(next: string[]) {
@@ -201,7 +199,7 @@ export default function RepositoryFields({
     setConnecting(false);
   }
   async function refresh() {
-    if (disabled || (!connectionOnly && !optionalOpen)) return;
+    if (disabled) return;
     setBusy(true);
     setError("");
     try {
@@ -235,7 +233,7 @@ export default function RepositoryFields({
       channel?.close();
       window.removeEventListener("focus", onFocus);
     };
-  }, [disabled, connectionOnly, optionalOpen]);
+  }, [disabled, connectionOnly]);
   useEffect(
     () => () => {
       const flow = activeFlow.current;
@@ -341,6 +339,89 @@ export default function RepositoryFields({
         label: url.replace("https://github.com/", ""),
       });
   }
+  function renderSubmodules(url: string) {
+    if (!onRelationsChange || disabled || !status?.connected) return null;
+              const state = discoveries[url];
+              const data = state?.data;
+              return (
+                <section
+                  className="repo-card-submodules"
+                  key={url}
+                  aria-label={`${url} 서브모듈`}
+                >
+                  <div className="repo-submodule-heading">
+                    <small>
+                      {data
+                        ? `서브모듈 ${data.submodules.length}개`
+                        : state?.error
+                          ? "조회 실패"
+                          : "서브모듈 확인 중…"}
+                    </small>
+                  </div>
+                  {state?.error && (
+                    <p role="alert">
+                      {state.error}
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setDiscoveries((current) => {
+                            const next = { ...current };
+                            delete next[url];
+                            return next;
+                          });
+                          void github(
+                            `submodules?repositoryUrl=${encodeURIComponent(url)}`,
+                          )
+                            .then((data) =>
+                              setDiscoveries((current) => ({
+                                ...current,
+                                [url]: { data },
+                              })),
+                            )
+                            .catch((e) =>
+                              setDiscoveries((current) => ({
+                                ...current,
+                                [url]: { error: e.message },
+                              })),
+                            );
+                        }}
+                      >
+                        다시 조회
+                      </button>
+                    </p>
+                  )}
+                  {data?.submodules.map((child) => (
+                    <div className="repo-submodule-item" key={child.path}>
+                      <span>
+                        {child.childUrl?.replace("https://github.com/", "") ??
+                          child.rawUrl}
+                        <small>
+                          {child.path} · {child.commit.slice(0, 7)}
+                        </small>
+                      </span>
+                      <small>
+                        {!child.available
+                          ? child.reason
+                          : relations.some(
+                                (r) =>
+                                  r.parentUrl === child.parentUrl &&
+                                  r.path === child.path &&
+                                  r.childUrl === child.childUrl &&
+                                  r.commit === child.commit,
+                              )
+                            ? "연결됨"
+                            : "연결 가능"}
+                      </small>
+                    </div>
+                  ))}
+                  {!!data?.submodules.some((child) => child.available) && (
+                    <button type="button" onClick={() => includeChildren(data)}>
+                      하위 저장소 함께 연결
+                    </button>
+                  )}
+                </section>
+              );
+  }
   if (connectionOnly)
     return (
       <section className="repo-fields repo-personal-connection">
@@ -433,14 +514,10 @@ export default function RepositoryFields({
         </p>
       )}
       {!disabled && (
-        <details
-          className="repo-personal-picker"
-          open={optionalOpen}
-          onToggle={(event) => setOptionalOpen(event.currentTarget.open)}
-        >
-          <summary>
+        <section className="repo-personal-picker">
+          <h4>
             내 GitHub에서 찾아 추가 <small>선택 사항</small>
-          </summary>
+          </h4>
           {!status && !error && <p role="status">개인 GitHub 연결 확인 중…</p>}
           {status && !status.configured && <p>GitHub 연결 준비 중</p>}
           {status?.configured && !status.connected && (
@@ -560,92 +637,6 @@ export default function RepositoryFields({
               </div>
             </>
           )}
-          {onRelationsChange &&
-            status?.connected &&
-            optionalOpen &&
-            value.map((url) => {
-              const state = discoveries[url];
-              const data = state?.data;
-              return (
-                <section
-                  className="repo-submodules"
-                  key={url}
-                  aria-label={`${url} 서브모듈`}
-                >
-                  <div className="repo-submodule-heading">
-                    <strong>{url.replace("https://github.com/", "")}</strong>
-                    <small>
-                      {data
-                        ? `서브모듈 ${data.submodules.length}개`
-                        : state?.error
-                          ? "조회 실패"
-                          : "서브모듈 확인 중…"}
-                    </small>
-                  </div>
-                  {state?.error && (
-                    <p role="alert">
-                      {state.error}
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setDiscoveries((current) => {
-                            const next = { ...current };
-                            delete next[url];
-                            return next;
-                          });
-                          void github(
-                            `submodules?repositoryUrl=${encodeURIComponent(url)}`,
-                          )
-                            .then((data) =>
-                              setDiscoveries((current) => ({
-                                ...current,
-                                [url]: { data },
-                              })),
-                            )
-                            .catch((e) =>
-                              setDiscoveries((current) => ({
-                                ...current,
-                                [url]: { error: e.message },
-                              })),
-                            );
-                        }}
-                      >
-                        다시 조회
-                      </button>
-                    </p>
-                  )}
-                  {data?.submodules.map((child) => (
-                    <div className="repo-submodule-item" key={child.path}>
-                      <span>
-                        {child.childUrl?.replace("https://github.com/", "") ??
-                          child.rawUrl}
-                        <small>
-                          {child.path} · {child.commit.slice(0, 7)}
-                        </small>
-                      </span>
-                      <small>
-                        {!child.available
-                          ? child.reason
-                          : relations.some(
-                                (r) =>
-                                  r.parentUrl === child.parentUrl &&
-                                  r.path === child.path &&
-                                  r.childUrl === child.childUrl &&
-                                  r.commit === child.commit,
-                              )
-                            ? "연결됨"
-                            : "연결 가능"}
-                      </small>
-                    </div>
-                  ))}
-                  {!!data?.submodules.some((child) => child.available) && (
-                    <button type="button" onClick={() => includeChildren(data)}>
-                      하위 저장소 함께 연결
-                    </button>
-                  )}
-                </section>
-              );
-            })}
           {error && (
             <p role="alert">
               {error}{" "}
@@ -658,14 +649,15 @@ export default function RepositoryFields({
               </button>
             </p>
           )}
-        </details>
+        </section>
       )}
       <div className="repo-selected-summary" aria-label="선택된 프로젝트 저장소">
         {value.map(url => <div key={url}>
           <RepositoryCard url={url} repository={repositories.find(item => item.url === url)} />
           <span className="repo-selected-status"><ControlIcon name="check" size={14} />선택됨</span>
-          {!!relations.filter(item => item.parentUrl === url).length && <span>등록된 서브모듈 {relations.filter(item => item.parentUrl === url).length}개</span>}
+          {(!onRelationsChange || disabled || !status?.connected) && <span>등록된 서브모듈 {relations.filter(item => item.parentUrl === url).length}개</span>}
           {!disabled && <button type="button" aria-label={`${url} 목록에서 제거`} onClick={() => changeUrls(value.filter(item => item !== url))}>제거</button>}
+          {renderSubmodules(url)}
         </div>)}
         {!value.length && <p>등록된 저장소가 없습니다.</p>}
       </div>

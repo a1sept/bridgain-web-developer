@@ -31,7 +31,8 @@ function FilterChip({ filter, open, onOpen, onClose }: {
   filter: FilterDefinition; open: boolean; onOpen: () => void; onClose: () => void;
 }) {
   const id = useId();
-  const anchor = useRef<HTMLButtonElement>(null);
+  const anchor = useRef<HTMLButtonElement | HTMLInputElement>(null);
+  const restoringFocus = useRef(false);
   const panel = useRef<HTMLDivElement>(null);
   const [query, setQuery] = useState("");
   const [position, setPosition] = useState({ left: 0, top: 0, width: 300, maxHeight: 400 });
@@ -40,9 +41,9 @@ function FilterChip({ filter, open, onOpen, onClose }: {
   function toggle(value: string) {
     const current = filter.values;
     filter.onChange(current.includes(value) ? current.filter(v => v !== value) : filter.multiple ? [...current, value] : [value]);
-    if (filter.closeOnSelect) close();
+    if (filter.closeOnSelect) { setQuery(""); close(); }
   }
-  function close(restoreFocus = true) { onClose(); if (restoreFocus) anchor.current?.focus(); }
+  function close(restoreFocus = true) { onClose(); if (restoreFocus) { restoringFocus.current = true; anchor.current?.focus(); restoringFocus.current = false; } }
   useLayoutEffect(() => {
     if (!open) return;
     const place = () => {
@@ -75,19 +76,29 @@ function FilterChip({ filter, open, onOpen, onClose }: {
   }, [open, onClose]);
   return <div className={`bg-filter-group${filter.trigger === "search" ? " bg-filter-group-search" : ""}`}><div className={`bg-filter-chip${selected.length ? " is-applied" : ""}`}>
     {selected.length > 0 && filter.trigger !== "search" && <button type="button" className="bg-filter-remove" aria-label={`${filter.label} 필터 해제`} onClick={() => { filter.onChange([]); onClose(); anchor.current?.focus(); }}><ControlIcon name="close" size={12} /></button>}
-    <button ref={anchor} type="button" className="bg-filter-trigger" aria-haspopup="dialog" aria-expanded={open} aria-controls={open ? id : undefined}
+    {filter.trigger === "search" ? <input ref={node => { anchor.current = node; }}
+      className="bg-filter-search-trigger" type="search" role="combobox" aria-label={filter.label}
+      aria-autocomplete="list" aria-haspopup="dialog" aria-expanded={open} aria-controls={open ? id : undefined}
+      placeholder={filter.label} value={query}
+      onFocus={() => { if (!restoringFocus.current) onOpen(); }} onClick={onOpen}
+      onChange={event => { setQuery(event.target.value); onOpen(); }}
+      onKeyDown={event => {
+        if (event.key === "Escape") { event.preventDefault(); event.stopPropagation(); close(); }
+        if (event.key === "ArrowDown") { event.preventDefault(); if (!open) onOpen(); else panel.current?.querySelector<HTMLButtonElement>(".bg-filter-option")?.focus(); }
+        if (event.key === "Enter") event.preventDefault();
+      }} /> : <button ref={node => { anchor.current = node; }} type="button" className="bg-filter-trigger" aria-haspopup="dialog" aria-expanded={open} aria-controls={open ? id : undefined}
       onClick={() => { if (open) close(); else { setQuery(""); onOpen(); } }}>
-      {!selected.length && filter.trigger !== "search" && <span className="bg-filter-plus" aria-hidden="true"><ControlIcon name="plus" /></span>}
+      {!selected.length && <span className="bg-filter-plus" aria-hidden="true"><ControlIcon name="plus" /></span>}
       <span>{filter.label}</span>
       {!!selected.length && <><span className="bg-filter-divider" aria-hidden="true" /><strong>{selected.length}개 선택</strong></>}
       <span className="bg-filter-chevron" aria-hidden="true"><ControlIcon name="chevron" /></span>
-    </button>
+    </button>}
     </div>
     {!filter.hideSelectedTags && selected.map(option => <span className="bg-filter-tag" key={option.value}><span>{option.label}</span><button type="button" aria-label={`${option.label} 선택 해제`} onClick={() => { filter.onChange(filter.values.filter(value => value !== option.value)); onClose(); anchor.current?.focus(); }}><ControlIcon name="close" size={12} /></button></span>)}
     {open && createPortal(<div ref={panel} id={id} role="dialog" aria-label={`${filter.label} 필터`} className="bg-filter-popover" style={position}
       onKeyDown={e => { if (e.key === "Escape") { e.stopPropagation(); e.preventDefault(); close(); } }}>
-      <h3>{filter.label} 필터</h3>
-      <input className="bg-filter-search" type="search" aria-label={filter.trigger === "search" ? filter.label : `${filter.label} 검색`} placeholder={filter.trigger === "search" ? `${filter.label}…` : `${filter.label} 검색…`} value={query} onChange={e => setQuery(e.target.value)} />
+      {filter.trigger !== "search" && <><h3>{filter.label} 필터</h3>
+      <input className="bg-filter-search" type="search" aria-label={`${filter.label} 검색`} placeholder={`${filter.label} 검색…`} value={query} onChange={e => setQuery(e.target.value)} /></>}
       {selected.length > 0 && !filter.hideSelectedTags && <div className="bg-filter-selected-tags" aria-label="선택한 항목">
         {selected.map(option => <span className="bg-filter-tag" key={option.value}><span>{option.label}</span><button type="button" aria-label={`${option.label} 선택 해제`} onClick={() => { toggle(option.value); panel.current?.querySelector<HTMLInputElement>("input")?.focus(); }}><ControlIcon name="close" size={12} /></button></span>)}
       </div>}

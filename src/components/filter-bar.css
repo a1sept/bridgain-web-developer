@@ -84,3 +84,10 @@
 .bg-filter-bar .bg-filter-group-search .bg-filter-chip { width: 100%; border-style: solid; border-radius: 7px; }
 .bg-filter-bar .bg-filter-group-search .bg-filter-trigger { width: 100%; padding: 7px 12px; border-radius: 7px; text-align: left; }
 .bg-filter-group-search .bg-filter-chevron { margin-left: auto; }
+
+.bg-filter-bar .bg-filter-search-trigger {
+  box-sizing: border-box; width: 100%; min-width: 0; min-height: 34px; margin: 0;
+  border: 0; border-radius: 7px; padding: 7px 12px; background: transparent;
+  color: #344158; font: inherit; font-size: 12px; line-height: 18px; outline: none;
+}
+.bg-filter-search-trigger::placeholder { color: #8390a5; }
