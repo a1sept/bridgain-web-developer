@@ -157,6 +157,7 @@ export default function DeveloperShell(p: Props) {
         </button>
         <nav aria-label="개발자 전역 메뉴">
           {(Object.keys(labels) as DeveloperView[])
+            .filter((v) => v !== "teams")
             .filter((v) => v !== "approvals" || p.showApprovals)
             .map((v) => (
               <button
