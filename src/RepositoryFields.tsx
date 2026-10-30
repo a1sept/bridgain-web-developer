@@ -1,5 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import "./repository-fields.css";
+import FilterBar from "./components/FilterBar";
+import ControlIcon from "./components/ControlIcon";
 
 export type RepositoryRelation = {
   parentUrl: string;
@@ -134,8 +136,6 @@ export default function RepositoryFields({
   const [repositories, setRepositories] = useState<Repository[]>([]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
-  const [query, setQuery] = useState("");
-  const [account, setAccount] = useState("");
   const [connecting, setConnecting] = useState(false);
   const activeFlow = useRef<{
     popup: Window | null;
@@ -272,28 +272,29 @@ export default function RepositoryFields({
       setError(e instanceof Error ? e.message : "연결하지 못했어요.");
     }
   }
-  const owners = [
-    ...new Map(
-      repositories.map((r) => {
-        const owner = r.owner ?? {
-          login: r.fullName.split("/")[0],
-          avatarUrl: "",
-          type: "User",
-        };
-        return [owner.login, owner] as const;
-      }),
-    ).values(),
-  ];
-  const activeAccount = owners.some((owner) => owner.login === account)
-    ? account
-    : "";
-  const filtered = repositories.filter(
-    (r) =>
-      (!activeAccount ||
-        (r.owner?.login ?? r.fullName.split("/")[0]) === activeAccount) &&
-      r.fullName.toLowerCase().includes(query.trim().toLowerCase()),
-  );
-  if (connectionOnly) return <section className="repo-fields"><h3>내 GitHub 계정</h3><p>{status?.connected ? "GitHub 연결됨" : "PR 제출·검토를 위해 내 GitHub 계정을 연결해주세요."}</p><button type="button" disabled={busy || connecting || !status?.configured} onClick={() => void connect()}>{connecting ? "GitHub 승인 대기…" : status?.connected ? "GitHub 다시 인증" : "GitHub 연결"}</button>{connecting && <><p role="status">{window.bridgainDesktop ? "기본 브라우저에서 GitHub 인증을 완료한 뒤 앱에서 연결할 계정을 확인해주세요." : "GitHub 창에서 로그인을 완료하고 접근을 승인해주세요."}</p><button type="button" onClick={stopConnection}>취소</button></>}{error && <p role="alert">{error}</p>}</section>;
+  const repositoryOptions = repositories.map(repo => ({
+    value: repo.url,
+    label: `${repo.fullName} · ${repo.private ? "비공개" : "공개"} · ${repo.defaultBranch}`,
+  }));
+  for (const url of value) {
+    if (!repositoryOptions.some(option => option.value === url))
+      repositoryOptions.push({ value: url, label: url.replace("https://github.com/", "") });
+  }
+  if (connectionOnly) return <section className="repo-fields repo-personal-connection">
+    <div className="repo-personal-header">
+      <h3>내 GitHub 계정</h3>
+      <span className={`repo-connection-badge${status?.connected ? " is-connected" : ""}`}>
+        <ControlIcon name={status?.connected ? "check" : "plus"} size={14} />
+        {status?.connected ? "연결됨" : "연결 필요"}
+      </span>
+      <button type="button" disabled={busy || connecting || !status?.configured} onClick={() => void connect()}>
+        {connecting ? "GitHub 승인 대기…" : status?.connected ? "다시 인증" : "GitHub 연결"}
+      </button>
+    </div>
+    <p>{status?.connected ? "PR 제출·검토에 사용할 GitHub 인증이 연결됐어요." : "PR 제출·검토를 위해 내 GitHub 계정을 연결해주세요."}</p>
+    {connecting && <><p role="status">{window.bridgainDesktop ? "기본 브라우저에서 GitHub 인증을 완료한 뒤 앱에서 연결할 계정을 확인해주세요." : "GitHub 창에서 로그인을 완료하고 접근을 승인해주세요."}</p><button type="button" onClick={stopConnection}>취소</button></>}
+    {error && <p role="alert">{error}</p>}
+  </section>;
   return (
     <fieldset className="repo-fields" disabled={disabled}>
       <legend>
@@ -326,8 +327,8 @@ export default function RepositoryFields({
       {status?.connected && (
         <>
           <div className="repo-toolbar">
-            <span className="repo-connected">● 연결됨</span>
-            <div className="repo-actions">
+            <span className="repo-connection-badge is-connected"><ControlIcon name="check" size={14} />GitHub 연결됨</span>
+            {!disabled && <div className="repo-actions">
               <button
                 type="button"
                 disabled={busy}
@@ -355,136 +356,59 @@ export default function RepositoryFields({
                   </button>
                 </div>
               </details>
-            </div>
+            </div>}
           </div>
-          {owners.length > 0 && (
-            <div className="repo-account">
-              {owners.find((owner) => owner.login === activeAccount)
-                ?.avatarUrl && (
-                <img
-                  src={
-                    owners.find((owner) => owner.login === activeAccount)!
-                      .avatarUrl
-                  }
-                  alt=""
-                  referrerPolicy="no-referrer"
-                />
-              )}
-              <select
-                aria-label="GitHub 계정 또는 조직"
-                value={activeAccount}
-                onChange={(e) => setAccount(e.target.value)}
-              >
-                <option value="">모든 GitHub 계정</option>
-                {owners.map((owner) => (
-                  <option key={owner.login} value={owner.login}>
-                    {owner.login}
-                    {owner.type === "Organization" ? " · 조직" : ""}
-                  </option>
-                ))}
-              </select>
-            </div>
-          )}
-          <input
-            className="repo-search"
-            type="search"
-            aria-label="GitHub 저장소 검색"
-            placeholder="저장소 검색"
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-          />
-          <div
-            className="repo-picker"
-            aria-label="GitHub 저장소 목록"
-            aria-busy={busy}
-          >
-            {filtered.map((repo) => (
-              <div
-                key={repo.id}
-                className={`repo-card${value.includes(repo.url) ? " is-selected" : ""}`}
-              >
-                {repo.owner?.avatarUrl ? (
-                  <img
-                    className="repo-avatar"
-                    src={repo.owner.avatarUrl}
-                    alt=""
-                    loading="lazy"
-                    referrerPolicy="no-referrer"
-                  />
-                ) : (
-                  <span
-                    className="repo-avatar repo-avatar-fallback"
-                    aria-hidden="true"
-                  >
-                    {repo.fullName[0].toUpperCase()}
-                  </span>
-                )}
-                <span className="repo-name">
-                  <span className="repo-title">
-                    <strong>
-                      {repo.fullName.split("/").slice(1).join("/")}
-                    </strong>
-                    <span className="repo-visibility">
-                      {repo.private ? "Private" : "Public"}
+          {!disabled && !busy && <FilterBar
+            label="프로젝트 GitHub 저장소 선택"
+            filters={[{ id: "repository", label: "저장소 선택", multiple: true,
+              options: repositoryOptions, values: value,
+              renderOption: option => {
+                const repo = repositories.find(item => item.url === option.value);
+                if (!repo) return option.label;
+                const owner = repo.owner?.login ?? repo.fullName.split("/")[0];
+                return <span className="repo-option-card">
+                  {repo.owner?.avatarUrl
+                    ? <img className="repo-avatar" src={repo.owner.avatarUrl} alt="" />
+                    : <span className="repo-avatar repo-avatar-fallback" aria-hidden="true">{owner.slice(0, 1).toUpperCase()}</span>}
+                  <span className="repo-name">
+                    <span className="repo-title"><strong>{repo.fullName.split("/").slice(1).join("/") || repo.fullName}</strong>
+                      <span className="repo-visibility">{repo.private ? "Private" : "Public"}</span>
                     </span>
+                    <small>{owner} · {repo.defaultBranch}</small>
                   </span>
-                  <small>
-                    {repo.owner?.login ?? repo.fullName.split("/")[0]} ·{" "}
-                    {repo.defaultBranch}
-                  </small>
-                </span>
-                <button
-                  className="repo-select"
-                  type="button"
-                  aria-label={`${repo.fullName} ${value.includes(repo.url) ? "연결 해제" : "연결"}`}
-                  aria-pressed={value.includes(repo.url)}
-                  disabled={
-                    busy || (!value.includes(repo.url) && value.length >= 20)
-                  }
-                  onClick={() =>
-                    changeUrls(
-                      value.includes(repo.url)
-                        ? value.filter((url) => url !== repo.url)
-                        : [...value, repo.url],
-                    )
-                  }
-                >
-                  {value.includes(repo.url) ? "✓ 선택됨" : "연결"}
-                </button>
-              </div>
-            ))}
-            {!connecting && !busy && !error && !repositories.length && (
-              <div className="repo-empty">
-                <strong>연결할 저장소를 선택해주세요</strong>
-                <span>GitHub에서 저장소 접근을 허용해주세요.</span>
-                <button
-                  className="repo-install"
-                  type="button"
-                  disabled={connecting}
-                  onClick={() => void connect()}
-                >
-                  GitHub 연결
-                </button>
-              </div>
-            )}
-            {!busy && !error && repositories.length > 0 && !filtered.length && (
-              <div className="repo-empty">검색 결과가 없어요.</div>
-            )}
-            {busy && !repositories.length && (
-              <div className="repo-empty" role="status">
-                저장소를 불러오는 중…
-              </div>
-            )}
-          </div>
+                </span>;
+              },
+              onChange: next => {
+                if (next.length > 20) { setError("저장소는 최대 20개까지 연결할 수 있어요."); return; }
+                setError(""); changeUrls(next);
+              },
+            }]}
+            onClear={() => changeUrls([])}
+          />}
+          {busy && <p role="status">저장소를 불러오는 중…</p>}
+          {disabled && <div className="repo-selected-summary" aria-label="프로젝트에 등록된 저장소">
+            {value.map(url => {
+              const repo = repositories.find(item => item.url === url);
+              return <div key={url}><ControlIcon name="check" size={14} /><strong>{repo?.fullName ?? url.replace("https://github.com/", "")}</strong>
+                {repo && <span>{repo.private ? "비공개" : "공개"} · {repo.defaultBranch}</span>}
+              </div>;
+            })}
+            {!value.length && <p>등록된 저장소가 없습니다.</p>}
+          </div>}
+          {!disabled && !busy && !value.length && <p>‘저장소 선택’을 눌러 이름이나 계정으로 검색하세요.</p>}
+          {!connecting && !busy && !error && !repositories.length && <div className="repo-empty">
+            <strong>접근할 수 있는 저장소가 없어요</strong>
+            <span>GitHub 연결 설정에서 저장소 접근을 허용해주세요.</span>
+          </div>}
           <div className="repo-footer">
             <span>{value.length}/20개 선택</span>
-            <a
+            {!disabled && <a
               href={status.installUrl!}
               target="_blank"
               rel="noopener noreferrer"
             >
               저장소 추가 ↗
-            </a>
+            </a>}
           </div>
         </>
       )}

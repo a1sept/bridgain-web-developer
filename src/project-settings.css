@@ -1,1 +1,34 @@
-.project-settings-form{margin-bottom:24px}.project-settings-form fieldset{border:0;padding:0;min-width:0}.project-settings-form label{display:grid;gap:8px;margin:18px 0;font-size:13px;font-weight:600}.project-settings-form input,.project-settings-form textarea,.project-settings-form select{width:100%;box-sizing:border-box;border:1px solid #dce4ef;border-radius:8px;padding:11px 12px;background:#fff;color:#27354b;font:inherit}.project-settings-form input:focus-visible,.project-settings-form textarea:focus-visible,.project-settings-form select:focus-visible{outline:2px solid #8aafff}.project-settings-form :disabled{opacity:.65}
+.project-settings-form{margin-bottom:24px}.project-settings-form fieldset{border:0;padding:0;min-width:0}.project-settings-form label{display:grid;gap:8px;margin:18px 0;font-size:13px;font-weight:600}.project-settings-form input,.project-settings-form textarea,.project-settings-form select{width:100%;box-sizing:border-box;border:1px solid #dce4ef;border-radius:8px;padding:11px 12px;background:#fff;color:#27354b;font:inherit}.project-settings-form input:focus-visible,.project-settings-form textarea:focus-visible,.project-settings-form select:focus-visible{outline:2px solid #8aafff}.project-settings-form :is(input,textarea,select,button):disabled{opacity:.65}
+.project-local{min-width:0}
+.project-local-heading{display:flex;align-items:flex-start;justify-content:space-between;gap:16px;margin-bottom:16px}
+.project-local-heading h2{margin:0 0 6px}
+.project-local-heading p,.project-local-help{margin:0;color:#65748b;font-size:12px;line-height:1.6}
+.project-local-status{display:inline-flex;align-items:center;gap:6px;flex-shrink:0;padding:3px 9px;border-radius:20px;font-size:12px;font-weight:650;line-height:18px}
+.project-local-status.is-connected{background:#e7f5ed;color:#216746}
+.project-local-status.is-empty{background:#edf1f6;color:#65748b}
+.project-local-status.is-pending{background:#fff3d8;color:#855b13}
+.project-local-status-dot{width:6px;height:6px;border-radius:50%;background:currentColor}
+.project-local-account{margin-bottom:16px}
+.project-local .project-local-message{margin:0 0 12px;padding:10px 12px;border-radius:6px;font-size:12px;line-height:1.5}
+.project-local-card{border:1px solid #dce5ef;border-radius:8px;overflow:hidden;margin-bottom:16px}
+.project-local-folder{display:grid;gap:5px;padding:14px 16px;background:#f7f9fc;min-width:0}
+.project-local-label{color:#65748b;font-size:11px;font-weight:600}
+.project-local-folder strong{font-size:14px;line-height:1.5;color:#27354b;overflow-wrap:anywhere}
+.project-local-folder code{font:12px/1.6 ui-monospace,SFMono-Regular,Consolas,monospace;color:#526179;overflow-wrap:anywhere;white-space:normal;user-select:text}
+.project-local-facts{display:grid;gap:10px;margin:0;padding:14px 16px;border-top:1px solid #e3e9f2}
+.project-local-facts>div{display:grid;grid-template-columns:100px minmax(0,1fr);gap:12px;align-items:baseline}
+.project-local-facts dt{color:#65748b;font-size:12px;line-height:1.6}
+.project-local-facts dd{margin:0;font-size:12px;line-height:1.6;overflow-wrap:anywhere;color:#27354b}
+.project-local-branch{display:inline-block;padding:1px 7px;background:#edf1f6;border-radius:4px;font:11px/18px ui-monospace,SFMono-Regular,Consolas,monospace;overflow-wrap:anywhere;max-width:100%}
+.project-local-facts .project-local-ready{color:#216746;font-weight:600}
+.project-local-facts .project-local-warning{color:#855b13}
+.project-local-empty{padding:16px;border:1px dashed #ccd7e6;border-radius:8px;margin-bottom:16px;background:#fafbfd}
+.project-local-empty strong{font-size:13px;color:#38485f}
+.project-local-empty p{font-size:12px;color:#65748b;line-height:1.6;margin:5px 0 0}
+.project-local-connect{display:grid;gap:12px;margin-bottom:12px}
+.project-local-repository{display:grid;gap:6px;font-size:12px;font-weight:600;color:#46566f;max-width:480px}
+.project-local-repository select{box-sizing:border-box;width:100%;min-width:0;border:1px solid #dce4ef;border-radius:7px;padding:7px 10px;background:#fff;color:#27354b;font-family:inherit;font-size:12px;line-height:18px;font-weight:400;min-height:34px}
+.project-local-repository select:focus-visible{outline:2px solid #8aafff;outline-offset:2px}
+.project-local-actions{align-items:center;gap:8px}
+.project-local-actions .project-local-disconnect{margin-left:auto}
+@media(max-width:600px){.project-local-heading{gap:10px}.project-local-facts>div{grid-template-columns:1fr;gap:3px}.project-local-folder,.project-local-facts{padding:12px}.project-local-actions .project-local-disconnect{margin-left:0}.project-local-repository{max-width:none}}

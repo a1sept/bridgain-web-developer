@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import ControlIcon from "./ControlIcon";
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, useId } from "react";
 import { createPortal } from "react-dom";
@@ -7,6 +8,7 @@ export type FilterDefinition = {
   id: string;
   label: string;
   options: { value: string; label: string }[];
+  renderOption?: (option: { value: string; label: string }) => ReactNode;
   values: string[];
   multiple?: boolean;
   onChange: (values: string[]) => void;
@@ -87,7 +89,7 @@ function FilterChip({ filter, open, onOpen, onClose }: {
       </div>}
       <div className="bg-filter-options" role="group" aria-label={`${filter.label} 선택 목록`}>
         {visibleOptions.map(option => <button type="button" className="bg-filter-option" key={option.value} aria-pressed={filter.values.includes(option.value)} onClick={() => toggle(option.value)}>
-          <span>{option.label}</span><span className="bg-filter-selected-mark" aria-hidden="true">{filter.values.includes(option.value) && <ControlIcon name="check" />}</span>
+          <span>{filter.renderOption ? filter.renderOption(option) : option.label}</span><span className="bg-filter-selected-mark" aria-hidden="true">{filter.values.includes(option.value) && <ControlIcon name="check" />}</span>
         </button>)}
         {!visibleOptions.length && <p role="status">{query ? "검색 결과가 없어요." : "선택할 항목이 없어요."}</p>}
       </div>

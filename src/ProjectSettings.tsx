@@ -223,58 +223,54 @@ export default function ProjectSettings({
             </button>
           )}
         </form>
-        <section className="pw-panel">
-          <h2>내 로컬 작업 디렉토리</h2>
-          {!canManage && <RepositoryFields value={[]} onChange={() => {}} connectionOnly />}
-          <p>현재 프로젝트 · 내 계정 · 이 PC에만 적용됩니다.</p>
-          {error && (
-            <p className="pw-error" role="alert">
-              {error}
-            </p>
-          )}
-          {notice && (
-            <p className="lw-notice" role="status">
-              {notice}
-            </p>
-          )}
+        <section className="pw-panel project-local">
+          <header className="project-local-heading">
+            <div>
+              <h2>내 로컬 작업 디렉토리</h2>
+              <p>현재 프로젝트 · 내 계정 · 이 PC의 연결 정보</p>
+            </div>
+            {bridge && <span className={`project-local-status ${folder && localRepo ? "is-connected" : folder ? "is-pending" : "is-empty"}`}>
+              <span aria-hidden="true" className="project-local-status-dot" />
+              {folder && localRepo ? "연결됨" : folder ? error ? "연결 확인 필요" : "연결 확인 중" : "미연결"}
+            </span>}
+          </header>
+          {!canManage && <div className="project-local-account"><RepositoryFields value={[]} onChange={() => {}} connectionOnly /></div>}
+          {error && <p className="pw-error project-local-message" role="alert">{error}</p>}
+          {notice && <p className="lw-notice project-local-message" role="status">{notice}</p>}
           {bridge ? (
             <>
-              <p className="project-folder-path">
-                {folder || "연결된 디렉토리 없음"}
-              </p>
-              {localRepo && <p>{localRepo.repositoryUrl} · {localRepo.branch || "브랜치 없음"}<br />{localRepo.authorConfigured ? "Git 작성자 설정됨" : "Git user.name / user.email 설정 필요"}</p>}
-              <label>다운로드할 GitHub 저장소<select value={repository} onChange={e => setRepository(e.target.value)} disabled={busy}>
-                <option value="">저장소 선택</option>{project.repositoryUrls?.map(url => <option key={url} value={url}>{url.replace("https://github.com/", "")}</option>)}
-              </select></label>
-              <div className="lw-actions">
-                <button
-                  className="pw-primary"
-                  disabled={busy}
-                  onClick={() => void change()}
-                >
-                  {busy ? "처리 중…" : "기존 디렉토리 연결"}
-                </button>
-                <button className="pw-secondary" disabled={busy || !repository} onClick={() => void change(false, true)}>새 프로젝트에 연결</button>
-                {folder && (
-                  <button
-                    className="pw-secondary"
-                    disabled={busy}
-                    onClick={() => void change(true)}
-                  >
-                    연결 해제
+              {folder ? <div className="project-local-card" aria-label="연결된 로컬 저장소">
+                <div className="project-local-folder">
+                  <span className="project-local-label">작업 폴더</span>
+                  <strong>{folder.replace(/[\\/]+$/, "").split(/[\\/]/).at(-1) || folder}</strong>
+                  <code>{folder}</code>
+                </div>
+                <dl className="project-local-facts">
+                  <div><dt>GitHub 저장소</dt><dd>{localRepo?.repositoryUrl?.replace("https://github.com/", "") || "확인 중"}</dd></div>
+                  <div><dt>현재 브랜치</dt><dd><span className="project-local-branch">{localRepo ? localRepo.branch || "브랜치 없음" : "확인 중"}</span></dd></div>
+                  <div><dt>Git 작성자</dt><dd className={localRepo?.authorConfigured ? "project-local-ready" : "project-local-warning"}>{localRepo ? localRepo.authorConfigured ? "설정 완료" : "user.name / user.email 설정 필요" : "확인 중"}</dd></div>
+                </dl>
+              </div> : <div className="project-local-empty">
+                <strong>아직 연결된 작업 폴더가 없어요.</strong>
+                <p>이 PC의 Git 저장소를 연결하거나, 새 폴더에 저장소를 내려받으세요.</p>
+              </div>}
+              <div className="project-local-connect">
+                <label className="project-local-repository">다운로드할 GitHub 저장소
+                  <select value={repository} onChange={e => setRepository(e.target.value)} disabled={busy}>
+                    <option value="">저장소 선택</option>{project.repositoryUrls?.map(url => <option key={url} value={url}>{url.replace("https://github.com/", "")}</option>)}
+                  </select>
+                </label>
+                <div className="lw-actions project-local-actions">
+                  <button type="button" className={folder ? "pw-secondary" : "pw-primary"} disabled={busy} onClick={() => void change()}>
+                    {busy ? "처리 중…" : "기존 디렉토리 연결"}
                   </button>
-                )}
+                  <button type="button" className="pw-secondary" disabled={busy || !repository} onClick={() => void change(false, true)}>새 프로젝트에 연결</button>
+                  {folder && <button type="button" className="pw-secondary project-local-disconnect" disabled={busy} onClick={() => void change(true)}>연결 해제</button>}
+                </div>
               </div>
-              <p>
-                기존 디렉토리는 다운로드 없이 Git 저장소를 검사합니다. 새 프로젝트에 연결은 빈 디렉토리에 GitHub 저장소를 내려받습니다. PC의 GitHub 인증이 필요하며 연결 해제 시 파일은 삭제하지 않습니다.
-              </p>
+              <p className="project-local-help">기존 디렉토리는 Git 저장소를 확인해 연결합니다. 새 프로젝트는 빈 폴더에 다운로드하며, 이 PC의 GitHub 인증을 사용합니다. 연결을 해제해도 파일은 남습니다.</p>
             </>
-          ) : (
-            <p>
-              Bridgain 데스크톱 앱에서 이 프로젝트를 열고 작업 폴더를
-              연결해주세요.
-            </p>
-          )}
+          ) : <p className="project-local-help">Bridgain 데스크톱 앱에서 이 프로젝트를 열고 작업 폴더를 연결해주세요.</p>}
         </section>
       </div>
       <div
