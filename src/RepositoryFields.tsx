@@ -71,11 +71,24 @@ export default function RepositoryFields({
   onRelationsChange?: (value: RepositoryRelation[]) => void;
   connectionOnly?: boolean;
 }) {
+  const [status, setStatus] = useState<Status | null>(null);
+  const [optionalOpen, setOptionalOpen] = useState(false);
+  const [urlInput, setUrlInput] = useState("");
+  const [urlError, setUrlError] = useState("");
+  function addUrl() {
+    const match = /^https:\/\/github\.com\/([a-z0-9](?:[a-z0-9-]{0,38}))\/([a-z0-9_.-]{1,100})\/?$/i.exec(urlInput.trim());
+    const name = match?.[2].replace(/\.git$/i, "");
+    if (!match || !name || /^\.+$/.test(name)) { setUrlError("https://github.com/소유자/저장소 형식으로 입력해주세요."); return; }
+    const url = `https://github.com/${match[1]}/${name}`;
+    if (value.some(item => item.toLowerCase() === url.toLowerCase())) { setUrlError("이미 목록에 추가된 저장소입니다."); return; }
+    if (value.length >= 20) { setUrlError("저장소는 최대 20개까지 등록할 수 있어요."); return; }
+    changeUrls([...value, url]); setUrlInput(""); setUrlError("");
+  }
   const [discoveries, setDiscoveries] = useState<
     Record<string, { data?: Discovery; error?: string }>
   >({});
   useEffect(() => {
-    if (!onRelationsChange) return;
+    if (!onRelationsChange || disabled || !optionalOpen || !status?.connected) return;
     let active = true;
     for (const url of value) {
       if (discoveries[url]?.data || discoveries[url]?.error) continue;
@@ -95,7 +108,7 @@ export default function RepositoryFields({
     return () => {
       active = false;
     };
-  }, [value.join("|"), !!onRelationsChange]);
+  }, [value.join("|"), !!onRelationsChange, disabled, optionalOpen, status?.connected]);
   function changeUrls(next: string[]) {
     onChange(next);
     onRelationsChange?.(
@@ -132,7 +145,6 @@ export default function RepositoryFields({
     onRelationsChange?.([...edges.values()]);
     setError("");
   }
-  const [status, setStatus] = useState<Status | null>(null);
   const [repositories, setRepositories] = useState<Repository[]>([]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -151,6 +163,7 @@ export default function RepositoryFields({
     setConnecting(false);
   }
   async function refresh() {
+    if (disabled || (!connectionOnly && !optionalOpen)) return;
     setBusy(true);
     setError("");
     try {
@@ -181,14 +194,16 @@ export default function RepositoryFields({
     };
     window.addEventListener("focus", onFocus);
     return () => {
-      const flow = activeFlow.current;
-      activeFlow.current = null;
-      if (flow?.timer) clearTimeout(flow.timer);
-      flow?.popup?.close();
-      void flow?.cancel?.().catch(() => {});
       channel?.close();
       window.removeEventListener("focus", onFocus);
     };
+  }, [disabled, connectionOnly, optionalOpen]);
+  useEffect(() => () => {
+    const flow = activeFlow.current;
+    activeFlow.current = null;
+    if (flow?.timer) clearTimeout(flow.timer);
+    flow?.popup?.close();
+    void flow?.cancel?.().catch(() => {});
   }, []);
   async function connect() {
     if (activeFlow.current) {
@@ -285,26 +300,45 @@ export default function RepositoryFields({
       <h3>내 GitHub 계정</h3>
       <span className={`repo-connection-badge${status?.connected ? " is-connected" : ""}`}>
         <ControlIcon name={status?.connected ? "check" : "plus"} size={14} />
-        {status?.connected ? "연결됨" : "연결 필요"}
+        {status?.connected ? "연결됨" : "선택 사항"}
       </span>
       <button type="button" disabled={busy || connecting || !status?.configured} onClick={() => void connect()}>
         {connecting ? "GitHub 승인 대기…" : status?.connected ? "다시 인증" : "GitHub 연결"}
       </button>
     </div>
-    <p>{status?.connected ? "PR 제출·검토에 사용할 GitHub 인증이 연결됐어요." : "PR 제출·검토를 위해 내 GitHub 계정을 연결해주세요."}</p>
+    <p>{status?.connected ? "내 GitHub 저장소를 찾아 선택할 수 있어요." : "개인 GitHub 연결로 저장소를 찾아 선택할 수 있습니다. 프로젝트의 서버 연동 권한이 설정되어 있으면 개인 연결 없이 코드 조회·PR 검토를 진행할 수 있습니다."}</p>
     {connecting && <><p role="status">{window.bridgainDesktop ? "기본 브라우저에서 GitHub 인증을 완료한 뒤 앱에서 연결할 계정을 확인해주세요." : "GitHub 창에서 로그인을 완료하고 접근을 승인해주세요."}</p><button type="button" onClick={stopConnection}>취소</button></>}
     {error && <p role="alert">{error}</p>}
   </section>;
   return (
     <fieldset className="repo-fields" disabled={disabled}>
       <legend>
-        GitHub 저장소 <small>선택</small>
+        GitHub 저장소 <small>프로젝트 공용</small>
       </legend>
-      {!status && !error && <p role="status">불러오는 중…</p>}
+      <p>관리자가 등록하고 저장한 저장소는 프로젝트 참여자 모두에게 표시됩니다.</p>
+      <div className="repo-selected-summary" aria-label="프로젝트 저장소 목록">
+        {value.map(url => <div key={url}><ControlIcon name="check" size={14} />
+          <div className="repo-shared-identity"><strong>{url.replace("https://github.com/", "")}</strong><code>{url}</code>
+            {!!relations.filter(item => item.parentUrl === url).length && <span>등록된 서브모듈 {relations.filter(item => item.parentUrl === url).length}개</span>}
+          </div>
+          {!disabled && <button type="button" aria-label={`${url} 목록에서 제거`} onClick={() => changeUrls(value.filter(item => item !== url))}>제거</button>}
+        </div>)}
+        {!value.length && <p>등록된 저장소가 없습니다.</p>}
+      </div>
+      {!disabled && <div className="repo-url-entry">
+        <label>GitHub 저장소 URL<input aria-label="프로젝트 공용 GitHub 저장소 URL" type="url" value={urlInput} placeholder="https://github.com/소유자/저장소" onChange={event => { setUrlInput(event.target.value); setUrlError(""); }} onKeyDown={event => { if (event.key === "Enter") { event.preventDefault(); addUrl(); } }} /></label>
+        <button type="button" disabled={!urlInput.trim()} onClick={addUrl}>목록에 추가</button>
+      </div>}
+      {urlError && <p role="alert">{urlError}</p>}
+      <p>URL 등록은 GitHub 접근 권한을 부여하지 않습니다. 비공개 저장소의 코드 조회·PR 처리를 위해 저장소 소유자가 프로젝트의 서버 연동 접근을 허용해야 합니다.</p>
+      {!disabled && <p>목록을 변경한 뒤 프로젝트 설정을 저장해주세요. ({value.length}/20개)</p>}
+      {!disabled && <details className="repo-personal-picker" open={optionalOpen} onToggle={event => setOptionalOpen(event.currentTarget.open)}>
+        <summary>내 GitHub에서 찾아 추가 <small>선택 사항</small></summary>
+      {!status && !error && <p role="status">개인 GitHub 연결 확인 중…</p>}
       {status && !status.configured && <p>GitHub 연결 준비 중</p>}
       {status?.configured && !status.connected && (
         <div className="repo-connect">
-          <span>Public·Private 저장소를 연결하세요.</span>
+          <span>개인 계정을 연결하면 접근 가능한 저장소를 검색할 수 있어요.</span>
           <button
             type="button"
             disabled={busy || connecting}
@@ -386,15 +420,6 @@ export default function RepositoryFields({
             onClear={() => changeUrls([])}
           />}
           {busy && <p role="status">저장소를 불러오는 중…</p>}
-          {disabled && <div className="repo-selected-summary" aria-label="프로젝트에 등록된 저장소">
-            {value.map(url => {
-              const repo = repositories.find(item => item.url === url);
-              return <div key={url}><ControlIcon name="check" size={14} /><strong>{repo?.fullName ?? url.replace("https://github.com/", "")}</strong>
-                {repo && <span>{repo.private ? "비공개" : "공개"} · {repo.defaultBranch}</span>}
-              </div>;
-            })}
-            {!value.length && <p>등록된 저장소가 없습니다.</p>}
-          </div>}
           {!disabled && !busy && !value.length && <p>‘저장소 선택’을 눌러 이름이나 계정으로 검색하세요.</p>}
           {!connecting && !busy && !error && !repositories.length && <div className="repo-empty">
             <strong>접근할 수 있는 저장소가 없어요</strong>
@@ -412,7 +437,7 @@ export default function RepositoryFields({
           </div>
         </>
       )}
-      {onRelationsChange &&
+      {onRelationsChange && status?.connected && optionalOpen &&
         value.map((url) => {
           const state = discoveries[url];
           const data = state?.data;
@@ -504,19 +529,7 @@ export default function RepositoryFields({
           </button>
         </p>
       )}
-      {value
-        .filter((url) => !repositories.some((repo) => repo.url === url))
-        .map((url) => (
-          <div className="repo-field-row" key={url}>
-            <span>{url.replace("https://github.com/", "")}</span>
-            <button
-              type="button"
-              onClick={() => changeUrls(value.filter((v) => v !== url))}
-            >
-              선택 해제
-            </button>
-          </div>
-        ))}
+      </details>}
     </fieldset>
   );
 }

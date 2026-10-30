@@ -234,7 +234,6 @@ export default function ProjectSettings({
               {folder && localRepo ? "연결됨" : folder ? error ? "연결 확인 필요" : "연결 확인 중" : "미연결"}
             </span>}
           </header>
-          {!canManage && <div className="project-local-account"><RepositoryFields value={[]} onChange={() => {}} connectionOnly /></div>}
           {error && <p className="pw-error project-local-message" role="alert">{error}</p>}
           {notice && <p className="lw-notice project-local-message" role="status">{notice}</p>}
           {bridge ? (
