@@ -30,6 +30,7 @@ export class DesktopRuntime {
     openEditor,
     emit,
     executable = process.execPath,
+    gitAccessRun,
   }) {
     Object.assign(this, {
       directory,
@@ -40,6 +41,7 @@ export class DesktopRuntime {
       openAuth,
       emit,
       executable,
+      gitAccessRun,
     });
     this.taskLocks = new Set();
     this.instances = new Map();
@@ -185,8 +187,10 @@ export class DesktopRuntime {
     const selected = await this.chooseFolder();
     if (!selected) return null;
     const folder = await realpath(selected);
-    await inspectRepository(folder, project.repositoryUrls || []);
+    const repo = await inspectRepository(folder, project.repositoryUrls || []);
+    const access = await checkRepositoryAccess(repo.repositoryUrl, project.repositoryUrls || [], this.gitAccessRun);
     await this.assertOwner(owner.key);
+    if (!access.ok) return access;
     owner.settings.folders[pid] = folder;
     await this.save();
     await this.syncProjects();
@@ -198,7 +202,7 @@ export class DesktopRuntime {
     const snapshot = await this.api("/api/workspace");
     const project = snapshot.projects?.find(p => p.id === pid);
     if (!project) throw Error("프로젝트 접근 권한을 확인해주세요.");
-    const result = await checkRepositoryAccess(repositoryUrl, project.repositoryUrls || []);
+    const result = await checkRepositoryAccess(repositoryUrl, project.repositoryUrls || [], this.gitAccessRun);
     await this.assertOwner(owner.key);
     return result;
   }
@@ -211,8 +215,9 @@ export class DesktopRuntime {
     const selected = await this.chooseFolder();
     if (!selected) return null;
     await this.assertOwner(owner.key);
-    const repo = await cloneRepository(selected, repositoryUrl, project.repositoryUrls || []);
+    const repo = await cloneRepository(selected, repositoryUrl, project.repositoryUrls || [], this.gitAccessRun);
     await this.assertOwner(owner.key);
+    if (repo.ok === false) return repo;
     owner.settings.folders[pid] = repo.path;
     await this.save();
     await this.syncProjects();

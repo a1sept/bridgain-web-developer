@@ -1,4 +1,5 @@
-export type RepositoryAccessResult = { ok: boolean; code: "ok" | "authentication" | "permission" | "not_found_or_no_access" | "network" | "git_missing" | "unknown"; message: string; repositoryUrl: string };
+export type RepositoryAccessFailureResult = { ok: false; code: "authentication" | "permission" | "not_found_or_no_access" | "network" | "git_missing" | "unknown"; message: string; repositoryUrl: string };
+export type RepositoryAccessResult = { ok: true; code: "ok"; message: string; repositoryUrl: string } | RepositoryAccessFailureResult;
 export type GitCommitDetail = { sha: string; files: { path: string; status: string; originalPath?: string; diff: string; limited?: boolean }[]; limited: boolean };
 export type TaskWorkspace = { folder?: string; binding?: { path: string; branch: string; baseBranch: string; repositoryUrl: string } };
 export type GitState = { files: { path: string; status: string; originalPath?: string }[]; head: string; remoteSha: string | null; ahead: number | null; behind: number | null; checkedAt: string; history: { sha: string; subject: string; author: string; date: string }[] };
@@ -37,7 +38,7 @@ export type DesktopBridge = {
   connectGithub?: () => Promise<void>;
   cancelGithub?: () => Promise<void>;
   checkRepositoryAccess?: (pid: string, repositoryUrl: string) => Promise<RepositoryAccessResult>;
-  cloneProject?: (pid: string, repositoryUrl: string) => Promise<RepositoryState | null>;
+  cloneProject?: (pid: string, repositoryUrl: string) => Promise<RepositoryState | RepositoryAccessFailureResult | null>;
   repositoryState?: (pid: string) => Promise<RepositoryState | null>;
   taskGit?: (pid: string, id: string, action?: string, options?: Record<string, unknown>) => Promise<any>;
   taskWorkspace: (projectId: string, taskId: string, action?: "state" | "start" | "open",
@@ -50,7 +51,7 @@ export type DesktopBridge = {
     provider: AiProviderName,
   ) => Promise<{ verificationUrl?: string; userCode?: string }>;
   disconnect: (provider: AiProviderName) => Promise<void>;
-  chooseFolder: (projectId: string) => Promise<string | null>;
+  chooseFolder: (projectId: string) => Promise<string | RepositoryAccessFailureResult | null>;
   clearFolder: (projectId: string) => Promise<void>;
   run: (
     projectId: string,

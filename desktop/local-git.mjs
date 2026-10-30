@@ -56,16 +56,16 @@ export async function checkRepositoryAccess(url, allowedRepositories, run = exec
     return { ok: false, ...repositoryAccessFailure(error), repositoryUrl: url };
   }
 }
-export async function cloneRepository(folder, url, allowedRepositories) {
+export async function cloneRepository(folder, url, allowedRepositories, run = exec) {
   registeredRepository(url, allowedRepositories);
   const path = await realpath(folder);
   if ((await readdir(path)).length) throw Error("다운로드할 빈 디렉토리를 선택해주세요. 기존 파일은 덮어쓰지 않습니다.");
-  const access = await checkRepositoryAccess(url, allowedRepositories);
-  if (!access.ok) throw Error(access.message);
+  const access = await checkRepositoryAccess(url, allowedRepositories, run);
+  if (!access.ok) return access;
   try {
-    await exec("git", ["clone", "--", url, "."], { cwd: path, timeout: 120000, maxBuffer: 4 * 1024 * 1024,
+    await run("git", ["clone", "--", url, "."], { cwd: path, timeout: 120000, maxBuffer: 4 * 1024 * 1024,
       env: { ...process.env, GIT_TERMINAL_PROMPT: "0", GCM_INTERACTIVE: "never", GIT_OPTIONAL_LOCKS: "0" } });
-  } catch (error) { throw Error(repositoryAccessFailure(error).message); }
+  } catch (error) { return { ok: false, ...repositoryAccessFailure(error), repositoryUrl: url }; }
   return inspectRepository(path, allowedRepositories);
 }
 export async function verifyBinding(binding, allowedRepositories) {

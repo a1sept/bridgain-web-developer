@@ -1,6 +1,9 @@
+import { mkdtemp, readdir } from "node:fs/promises";
+import { join } from "node:path";
+import { tmpdir } from "node:os";
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { checkRepositoryAccess, repositoryAccessFailure } from "../local-git.mjs";
+import { checkRepositoryAccess, repositoryAccessFailure, cloneRepository } from "../local-git.mjs";
 const url = "https://github.com/example/project";
 test("access check only allows registered credential-free GitHub URLs", async () => {
   let calls = 0;
@@ -40,4 +43,17 @@ test("failure classifications preserve 404 ambiguity and never expose credential
   }
   assert.equal(repositoryAccessFailure({ code: "ENOENT" }).code, "git_missing");
   assert.equal(repositoryAccessFailure({ killed: true }).code, "network");
+});
+
+test("clone access and clone-time failures return safe structured results without deleting files", async () => {
+  const folder = await mkdtemp(join(tmpdir(), "bridgain-access-clone-"));
+  const denied = await cloneRepository(folder, url, [url], async () => { throw { stderr: "requested URL returned error: 403 secret-token" }; });
+  assert.equal(denied.ok, false); assert.equal(denied.code, "permission");
+  assert.equal(denied.repositoryUrl, url); assert.doesNotMatch(JSON.stringify(denied), /secret-token/);
+  const expired = await cloneRepository(folder, url, [url], async (_command, args) => {
+    if (args[0] === "clone") throw { stderr: "Authentication failed secret-token" };
+    return { stdout: "" };
+  });
+  assert.equal(expired.ok, false); assert.equal(expired.code, "authentication");
+  assert.deepEqual(await readdir(folder), []);
 });

@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, type FormEvent } from "react";
+import { requestForRepositoryFailure } from "./repository-access";
 import RepositoryAccess from "./RepositoryAccess";
 import StageSettings from "./StageSettings";
 import RepositoryFields, { type RepositoryRelation } from "./RepositoryFields";
@@ -42,6 +43,7 @@ export default function ProjectSettings({
   );
   const [access, setAccess] = useState<RepositoryAccessResult | null>(null);
   const [checkingAccess, setCheckingAccess] = useState(false);
+  const [accessRefreshVersion, setAccessRefreshVersion] = useState(0);
   const accessRequestSection = useRef<HTMLDivElement>(null);
   const accessRequestVersion = useRef(0);
   const accessContext = useRef({ projectId: project.id, repository });
@@ -118,7 +120,7 @@ export default function ProjectSettings({
       accessRequestVersion.current += 1;
     };
   }, [repository, project.id]);
-  async function checkAccess() {
+  async function checkAccess(autoRequest = false) {
     if (!bridge?.checkRepositoryAccess) {
       setError("접근 확인을 위해 데스크톱 앱을 업데이트해주세요.");
       return;
@@ -138,7 +140,19 @@ export default function ProjectSettings({
         requestProject,
         requestRepository,
       );
-      if (isCurrent()) setAccess(result);
+      if (!isCurrent()) return null;
+      setAccess(result);
+      if (!result.ok && autoRequest) {
+        const summary = await requestForRepositoryFailure(
+          requestProject,
+          result,
+        );
+        if (isCurrent()) {
+          setError(summary);
+          setAccessRefreshVersion((value) => value + 1);
+        }
+      }
+      return isCurrent() ? result : null;
     } catch (e) {
       if (isCurrent())
         setError(
@@ -150,21 +164,48 @@ export default function ProjectSettings({
   }
   async function change(clear = false, clone = false) {
     if (!bridge || lock.current) return;
-    if (clone && (!access?.ok || access.repositoryUrl !== repository)) {
-      setError("선택한 저장소의 접근 권한을 먼저 재확인해주세요.");
-      return;
-    }
     lock.current = true;
     setBusy(true);
     setError("");
     setNotice("");
+    const requestProject = project.id;
+    const isCurrentProject = () =>
+      accessContext.current.projectId === requestProject;
     try {
-      if (clear) await bridge.clearFolder(project.id);
-      else if (clone) {
-        if (!bridge.cloneProject)
-          throw Error("Bridgain 데스크톱 앱을 업데이트해주세요.");
-        if (!(await bridge.cloneProject(project.id, repository))) return;
-      } else if (!(await bridge.chooseFolder(project.id))) return;
+      if (clear) await bridge.clearFolder(requestProject);
+      else {
+        let result;
+        if (clone) {
+          if (!bridge.cloneProject)
+            throw Error("Bridgain 데스크톱 앱을 업데이트해주세요.");
+          const checked = await checkAccess(true);
+          if (
+            !checked?.ok ||
+            checked.repositoryUrl !== repository ||
+            !isCurrentProject()
+          )
+            return;
+          result = await bridge.cloneProject(requestProject, repository);
+        } else result = await bridge.chooseFolder(requestProject);
+        if (!result || !isCurrentProject()) return;
+        if (
+          typeof result === "object" &&
+          "ok" in result &&
+          result.ok === false
+        ) {
+          setAccess(result);
+          const summary = await requestForRepositoryFailure(
+            requestProject,
+            result,
+          );
+          if (isCurrentProject()) {
+            setError(`${summary} 기존 파일과 연결 정보는 그대로 보존됩니다.`);
+            setAccessRefreshVersion((value) => value + 1);
+          }
+          return;
+        }
+      }
+      if (!isCurrentProject()) return;
       await ai.refreshFolders();
       setNotice(
         clear
@@ -297,6 +338,7 @@ export default function ProjectSettings({
             key={project.id}
             projectId={project.id}
             repositoryUrls={project.repositoryUrls || []}
+            refreshVersion={accessRefreshVersion}
           />
         </div>
         <section
@@ -425,7 +467,7 @@ export default function ProjectSettings({
                     type="button"
                     className="pw-secondary"
                     disabled={busy || checkingAccess || !repository}
-                    onClick={() => void checkAccess()}
+                    onClick={() => void checkAccess(true)}
                   >
                     {checkingAccess
                       ? "접근 확인 중…"
@@ -449,9 +491,9 @@ export default function ProjectSettings({
                     ) && (
                       <>
                         <p>
-                          저장소 주소를 확인한 뒤 담당자에게 접근을
-                          요청해주세요. GitHub 초대를 수락하면 다시 확인할 수
-                          있습니다.
+                          등록자에게 전달된 접근 확인 요청을 아래 목록에서
+                          확인할 수 있습니다. GitHub 초대를 받으면 수락한 뒤
+                          다시 시도해주세요.
                         </p>
                         <button
                           type="button"
@@ -466,7 +508,7 @@ export default function ProjectSettings({
                             });
                           }}
                         >
-                          담당자 접근 요청으로 이동
+                          접근 확인 요청 목록으로 이동
                         </button>
                       </>
                     )}
@@ -483,13 +525,7 @@ export default function ProjectSettings({
                   <button
                     type="button"
                     className="pw-secondary"
-                    disabled={
-                      busy ||
-                      checkingAccess ||
-                      !repository ||
-                      !access?.ok ||
-                      access.repositoryUrl !== repository
-                    }
+                    disabled={busy || checkingAccess || !repository}
                     onClick={() => void change(false, true)}
                   >
                     새 디렉토리에 내려받기
@@ -508,8 +544,9 @@ export default function ProjectSettings({
               </div>
               <p className="project-local-help">
                 기존 디렉토리는 Git 저장소를 확인해 연결합니다. 새 디렉토리에
-                내려받기는 접근 재확인 후 빈 폴더에 저장소를 다운로드하며, 이
-                PC의 GitHub 인증을 사용합니다. 연결을 해제해도 파일은 남습니다.
+                내려받기는 접근 확인 후 빈 폴더에 저장소를 다운로드합니다.
+                접근이 거부되면 등록자에게 확인 요청을 남깁니다. 이 PC의 GitHub
+                인증을 사용합니다. 연결을 해제해도 파일은 남습니다.
               </p>
             </>
           ) : (

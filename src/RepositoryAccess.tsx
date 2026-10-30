@@ -1,22 +1,24 @@
 import { useEffect, useRef, useState } from "react";
 import { workflowApi } from "./Approvals";
-import MemberPicker from "./MemberPicker";
 
 type RepositoryAccessData = {
   currentUserId: string;
   canManage: boolean;
-  members: { userId: string; displayName: string }[];
   repositories: {
     repositoryUrl: string;
-    managerUserId: string | null;
-    managerName: string | null;
+    registeredByUserId: string | null;
+    registeredByName: string | null;
+    recipientUserId: string | null;
+    recipientName: string | null;
+    recipientSource:
+      "registrant" | "project_creator" | "project_admin" | "unavailable";
   }[];
   requests: {
     id: string;
     repositoryUrl: string;
     requesterId: string;
     requesterName: string;
-    managerUserId: string | null;
+    recipientUserId: string | null;
     status: "pending" | "resolved";
     note: string;
     createdAt: string;
@@ -26,9 +28,11 @@ type RepositoryAccessData = {
 export default function RepositoryAccess({
   projectId,
   repositoryUrls,
+  refreshVersion = 0,
 }: {
   projectId: string;
   repositoryUrls: string[];
+  refreshVersion?: number;
 }) {
   const [data, setData] = useState<RepositoryAccessData | null>(null);
   const [error, setError] = useState("");
@@ -44,7 +48,7 @@ export default function RepositoryAccess({
     });
     if (response.status === 404)
       throw Error(
-        "공용 서버 업데이트가 필요합니다. 저장소 담당자·접근 요청 기능은 최신 API 배포 후 사용할 수 있어요.",
+        "공용 서버 업데이트가 필요합니다. 저장소 등록자·접근 요청 기능은 최신 API 배포 후 사용할 수 있어요.",
       );
     if (response.status >= 500)
       throw Error(
@@ -53,6 +57,16 @@ export default function RepositoryAccess({
     const result = await response.json();
     if (!response.ok)
       throw Error(result.message || "저장소 접근 요청을 불러오지 못했어요.");
+    if (
+      !Array.isArray(result.repositories) ||
+      result.repositories.some(
+        (repo: { recipientSource?: string }) => !repo.recipientSource,
+      )
+    ) {
+      throw Error(
+        "공용 서버 업데이트가 필요합니다. 저장소 등록자 기반 접근 요청 기능을 적용해주세요.",
+      );
+    }
     return result as RepositoryAccessData;
   }
   async function load() {
@@ -72,7 +86,7 @@ export default function RepositoryAccess({
     return () => {
       active = false;
     };
-  }, [projectId, repositoryUrls.join("|")]);
+  }, [projectId, repositoryUrls.join("|"), refreshVersion]);
   async function mutate(
     path: string,
     body: object,
@@ -102,9 +116,9 @@ export default function RepositoryAccess({
     >
       <header className="project-local-heading">
         <div>
-          <h2>저장소 담당자 · 접근 요청</h2>
+          <h2>저장소 등록자 · 접근 요청</h2>
           <p>
-            요청 → 담당자가 GitHub에서 초대 → 작업자가 초대 수락 → 내 PC 접근
+            요청 → 등록자가 GitHub에서 초대 → 작업자가 초대 수락 → 내 PC 접근
             재확인 → 내려받기
           </p>
         </div>
@@ -121,10 +135,10 @@ export default function RepositoryAccess({
         </button>
       </header>
       <p className="project-local-help">
-        담당자는 초대할 GitHub 권한이 있는 프로젝트 멤버로 지정해주세요. 담당자
-        지정만으로 GitHub 권한이 생기지는 않습니다. 접근 요청은 프로젝트 채널과
-        아래 요청 목록에 남습니다. 담당자는 자신에게 배정된 요청을 여기서
-        확인하고 GitHub 초대를 직접 진행합니다.
+        저장소를 등록한 사람에게 접근 확인 요청이 자동 전달됩니다. 등록 기록이
+        없는 기존 저장소는 프로젝트 생성자에게, 등록자가 참여 중이 아니면
+        관리자에게 요청합니다. 요청은 프로젝트 채널과 아래 목록에 기록됩니다.
+        GitHub 초대는 수신자가 직접 진행해야 합니다.
       </p>
       {error && (
         <p className="pw-error" role="alert">
@@ -136,14 +150,14 @@ export default function RepositoryAccess({
           {notice}
         </p>
       )}
-      {!data && !error && <p role="status">담당자 정보를 불러오는 중…</p>}
+      {!data && !error && <p role="status">등록자 정보를 불러오는 중…</p>}
       {data && (
         <p className="project-local-help">
-          내가 담당한 미처리 접근 요청{" "}
+          내게 전달된 미처리 접근 요청{" "}
           {
             data.requests.filter(
               (request) =>
-                request.managerUserId === data.currentUserId &&
+                request.recipientUserId === data.currentUserId &&
                 request.status === "pending",
             ).length
           }
@@ -158,7 +172,7 @@ export default function RepositoryAccess({
             request.status === "pending",
         );
         const manageable =
-          data.canManage || repo.managerUserId === data.currentUserId;
+          data.canManage || repo.recipientUserId === data.currentUserId;
         const githubUrl =
           /^https:\/\/github\.com\/[a-z0-9-]+\/[a-z0-9_.-]+$/i.test(
             repo.repositoryUrl,
@@ -173,31 +187,18 @@ export default function RepositoryAccess({
             <strong>
               {repo.repositoryUrl.replace("https://github.com/", "")}
             </strong>
-            {data.canManage ? (
-              <MemberPicker
-                label="저장소 담당자"
-                items={data.members}
-                value={repo.managerUserId ? [repo.managerUserId] : []}
-                disabled={busy}
-                onChange={(ids) =>
-                  void mutate(
-                    "/manager",
-                    {
-                      repositoryUrl: repo.repositoryUrl,
-                      managerUserId: ids.at(-1) || null,
-                    },
-                    "저장소 담당자를 저장했어요.",
-                    "PATCH",
-                  )
-                }
-              />
-            ) : (
-              <p>
-                저장소 담당자:{" "}
-                {repo.managerName ||
-                  "미지정 · 프로젝트 관리자에게 지정을 요청해주세요."}
-              </p>
-            )}
+            <p>
+              저장소 등록자:{" "}
+              {repo.registeredByName || "기존 저장소 · 등록 기록 없음"}
+            </p>
+            <p>
+              접근 요청 수신자:{" "}
+              {repo.recipientName || "현재 수신 가능한 관리자가 없습니다."}
+              {repo.recipientSource === "project_creator" &&
+                " (기존 저장소: 프로젝트 생성자에게 요청)"}
+              {repo.recipientSource === "project_admin" &&
+                " (등록자 부재: 프로젝트 관리자에게 요청)"}
+            </p>
             {manageable && githubUrl && (
               <a
                 className="project-repo-external"
@@ -226,7 +227,7 @@ export default function RepositoryAccess({
             <button
               type="button"
               className="pw-secondary"
-              disabled={busy || myPending || !repo.managerUserId}
+              disabled={busy || myPending || !repo.recipientUserId}
               onClick={() =>
                 void mutate(
                   "/requests",
@@ -234,11 +235,11 @@ export default function RepositoryAccess({
                     repositoryUrl: repo.repositoryUrl,
                     note: notes[repo.repositoryUrl] || "",
                   },
-                  "접근 요청을 저장하고 프로젝트 채널에 기록했어요. 담당자는 이 화면에서 요청을 확인할 수 있습니다.",
+                  "접근 요청을 저장하고 프로젝트 채널에 기록했어요. 수신자는 이 화면에서 요청을 확인할 수 있습니다.",
                 )
               }
             >
-              {myPending ? "담당자 확인 대기" : "담당자에게 접근 요청"}
+              {myPending ? "접근 확인 대기" : "등록자에게 접근 확인 요청"}
             </button>
             {data.requests
               .filter(
@@ -253,7 +254,7 @@ export default function RepositoryAccess({
                     <span>
                       {request.status === "pending"
                         ? "접근 요청 중"
-                        : "담당자 처리 완료 · 초대 수락 후 접근 재확인 필요"}
+                        : "수신자 처리 완료 · 초대 수락 후 접근 재확인 필요"}
                     </span>
                     {request.note && <p>{request.note}</p>}
                   </div>
@@ -266,7 +267,7 @@ export default function RepositoryAccess({
                         void mutate(
                           `/requests/${request.id}`,
                           { status: "resolved" },
-                          "담당자 처리 완료로 표시했어요. 작업자는 GitHub 초대를 수락하고 접근을 재확인해야 합니다.",
+                          "수신자 처리 완료로 표시했어요. 작업자는 GitHub 초대를 수락하고 접근을 재확인해야 합니다.",
                           "PATCH",
                         )
                       }

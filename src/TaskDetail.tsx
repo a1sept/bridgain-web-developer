@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import type { ProjectTask } from "./ProjectTasks";
 import type { TaskWorkspace } from "./desktop";
 import { workflowApi } from "./Approvals";
+import { requestForRepositoryFailure } from "./repository-access";
 import RichTextContent from "./editor/RichTextContent";
 import ControlIcon from "./components/ControlIcon";
 import "./task-detail.css";
@@ -102,7 +103,7 @@ export default function TaskDetail({ task, projectId, projectName, userId, onClo
       {task.status === "in_progress" && review?.events?.some(e => e.action === "changes_requested") && <div className="td-rework"><strong>재작업 요청</strong><p>{review.events.find(e => e.action === "changes_requested")?.note}</p><small>기존 브랜치에서 수정·푸시 후 같은 PR로 재제출해주세요.</small></div>}
       {!bridge?.taskWorkspace ? <p className="td-muted">로컬 폴더와 브랜치 연결은 데스크톱 앱에서 사용할 수 있습니다.</p> : <>
         {localError && <p role="alert">{localError} <button disabled={busy} onClick={() => setRefresh(v => v + 1)}>다시 확인</button></p>}
-        {!local ? (!localError && <p>로컬 연결 확인 중…</p>) : !local.folder ? <button disabled={busy} onClick={() => void run(async () => { await bridge.chooseFolder(projectId); })}>기존 디렉토리 연결</button> : <>
+        {!local ? (!localError && <p>로컬 연결 확인 중…</p>) : !local.folder ? <button disabled={busy} onClick={() => void run(async () => { const result = await bridge.chooseFolder(projectId); if (result && typeof result === "object" && result.ok === false) throw Error(await requestForRepositoryFailure(projectId, result)); })}>기존 디렉토리 연결</button> : <>
           <h3>로컬 작업 디렉토리</h3>
           <p className="td-muted">● 연결됨</p><p className="td-path">{local.binding?.path || local.folder}</p>
           <button disabled={busy} onClick={() => void run(() => bridge.taskWorkspace(projectId, task.id, "open"))}>폴더 열기</button>

@@ -23,6 +23,7 @@ async function fixture() {
     events = [];
   const runtime = new DesktopRuntime({
     directory,
+    gitAccessRun: async () => ({ stdout: "" }),
     api: async (path, body) => {
       calls.push({ path, body });
       if (path === "/api/auth/me") return { user };
@@ -207,4 +208,21 @@ test("repository access IPC checks server project membership and registered URL 
   await assert.rejects(runtime.checkRepositoryAccess("abcdef99-1234-4321-abcd-123456789012", "https://github.com/example/project"), /프로젝트 접근/);
   await assert.rejects(runtime.checkRepositoryAccess(pid, "https://github.com/other/project"), /등록된/);
   assert.ok(calls.some(call => call.path === "/api/workspace"));
+});
+
+test("folder permission failure is structured and preserves existing binding; cancel performs no access check", async () => {
+  const { runtime, cwd } = await fixture();
+  await runtime.folder(pid);
+  const owner = await runtime.owner();
+  const saved = owner.settings.folders[pid];
+  let checks = 0;
+  runtime.gitAccessRun = async () => { checks++; throw { stderr: "requested URL returned error: 403 secret-token" }; };
+  const result = await runtime.folder(pid);
+  assert.equal(result.ok, false); assert.equal(result.code, "permission");
+  assert.equal(result.repositoryUrl, "https://github.com/example/project");
+  assert.doesNotMatch(JSON.stringify(result), /secret-token/);
+  assert.equal(owner.settings.folders[pid], saved);
+  runtime.chooseFolder = async () => null;
+  assert.equal(await runtime.folder(pid), null); assert.equal(checks, 1);
+  assert.equal(owner.settings.folders[pid], await realpath(cwd));
 });
