@@ -41,7 +41,7 @@
 }
 .approvals-page .approvals-tabs button {
   border: 0;
-  border-bottom: 3px solid transparent;
+  border-bottom: 2px solid transparent;
   border-radius: 0;
   background: none;
   padding: 10px 2px;
@@ -52,6 +52,9 @@
   line-height: 18px;
   font-weight: 700;
   cursor: pointer;
+}
+.approvals-page .approvals-tabs button:hover {
+  color: #2d63ed;
 }
 .approvals-page .approvals-tabs button[aria-selected="true"] {
   color: #2d63ed;
@@ -67,6 +70,11 @@
   flex-wrap: wrap;
   gap: 10px;
   margin-bottom: 8px;
+}
+.approvals-filters > .bg-filter-bar {
+  flex: 1;
+  min-width: 0;
+  border-bottom: 0;
 }
 .approvals-filters > .pw-secondary,
 .approval-dialog-toolbar > button,

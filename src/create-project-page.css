@@ -314,3 +314,6 @@
 .cp-repository-panel { grid-column:1 / -1; border-color:#e3eaf3; border-radius:13px; padding:26px; }
 .cp-repository-panel .repo-fields { margin:0; }
 @media(max-width:700px) { .cp-repository-panel { padding:20px 0; border-top:1px solid #e0e6ef; border-radius:0; } }
+
+.cp-search-results > button:disabled { opacity:.5; cursor:not-allowed; }
+.cp-search-results > button[aria-pressed="true"] { background:#edf4ff; }

@@ -53,6 +53,7 @@ test("server failure retains prepared worktree; retry syncs status only after pr
   const options = { branch: f.branch, baseBranch: f.baseBranch, existing: false };
   await assert.rejects(runtime.taskWorkspace(pid, id, "start", options), /기존 폴더를 재사용/);
   const prepared = (await runtime.taskWorkspace(pid, id)).binding;
+  assert.equal(prepared.path, f.folder);
   assert.equal(await readFile(join(prepared.path, "file.txt"), "utf8"), "original");
   fail = false;
   assert.deepEqual((await runtime.taskWorkspace(pid, id, "start", options)).binding, prepared);
@@ -68,4 +69,22 @@ test("attaches the selected checkout when the existing branch is already open", 
   const result = await prepareTaskWorkspace({ ...f, branch: "task/current", existing: true });
   assert.equal(result.path, f.folder);
   assert.equal(await readFile(join(f.folder, "file.txt"), "utf8"), "in progress");
+});
+
+test("new task switches branch in selected directory without creating a worktree", async () => {
+  const f = await fixture();
+  const result = await prepareTaskWorkspace({...f, path:f.folder});
+  assert.equal(result.path, f.folder);
+  assert.equal(await f.git("branch", "--show-current"), f.branch);
+  assert.equal((await f.git("worktree", "list", "--porcelain")).split("worktree ").length - 1, 1);
+  await assert.rejects(prepareTaskWorkspace({...f,path:f.folder}), /기존 브랜치 연결/);
+  await writeFile(join(f.folder,"file.txt"),"keep current work");
+  assert.equal((await prepareTaskWorkspace({...f,path:f.folder,existing:true})).path,f.folder);
+  await assert.rejects(prepareTaskWorkspace({...f,path:f.folder,branch:"task/next"}), /미커밋/);
+  assert.equal(await readFile(join(f.folder,"file.txt"),"utf8"),"keep current work");
+});
+test("selected directory can switch to existing local branch without resetting commits", async () => {
+  const f = await fixture(); await f.git("branch", "task/existing");
+  await prepareTaskWorkspace({...f,path:f.folder,branch:"task/existing",existing:true});
+  assert.equal(await f.git("branch","--show-current"),"task/existing");
 });

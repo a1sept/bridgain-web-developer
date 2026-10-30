@@ -8,3 +8,5 @@
 .pt-mine-toggle[aria-pressed=true]{background:#edf2ff;border-color:#b6c8fa;color:#436bf0}
 .pt-view-switch button:hover:not([aria-pressed=true]){background:#e5eaf4;color:#33415a}
 .pt-card-badge{display:inline-flex;align-items:center;max-width:100%;box-sizing:border-box;margin:6px 4px 0 0;padding:3px 7px;border-radius:5px;background:#f0f4ff;color:#6380bc;font-size:11px;line-height:16px;overflow-wrap:anywhere}
+
+.pt-waiting{opacity:.65}.pt-waiting .pt-card-open,.pt-list-row.pt-waiting{background:#f5f7fa}

@@ -348,7 +348,10 @@ export default function LiveWorkspace({
   const [description, setDescription] = useState("");
   const [teamId, setTeamId] = useState("");
   const [inviteId, setInviteId] = useState("");
-  const [found, setFound] = useState<User | null>(null);
+  const [inviteSelected, setInviteSelected] = useState<User[]>([]);
+  const [inviteSentIds, setInviteSentIds] = useState<string[]>([]);
+  const [inviteResults, setInviteResults] = useState<User[]>([]);
+  const [inviteSearched, setInviteSearched] = useState(false);
   const [modalError, setModalError] = useState("");
   const dialog = useRef<HTMLDialogElement>(null);
   const isTeam = user.accountType === "team";
@@ -454,9 +457,38 @@ export default function LiveWorkspace({
   ) {
     setTarget({ type, id, name: targetName });
     setInviteId("");
-    setFound(null);
+    setInviteSelected([]);
+    setInviteSentIds([]);
+    setInviteResults([]);
+    setInviteSearched(false);
     setModalError("");
     setModal("invite");
+  }
+  function inviteUnavailable(id: string) {
+    const members = target?.type === "teams"
+      ? data?.teams.find(t => t.id === target.id)?.members
+      : data?.projects.find(p => p.id === target?.id)?.members;
+    if (members?.some(member => member.userId === id)) return "참여 중";
+    if (inviteSentIds.includes(id) || data?.invitations.some(invite =>
+      invite.inviteeId === id && invite.status === "pending" &&
+      (target?.type === "teams" ? invite.teamId === target.id && !invite.projectId : invite.projectId === target?.id))) return "초대 대기";
+    return "";
+  }
+  const availableInviteSelected = inviteSelected.filter(person => !inviteUnavailable(person.id));
+  function searchInvitees() {
+    if (!target) return;
+    void run(async () => {
+      const query = inviteId.trim();
+      setInviteResults([]); setInviteSearched(false);
+      if (query.length < 2) throw new Error("이름·닉네임은 두 글자 이상 입력해주세요.");
+      const types = target.type === "teams" ? ["team"] : ["team", "client"];
+      const results = await Promise.all(types.map(type => request<{ users: User[] }>(
+        `/users?q=${encodeURIComponent(query)}&accountType=${type}`,
+      )));
+      await reload();
+      setInviteResults(results.flatMap(result => result.users).filter(person => person.id !== user.id));
+      setInviteSearched(true);
+    }, "", true);
   }
   function navigate(next: typeof view) {
     setView(next);
@@ -555,10 +587,23 @@ export default function LiveWorkspace({
             description: description.trim(),
             ...(teamId ? { teamId } : {}),
           });
-        } else if (modal === "invite" && target && found) {
-          await request(`/${target.type}/${target.id}/invitations`, {
-            userId: found.id,
-          });
+        } else if (modal === "invite" && target && availableInviteSelected.length) {
+          const sent: string[] = [], failed: string[] = [];
+          for (const person of availableInviteSelected) {
+            try {
+              await request(`/${target.type}/${target.id}/invitations`, { userId: person.id });
+              sent.push(person.id);
+              setInviteSentIds(ids => [...ids, person.id]);
+            } catch (error) {
+              failed.push(`${person.displayName}: ${error instanceof Error ? error.message : "초대 실패"}`);
+            }
+          }
+          setInviteSelected(people => people.filter(person => !sent.includes(person.id)));
+          await reload();
+          if (failed.length) throw new Error(`${sent.length}명 초대 완료. ${failed.join(" / ")}`);
+          setModal(null);
+          setNotice(`${sent.length}명에게 초대를 보냈어요.`);
+          return;
         } else return;
         setModal(null);
         await reload();
@@ -1163,46 +1208,56 @@ export default function LiveWorkspace({
                     : "가입된 개발팀 계정 또는 의뢰자를 초대하세요."}
                 </p>
                 <label>
-                  <span>사용자 ID</span>
+                  <span>이름·닉네임 또는 ID</span>
                   <div className="pw-lookup">
                     <input
-                      required
                       value={inviteId}
                       onChange={(e) => {
                         setInviteId(e.target.value);
-                        setFound(null);
+                        setInviteResults([]);
+                        setInviteSearched(false);
+                        setModalError("");
                       }}
-                      placeholder="초대할 사람의 사용자 ID"
+                      onKeyDown={e => { if (e.key === "Enter") { e.preventDefault(); searchInvitees(); } }}
+                      maxLength={100}
+                      placeholder="이름·닉네임 또는 사용자 ID"
                     />
                     <button
                       type="button"
                       className="pw-secondary"
                       disabled={!inviteId.trim() || busy}
-                      onClick={() =>
-                        void run(
-                          async () => {
-                            setFound(null);
-                            const result = await request<User>(
-                              `/users/${encodeURIComponent(inviteId.trim())}`,
-                            );
-                            setFound(result);
-                          },
-                          "",
-                          true,
-                        )
-                      }
+                      onClick={searchInvitees}
                     >
-                      계정 확인
+                      검색
                     </button>
                   </div>
                 </label>
-                {found && (
-                  <div className="pw-found">
-                    <strong>{found.displayName}</strong>
-                    <p>
-                      {found.accountType === "client" ? "의뢰자" : "개발팀"}{" "}
-                      계정
-                    </p>
+                {inviteSearched && (
+                  <div className="cp-search-results" role="group" aria-label="초대할 사용자 검색 결과">
+                    {!inviteResults.length && <p>초대할 수 있는 사용자가 없습니다.</p>}
+                    {inviteResults.map(person => {
+                      const unavailable = inviteUnavailable(person.id);
+                      const selected = inviteSelected.some(p => p.id === person.id);
+                      return <button type="button" key={person.id} disabled={!!unavailable || (!selected && availableInviteSelected.length >= 20)} aria-pressed={selected && !unavailable}
+                        onClick={() => setInviteSelected(people => selected ? people.filter(p => p.id !== person.id) : [...people, person])}>
+                        <span className="cp-result-avatar" aria-hidden="true">{person.displayName.slice(0, 1)}</span>
+                        <span className="cp-result-person"><strong>{person.displayName}</strong>
+                          <small>{person.accountType === "team" ? "개발팀" : "의뢰자"} · ID {person.id}</small></span>
+                        <span>{unavailable || (selected ? "선택됨" : "선택")}</span>
+                      </button>;
+                    })}
+                    {inviteResults.length >= 20 && <p>이름을 더 입력하면 검색 범위를 좁힐 수 있어요.</p>}
+                  </div>
+                )}
+                {!!availableInviteSelected.length && (
+                  <div className="pw-invite-selected" aria-label="선택한 초대 대상">
+                    <p>{availableInviteSelected.length}명 선택 · 최대 20명</p>
+                    <div className="cp-chips">{availableInviteSelected.map(person => (
+                      <span className="cp-chip" key={person.id}>{person.displayName}
+                        <button type="button" aria-label={`${person.displayName} 선택 해제`}
+                          onClick={() => setInviteSelected(people => people.filter(p => p.id !== person.id))}>×</button>
+                      </span>
+                    ))}</div>
                   </div>
                 )}
               </>
@@ -1266,12 +1321,12 @@ export default function LiveWorkspace({
               <button
                 className="pw-primary"
                 type="submit"
-                disabled={busy || (modal === "invite" ? !found : !name.trim())}
+                disabled={busy || (modal === "invite" ? !availableInviteSelected.length : !name.trim())}
               >
                 {busy
                   ? "처리 중…"
                   : modal === "invite"
-                    ? "초대 보내기"
+                    ? `초대 보내기${availableInviteSelected.length ? ` (${availableInviteSelected.length}명)` : ""}`
                     : "저장"}
               </button>
             </div>

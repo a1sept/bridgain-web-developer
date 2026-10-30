@@ -6,8 +6,8 @@ const labels: Record<string, string> = { pending: "승인 대기", approved: "�
 export default function MeetingApprovalStatus({ status, approvers }: { status: string; approvers: Reviewer[] }) {
   const helpId = useId();
   return <div className="meeting-approval-status" aria-label="최종 승인 현황">
-    <span>최종 승인자</span>
-    <span className="meeting-approval-help"><button type="button" aria-label="최종 승인자 역할 안내" aria-describedby={helpId}>ⓘ</button><span role="tooltip" id={helpId}>지정된 최종 승인자 전원이 승인하면 실제 업무가 생성됩니다. 업무 결과를 검토하는 작업 승인자와는 별도 역할입니다.</span></span>
+    <span>회의 최종 승인자</span>
+    <span className="meeting-approval-help"><button type="button" aria-label="회의 최종 승인자 역할 안내" aria-describedby={helpId}>ⓘ</button><span role="tooltip" id={helpId}>지정된 회의 최종 승인자 전원이 승인하면 실제 업무가 생성됩니다. 업무 결과를 검토하는 작업 승인자와는 별도 역할입니다.</span></span>
     {approvers.map(person => <span className="meeting-approval-person" key={person.userId}>
       <span>{person.displayName}</span><span className={`meeting-approval-badge ${person.status}`}>{labels[person.status] || person.status}</span>
       {person.note && <span className="meeting-approval-note">{person.note}</span>}

@@ -26,6 +26,35 @@ export async function prepareTaskWorkspace({ folder, path, branch, baseBranch, e
     throw Error("프로젝트에 등록된 저장소의 로컬 폴더를 연결해주세요.");
   if (repositoryUrl && repositoryIdentity(remote) !== repositoryIdentity(repositoryUrl))
     throw Error("업무 저장소와 로컬 origin이 다릅니다. 프로젝트 폴더를 확인해주세요.");
+  // New tasks use the user's selected checkout; old explicit worktree bindings remain valid.
+  if (resolve(path) === resolve(folder)) {
+    const current = await git(folder, "branch", "--show-current");
+    if (current === branch) {
+      if (!existing) throw Error("같은 로컬 브랜치가 있습니다. 기존 브랜치 연결을 사용해주세요.");
+      return { path: folder, branch, baseBranch, repositoryUrl: repositoryIdentity(remote) };
+    }
+    if (await git(folder, "status", "--porcelain", "--untracked-files=all"))
+      throw Error("선택한 디렉토리에 미커밋 변경사항이 있습니다. 현재 브랜치에서 커밋하거나 직접 보관한 뒤 다시 시도해주세요.");
+    await git(folder, "fetch", "origin");
+    let localExists = false, remoteExists = false;
+    try { await git(folder, "show-ref", "--verify", `refs/heads/${branch}`); localExists = true; } catch {}
+    try { await git(folder, "show-ref", "--verify", `refs/remotes/origin/${branch}`); remoteExists = true; } catch {}
+    if (!existing && (localExists || remoteExists))
+      throw Error("같은 브랜치가 있습니다. 기존 브랜치 연결을 사용해주세요.");
+    try {
+      if (existing && localExists) await git(folder, "switch", "--", branch);
+      else if (existing) {
+        if (!remoteExists) throw Error("연결할 원격 브랜치가 없습니다.");
+        await git(folder, "switch", "-c", branch, `refs/remotes/origin/${branch}`);
+      } else {
+        await git(folder, "show-ref", "--verify", `refs/remotes/origin/${baseBranch}`);
+        await git(folder, "switch", "-c", branch, `refs/remotes/origin/${baseBranch}`);
+      }
+    } catch (error) {
+      throw Error(`선택한 디렉토리에서 브랜치를 전환하지 못했습니다. 다른 작업 폴더에서 사용 중인지 확인해주세요. ${error.message}`);
+    }
+    return { path: folder, branch, baseBranch, repositoryUrl: repositoryIdentity(remote) };
+  }
   try {
     await realpath(path);
     const common = await git(path, "rev-parse", "--git-common-dir");

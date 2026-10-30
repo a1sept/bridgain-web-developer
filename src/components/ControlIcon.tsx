@@ -1,6 +1,6 @@
 /** Compact control glyphs. Size the clickable button independently. */
 export default function ControlIcon({ name, size = 14 }: {
-  name: "close" | "chevron" | "plus" | "check" | "arrow" | "more";
+  name: "close" | "chevron" | "plus" | "check" | "arrow" | "more" | "refresh";
   size?: 12 | 14 | 16;
 }) {
   return <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" focusable="false" style={{ display: "block", flexShrink: 0 }}>
@@ -10,5 +10,6 @@ export default function ControlIcon({ name, size = 14 }: {
     {name === "plus" && <><circle cx="12" cy="12" r="9" /><path d="M8 12h8M12 8v8" /></>}
     {name === "check" && <path d="m5 12 4 4L19 6" />}
     {name === "arrow" && <path d="M7 17 17 7M7 7h10v10" />}
+    {name === "refresh" && <path d="M20 7v5h-5M20 12a8 8 0 1 0-2.3 5.7M20 12a8 8 0 0 0-2.3-5.7" />}
   </svg>;
 }

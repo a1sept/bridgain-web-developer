@@ -1,4 +1,6 @@
 import { useEffect, useRef, useState } from "react";
+import TaskMaterials from "./TaskMaterials";
+import { waitingForPredecessors } from "./ProjectTasks";
 import type { ProjectTask } from "./ProjectTasks";
 import type { TaskWorkspace } from "./desktop";
 import { workflowApi } from "./Approvals";
@@ -15,7 +17,9 @@ export default function TaskDetail({ task, projectId, projectName, userId, onClo
   onClose: () => void; onRequest: (id: string) => void; onTask: (id: string) => void;
   onChanged: () => void; onDeployments?: () => void; onApprovals?: () => void;
 }) {
-  const bridge = window.bridgainDesktop;
+  const bridge = task.completionMode === "code" ? window.bridgainDesktop : undefined;
+  const waiting = waitingForPredecessors(task);
+  const [materialsDirty, setMaterialsDirty] = useState(false);
   const path = `/projects/${projectId}/tasks/${task.id}`;
   const [review, setReview] = useState<Review>();
   const [local, setLocal] = useState<TaskWorkspace>();
@@ -66,7 +70,7 @@ export default function TaskDetail({ task, projectId, projectName, userId, onClo
   const mergeRetry = codeReview && !task.mergeCommit && !!review?.reviewers.length && review.reviewers.every(a => a.status === "approved");
   const canApprove = !!reviewer && (task.status === "review_pending" || legacyMergePending) && (reviewer.status !== "approved" || mergeRetry);
   const progressing = ["todo", "in_progress"].includes(task.status);
-  const editable = !!mine && progressing && !assignees.some(a => a.completedAt);
+  const editable = !waiting && !!mine && progressing && !assignees.some(a => a.completedAt);
   async function run(action: () => Promise<unknown>) {
     if (busy) return;
     setBusy(true); setError("");
@@ -93,14 +97,17 @@ export default function TaskDetail({ task, projectId, projectName, userId, onClo
   }
   return <div className="td-layout">
     <header className="td-header"><div><small>{projectName}</small><h2>{task.title}</h2></div>
-      <button type="button" aria-label="업무 상세 닫기" onClick={onClose}><ControlIcon name="close" size={16} /></button></header>
+      <div className="td-header-actions">
+        <button type="button" aria-label="업무 새로고침" title="업무 새로고침" disabled={busy} onClick={() => { onChanged(); setRefresh(v => v + 1); }}><ControlIcon name="refresh" size={16} /></button>
+        <button type="button" aria-label="업무 상세 닫기" onClick={onClose}><ControlIcon name="close" size={16} /></button>
+      </div></header>
     <section className="td-information" aria-label="업무 정보" tabIndex={0}>
       {task.completionMode === "code" && <nav className="td-code-tabs" aria-label="업무 상세 보기"><button aria-pressed={tab === "info"} onClick={() => setTab("info")}>업무 정보</button><button aria-pressed={tab === "code"} onClick={() => setTab("code")}>코드 작업</button>{localGit && <button aria-pressed={tab === "history"} onClick={() => setTab("history")}>커밋 이력</button>}</nav>}
-      {tab !== "info" ? <div className="td-body">{localGit ? <LocalCode git={git} history={tab === "history"} editable={!!mine && progressing && !mine.completedAt} /> : task.pullRequestUrl ? <RemoteTaskCode projectId={projectId} taskId={task.id} /> : <p className="td-muted">데스크톱 앱에서 로컬 작업 디렉토리와 업무 브랜치를 연결해주세요.</p>}</div> :
+      {tab !== "info" ? <div className="td-body">{localGit ? <LocalCode git={git} history={tab === "history"} editable={!waiting && !!mine && progressing && !mine.completedAt} /> : task.pullRequestUrl ? <RemoteTaskCode projectId={projectId} taskId={task.id} /> : <p className="td-muted">데스크톱 앱에서 로컬 작업 디렉토리와 업무 브랜치를 연결해주세요.</p>}</div> :
       <div className="td-body">
         {task.requests.length > 0 && <div className="td-links">{task.requests.map(r => <button key={r.id} onClick={() => onRequest(r.id)}>{r.title} ↗</button>)}</div>}
         <div><h3>카테고리</h3><span className="td-badge">{task.stageName || "미지정"}</span></div>
-        <dl className="td-meta"><div><dt>상태</dt><dd>{statuses[task.status]}</dd></div><div><dt>우선순위</dt><dd>{priorities[task.priority]}</dd></div><div><dt>기한</dt><dd>{task.dueDate?.slice(0, 10) || "기한 없음"}</dd></div></dl>
+        <dl className="td-meta"><div><dt>상태</dt><dd>{waiting ? "선행 업무 대기" : statuses[task.status]}</dd></div><div><dt>우선순위</dt><dd>{priorities[task.priority]}</dd></div><div><dt>기한</dt><dd>{task.dueDate?.slice(0, 10) || "기한 없음"}</dd></div></dl>
         <div className="td-people"><section><h3>담당자</h3>{assignees.map(a => <p key={a.userId}>{a.displayName} <span className="td-badge">{a.completedAt ? "작업 완료" : task.status === "todo" ? "진행 전" : "미완료"}</span></p>)}</section>
           <section><h3>작업 승인자</h3>{review?.reviewers.map(a => <p key={a.userId}>{a.displayName} <span className="td-badge">{a.status === "approved" ? "승인 완료" : a.status === "changes_requested" ? "재작업 요청" : "승인 대기"}</span></p>)}
             {task.stageKey && !review && !reviewError && <p>불러오는 중…</p>}
@@ -113,14 +120,18 @@ export default function TaskDetail({ task, projectId, projectName, userId, onClo
       </div>}
     </section>
     <aside className="td-work" aria-label="업무 작업 패널" tabIndex={0}>
-      <h3>로컬 작업</h3>
-      {task.status === "in_progress" && review?.events?.some(e => e.action === "changes_requested") && <div className="td-rework"><strong>재작업 요청</strong><p>{review.events.find(e => e.action === "changes_requested")?.note}</p><small>기존 브랜치에서 수정·푸시 후 같은 PR로 재제출해주세요.</small></div>}
+      {waiting && <p className="td-waiting" role="status">선행 업무의 작업 승인이 완료되면 시작할 수 있습니다.</p>}
+      {task.status === "in_progress" && review?.events?.some(e => e.action === "changes_requested") && <div className="td-rework"><strong>재작업 요청</strong><p>{review.events.find(e => e.action === "changes_requested")?.note}</p><small>{task.completionMode === "code" ? "기존 브랜치에서 수정·푸시 후 같은 PR로 재제출해주세요." : "문서와 메모를 보완한 뒤 다시 작업 완료를 요청해주세요."}</small></div>}
+      <TaskMaterials key={task.id} task={task} projectId={projectId} editable={editable} onChanged={onChanged} onDirtyChange={setMaterialsDirty} />
+      {task.completionMode === "code" && <><h3>로컬 작업</h3>
+
       {!bridge?.taskWorkspace ? <p className="td-muted">로컬 폴더와 브랜치 연결은 데스크톱 앱에서 사용할 수 있습니다.</p> : <>
         {localError && <p role="alert">{localError} <button disabled={busy} onClick={() => setRefresh(v => v + 1)}>다시 확인</button></p>}
         {!local ? (!localError && <p>로컬 연결 확인 중…</p>) : !local.folder ? <button disabled={busy} onClick={() => void run(async () => { const result = await bridge.chooseFolder(projectId); if (result && typeof result === "object" && result.ok === false) throw Error(await requestForRepositoryFailure(projectId, result)); })}>기존 디렉토리 연결</button> : <>
           <h3>로컬 작업 디렉토리</h3>
           <p className="td-muted">● 연결됨</p><p className="td-path">{local.binding?.path || local.folder}</p>
           <button disabled={busy} onClick={() => void run(() => bridge.taskWorkspace(projectId, task.id, "open"))}>폴더 열기</button>
+          {editable && local.binding?.path === local.folder && task.status === "in_progress" && task.workBranch && <button disabled={busy} onClick={() => void run(async () => { setLocal(await bridge.taskWorkspace(projectId, task.id, "start", { branch: local.binding!.branch, baseBranch: local.binding!.baseBranch, existing: true })); })}>업무 브랜치로 전환</button>}
           {editable && (!local.binding || task.status === "todo" || !task.workBranch) ? <>
             <label>기준 브랜치<input value={baseBranch} disabled={busy || !!local.binding} onChange={e => setBaseBranch(e.target.value)} /></label>
             <label>업무 브랜치<input value={branch} disabled={busy || !!local.binding || !!task.workBranch} onChange={e => setBranch(e.target.value)} /></label>
@@ -129,13 +140,14 @@ export default function TaskDetail({ task, projectId, projectName, userId, onClo
           </> : <p className="td-path">{local.binding?.branch || task.workBranch || "연결된 업무 브랜치 없음"}</p>}
         </>}
       </>}
-      {localGit && <GitControls git={git} editable={!!mine && progressing && !mine.completedAt} />}
+      {localGit && <GitControls git={git} editable={!waiting && !!mine && progressing && !mine.completedAt} />}
+      </>}
       <section className="td-actions"><h3>작업 진행</h3>
         {error && <p className="td-error" role="alert">{error}</p>}
         {task.completionMode === "code" && <label>PR URL<input type="url" value={pr} disabled={busy || !editable} placeholder="https://github.com/…/pull/…" onChange={e => setPr(e.target.value)} />{editable && pr !== (task.pullRequestUrl || "") && <button disabled={busy} onClick={() => void run(() => patch({ pullRequestUrl: pr }))}>PR 연결 저장</button>}</label>}
         {task.completionMode === "deploy" && <label>배포 확인 URL<input type="url" value={deployUrl} disabled={busy || !editable} onChange={e => setDeployUrl(e.target.value)} />{editable && deployUrl !== (task.deploymentUrl || "") && <button disabled={busy} onClick={() => void run(() => patch({ deploymentUrl: deployUrl }))}>확인 URL 저장</button>}</label>}
-        {editable && task.status === "todo" && task.completionMode !== "code" && <button disabled={busy} onClick={() => void run(() => patch({ status: "in_progress" }))}>작업 시작</button>}
-        {mine && progressing && task.stageKey && !(localGit && task.completionMode === "code") && <button disabled={busy || !review || !!mine.completedAt || pr !== (task.pullRequestUrl || "") || deployUrl !== (task.deploymentUrl || "")} onClick={() => void run(() => act("complete"))}>{mine.completedAt ? "내 작업 완료됨" : "내 작업 완료"}</button>}
+        {mine && task.status === "todo" && task.completionMode !== "code" && <button disabled={busy || waiting} onClick={() => void run(() => patch({ status: "in_progress" }))}>작업 시작</button>}
+        {mine && progressing && task.stageKey && !(localGit && task.completionMode === "code") && <button disabled={busy || waiting || materialsDirty || task.status !== "in_progress" || !review || !!mine.completedAt || pr !== (task.pullRequestUrl || "") || deployUrl !== (task.deploymentUrl || "")} onClick={() => void run(() => act("complete"))}>{mine.completedAt ? "내 작업 완료됨" : "내 작업 완료"}</button>}
         {mine?.completedAt && progressing && <p className="td-muted">다른 담당자의 작업 완료를 기다리고 있습니다.</p>}
         {task.status === "review_pending" && <p className="td-muted">작업 완료 · 승인 대기</p>}
         {legacyMergePending && <p className="td-muted">기존 승인은 완료됐지만 main 병합이 남아 있습니다. 업무에서 병합을 완료하면 배포 목록에 표시됩니다.</p>}
@@ -145,7 +157,6 @@ export default function TaskDetail({ task, projectId, projectName, userId, onClo
         {rejecting && <label>재작업 사유<textarea maxLength={5000} value={note} onChange={e => setNote(e.target.value)} /><button disabled={busy || !note.trim()} onClick={() => void run(() => act("changes_requested"))}>재작업 요청 보내기</button></label>}
         {!task.stageKey && onApprovals && <button onClick={onApprovals}>승인함 열기</button>}
         {["deploy_pending", "deploying", "released"].includes(task.status) && (!codeReview || !!task.mergeCommit) && onDeployments && <button onClick={onDeployments}>배포 화면 열기</button>}
-        <button disabled={busy} onClick={() => { onChanged(); setRefresh(v => v + 1); }}>최신 상태 확인</button>
       </section>
     </aside>
   </div>;

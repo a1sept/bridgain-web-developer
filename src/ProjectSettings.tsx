@@ -341,16 +341,6 @@ export default function ProjectSettings({
             refreshVersion={accessRefreshVersion}
           />
         </div>
-        <section
-          className="pw-panel project-personal-github"
-          aria-label="내 GitHub 계정 연결"
-        >
-          <RepositoryFields value={[]} onChange={() => {}} connectionOnly />
-          <p className="project-local-help">
-            프로젝트의 공용 저장소 등록과 별개인 내 계정 연결입니다. PC에서 Git
-            작업에 사용하는 인증과 저장소 접근 권한도 별도로 확인합니다.
-          </p>
-        </section>
         <section className="pw-panel project-local">
           <header className="project-local-heading">
             <div>

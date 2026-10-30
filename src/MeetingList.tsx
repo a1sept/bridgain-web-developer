@@ -81,7 +81,7 @@ export default function MeetingList({meetings,busy,canUpdate,pendingIds,onOpen,o
               {group==='running'&&<div className="ml-badges"><span className="ml-badge">● 진행 중</span><time dateTime={m.scheduledAt}>{hint||d.toLocaleDateString('ko-KR',{month:'long',day:'numeric'})} · {d.toLocaleTimeString('ko-KR',{hour:'2-digit',minute:'2-digit',hour12:false})}</time></div>}
               <div className="ml-title-row"><button className="ml-title" type="button" disabled={busy} onClick={()=>onOpen(m.id)}>{m.title}</button>{m.status==='scheduled'&&<span className="ml-badge ml-neutral">예정</span>}</div>
               <div className="ml-meta">{group!=='running'&&<><time dateTime={m.scheduledAt} className={hint==='오늘'?'ml-today':''}>{hint==='오늘'||hint==='내일'?`${hint} · `:''}{d.toLocaleTimeString('ko-KR',{hour:'2-digit',minute:'2-digit',hour12:false})}</time>{late&&<span className="ml-badge ml-warn">{hint==='오늘'?'시작 시각 지남':'일정 지남'}</span>}</>}<span>{m.durationMinutes}분 · {m.location||'장소 미정'}</span></div>
-              <p className="ml-summary">요청 {m.requests.length}개 · {m.decisionStatus==='final'?'생성된 업무':'업무 초안'} {taskCount}개{pending&&<span className="ml-approval">업무 생성 승인 대기</span>}</p>
+              <p className="ml-summary">요청 {m.requests.length}개 · {m.decisionStatus==='final'?'생성된 업무':'업무 초안'} {taskCount}개{pending&&<span className="ml-approval">회의 최종 승인 대기</span>}</p>
               {group==='running'&&m.notes.trim()&&<p className="ml-preview">{m.notes.replace(/\s+/g,' ')}</p>}
             </div>
             <div className="ml-actions">

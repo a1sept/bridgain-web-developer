@@ -81,7 +81,7 @@ export function ApproverPicker({
   return (
     <div className="approval-picker">
       <MemberPicker
-        label={label || "업무화 승인자 · 전원 승인 후 업무 생성"}
+        label={label || "회의 최종 승인자"}
         items={items}
         value={value}
         onChange={onChange}
@@ -219,8 +219,8 @@ export default function Approvals({
   };
   const kindLabels: Record<string, string> = {
     work: "작업 검토",
-    meeting: "회의 업무화",
-    urgent: "긴급 업무화",
+    meeting: "회의 최종 승인",
+    urgent: "긴급 승인",
   };
   const todoApprovals = items.filter((i) => i.canApprove);
   const todoCount = workItems.length + todoApprovals.length;
@@ -414,8 +414,8 @@ export default function Approvals({
           <h1>승인함</h1>
           <p>
             {todoCount
-              ? `처리할 승인 ${todoCount}건 · 작업 검토 ${workItems.length} · 업무화 승인 ${todoApprovals.length}`
-              : "처리할 승인이 없어요. 업무화 승인은 단계 업무를 만들고, 작업 검토는 완료된 결과를 확인해요."}
+              ? `처리할 승인 ${todoCount}건 · 작업 검토 ${workItems.length} · 회의·긴급 승인 ${todoApprovals.length}`
+              : "처리할 승인이 없어요. 회의·긴급 승인은 단계 업무를 만들고, 작업 검토는 완료된 결과를 확인해요."}
           </p>
         </div>
         <button
@@ -470,7 +470,7 @@ export default function Approvals({
           {visibleWork.map(renderWork)}
           {tab === "todo" && visibleItems.length > 0 && (
             <h2 className="approval-group">
-              업무화 승인 <small>{visibleItems.length}건</small>
+              회의·긴급 승인 <small>{visibleItems.length}건</small>
             </h2>
           )}
           {visibleItems.map(renderApproval)}
@@ -657,22 +657,36 @@ export function UrgentApproval({
     [members, setMembers] = useState<Approver[]>([]);
   const [stages, setStages] = useState<StagePlan[]>([]);
   const [workApprovers, setWorkApprovers] = useState<Approver[]>([]);
+  const [workApproversLoaded, setWorkApproversLoaded] = useState(false);
+  const defaultedStages = useRef(new Set<string>());
   useEffect(() => {
+    let active = true;
+    defaultedStages.current = new Set();
+    setStages([]);
+    setWorkApproversLoaded(false);
+    setApprovers([]);
+    setSelected([]);
+    setWorkApprovers([]);
+    setMembers([]);
+    setError("");
     workflowApi<{ approvers: Approver[]; workApprovers?: Approver[] }>(
       `/projects/${projectId}/approvals`,
     )
       .then((d) => {
+        if (!active) return;
         setApprovers(d.approvers);
+        setSelected(d.approvers.map(person => person.userId));
         setWorkApprovers(d.workApprovers || []);
+        setWorkApproversLoaded(true);
       })
-      .catch((e) => setError(e.message));
+      .catch((e) => { if (active) setError(e.message); });
     workflowApi<{
       projects: {
         id: string;
         members: (Approver & { accountType: string })[];
       }[];
     }>("")
-      .then((d) =>
+      .then((d) => active &&
         setMembers(
           d.projects
             .find((p) => p.id === projectId)
@@ -680,12 +694,23 @@ export function UrgentApproval({
         ),
       )
       .catch(() => {});
-  }, [projectId]);
+    return () => { active = false; };
+  }, [projectId, requestId]);
+  useEffect(() => {
+    if (!workApproversLoaded) return;
+    const added = new Set(stages.filter(stage => !defaultedStages.current.has(stage.id)).map(stage => stage.id));
+    if (!added.size) return;
+    added.forEach(id => defaultedStages.current.add(id));
+    const reviewerIds = workApprovers.map(person => person.userId);
+    setStages(current => current.map(stage => added.has(stage.id) && !stage.reviewerIds.length
+      ? { ...stage, reviewerIds: [...reviewerIds] } : stage));
+  }, [stages, workApprovers, workApproversLoaded]);
   return (
     <section className="rb-panel urgent-approval">
       <h2>긴급 승인 요청</h2>
       <p>회의만 생략하며 필수 승인자 전원의 승인이 필요합니다.</p>
       <ApproverPicker
+        label="긴급 승인자"
         items={approvers}
         value={selected}
         onChange={setSelected}

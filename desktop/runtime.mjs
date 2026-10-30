@@ -318,9 +318,9 @@ export class DesktopRuntime {
       if (!project) throw Error("프로젝트 접근 권한을 확인해주세요.");
       const prepared = await prepareTaskWorkspace({ folder,
         allowedRepositories: project.repositoryUrls || [],
-        path: binding?.path || join(this.directory, "worktrees", owner.key, pid, id),
+        path: binding?.path || folder,
         branch: options.branch, baseBranch: options.baseBranch,
-        existing: !!options.existing, repositoryUrl: task.repositoryUrl });
+        existing: !!binding || !!options.existing, repositoryUrl: task.repositoryUrl });
       owner.settings.taskWorkspaces[key] = prepared;
       await this.save();
       await this.assertOwner(owner.key);

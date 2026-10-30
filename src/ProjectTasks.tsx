@@ -29,6 +29,7 @@ export type ProjectTask = {
     | "deploying"
     | "done"
     | "released";
+  waitingForPredecessors?: boolean;
   stageKey?: string;
   stageName?: string;
   stageOrder?: number;
@@ -79,6 +80,8 @@ export type ProjectTask = {
     id: string;
     documentId: string;
     title: string;
+    content?: string;
+    url?: string | null;
     changeSummary: string;
     createdAt: string;
   }[];
@@ -92,7 +95,10 @@ const reviewStatuses: Record<string, string> = {
   changes_requested: "수정 요청",
   stale: "재검토 필요",
 };
+export const waitingForPredecessors = (task: ProjectTask) => ["todo", "in_progress"].includes(task.status) && (task.waitingForPredecessors ?? !!task.dependencies?.some(d => !["done", "released", "deploy_pending", "deploying"].includes(d.status)));
+const displayStatus = (task: ProjectTask) => waitingForPredecessors(task) ? "waiting" : task.status;
 const statuses = {
+  waiting: "선행 업무 대기",
   todo: "진행 전",
   in_progress: "진행 중",
   review_pending: "작업 완료 · 승인 대기",
@@ -240,7 +246,7 @@ export default function ProjectTasks({
   function taskCard(task: ProjectTask) {
     return (
       <article
-        className={`pt-card ${task.status === "done" ? "pt-done" : ""}`}
+        className={`pt-card ${waitingForPredecessors(task) ? "pt-waiting" : ""} ${task.status === "done" ? "pt-done" : ""}`}
         key={task.id}
       >
         <button
@@ -376,19 +382,19 @@ export default function ProjectTasks({
         !loadError &&
         (view === "board" ? (
           <div className="pt-board">
-            {(Object.keys(statuses) as ProjectTask["status"][]).map(
+            {(Object.keys(statuses) as (keyof typeof statuses)[]).map(
               (status) => (
                 <section className={`pt-column ${status}`} key={status}>
                   <h2>
                     <span>{statuses[status]}</span>
                     <span>
-                      {visible.filter((task) => task.status === status).length}
+                      {visible.filter((task) => displayStatus(task) === status).length}
                     </span>
                   </h2>
                   {visible
-                    .filter((task) => task.status === status)
+                    .filter((task) => displayStatus(task) === status)
                     .map(taskCard)}
-                  {!visible.some((task) => task.status === status) && (
+                  {!visible.some((task) => displayStatus(task) === status) && (
                     <p className="pt-column-empty">
                       {statuses[status]} 업무가 없어요.
                     </p>
@@ -407,7 +413,7 @@ export default function ProjectTasks({
             </div>
             {visible.map((task) => (
               <button
-                className="pt-list-row"
+                className={`pt-list-row ${waitingForPredecessors(task) ? "pt-waiting" : ""}`}
                 key={task.id}
                 onClick={() => open(task)}
               >
@@ -425,7 +431,7 @@ export default function ProjectTasks({
                   )}
                 </span>
                 <span className={`pt-status ${task.status}`}>
-                  {statuses[task.status]}
+                  {statuses[displayStatus(task)]}
                 </span>
                 <span>
                   {task.assignees
