@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { workflowApi } from "./Approvals";
 import "./stage-workflow.css";
+import { RemoteTaskCode } from "./TaskCode";
 type Person = {
   userId: string;
   displayName: string;
@@ -27,6 +28,7 @@ export default function WorkReview({
   disabled?: boolean;
   workRevision?: number;
 }) {
+  const [showCode, setShowCode] = useState(false);
   const [data, setData] = useState<{
       events: {
         id: string;
@@ -74,6 +76,8 @@ export default function WorkReview({
   return (
     <section className="sw-review">
       <h3>작업 완료 · 전원 승인</h3>
+      <button type="button" onClick={() => setShowCode(v => !v)}>{showCode ? "PR 코드 접기" : "연결된 PR 코드 확인"}</button>
+      {showCode && <RemoteTaskCode projectId={projectId} taskId={taskId} />}
       <p className="sw-help">
         작업 완료는 자동 승인이 아닙니다. 재작업 요청 시 전원 완료와 승인이
         초기화됩니다.

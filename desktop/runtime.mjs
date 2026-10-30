@@ -1,4 +1,5 @@
 import { prepareTaskWorkspace } from "./task-workspace.mjs";
+import { inspectRepository, cloneRepository, verifyBinding, gitState, fileDiff, commitFiles, pushBranch, submissionState, git } from "./local-git.mjs";
 import { projectTool } from "./project-files.mjs";
 import { mkdir, readFile, writeFile, rename, realpath } from "node:fs/promises";
 import { join } from "node:path";
@@ -26,6 +27,7 @@ export class DesktopRuntime {
     openAuth,
     openCodex,
     openPath,
+    openEditor,
     emit,
     executable = process.execPath,
   }) {
@@ -34,6 +36,7 @@ export class DesktopRuntime {
       api,
       chooseFolder,
       openPath,
+      openEditor,
       openAuth,
       emit,
       executable,
@@ -176,14 +179,81 @@ export class DesktopRuntime {
   async folder(pid) {
     pid = identifier(pid);
     const owner = await this.owner();
-    await this.api(`/api/workspace/projects/${pid}/ai/sessions`);
+    const snapshot = await this.api("/api/workspace");
+    const project = snapshot.projects?.find(p => p.id === pid);
+    if (!project) throw Error("프로젝트 접근 권한을 확인해주세요.");
     const selected = await this.chooseFolder();
     if (!selected) return null;
     const folder = await realpath(selected);
+    await inspectRepository(folder, project.repositoryUrls || []);
+    await this.assertOwner(owner.key);
     owner.settings.folders[pid] = folder;
     await this.save();
     await this.syncProjects();
     return folder;
+  }
+  async cloneProject(pid, repositoryUrl) {
+    pid = identifier(pid);
+    const owner = await this.owner();
+    const snapshot = await this.api("/api/workspace");
+    const project = snapshot.projects?.find(p => p.id === pid);
+    if (!project) throw Error("프로젝트 접근 권한을 확인해주세요.");
+    const selected = await this.chooseFolder();
+    if (!selected) return null;
+    await this.assertOwner(owner.key);
+    const repo = await cloneRepository(selected, repositoryUrl, project.repositoryUrls || []);
+    await this.assertOwner(owner.key);
+    owner.settings.folders[pid] = repo.path;
+    await this.save();
+    await this.syncProjects();
+    return repo;
+  }
+  async repositoryState(pid) {
+    pid = identifier(pid);
+    const owner = await this.owner();
+    const snapshot = await this.api("/api/workspace");
+    const project = snapshot.projects?.find(p => p.id === pid);
+    if (!project) throw Error("프로젝트 접근 권한을 확인해주세요.");
+    const folder = owner.settings.folders[pid];
+    if (!folder) return null;
+    const repo = await inspectRepository(folder, project.repositoryUrls || []);
+    let author = "";
+    try { author = (await git(folder, "var", "GIT_AUTHOR_IDENT")).trim(); } catch {}
+    return { ...repo, authorConfigured: !!author };
+  }
+  async taskGit(pid, id, action = "state", options = {}) {
+    pid = identifier(pid); id = identifier(id);
+    if (!["state", "diff", "commit", "push", "fetch", "submit", "editor"].includes(action)) throw Error("지원하지 않는 Git 작업입니다.");
+    const owner = await this.owner();
+    const write = ["commit", "push", "submit"].includes(action);
+    const context = await this.api(`/api/workspace/projects/${pid}/tasks/${id}/git/context`, write ? {} : undefined);
+    const binding = owner.settings.taskWorkspaces?.[`${pid}:${id}`];
+    await verifyBinding(binding, context.repositoryUrls);
+    if (context.task.workBranch !== binding.branch || context.task.repositoryUrl !== binding.repositoryUrl)
+      throw Error("서버 업무와 로컬 브랜치 연결이 다릅니다. 업무 연결을 완료해주세요.");
+    const lock = `${owner.key}:${pid}`;
+    if (this.taskLocks.has(lock)) throw Error("Git 작업이 진행 중입니다. 잠시 후 다시 시도해주세요.");
+    this.taskLocks.add(lock);
+    try {
+      await this.assertOwner(owner.key);
+      if (action === "diff") return await fileDiff(binding, options.path);
+      if (action === "commit") return await commitFiles(binding, options.paths, options.message, options.expectedHead);
+      if (action === "push") return await pushBranch(binding);
+      if (action === "fetch") await git(binding.path, "fetch", "origin");
+      if (action === "editor") {
+        try {
+          if (this.openEditor) await this.openEditor(binding.path);
+          else await exec("code", ["--new-window", binding.path], { timeout: 15000 });
+        }
+        catch { throw Error("VS Code를 설치하고 vscode 링크 연결을 확인해주세요. 로컬 작업 디렉토리를 직접 열어도 됩니다."); }
+      }
+      if (action === "submit") {
+        const state = await submissionState(binding);
+        await this.assertOwner(owner.key);
+        return await this.api(`/api/workspace/projects/${pid}/tasks/${id}/git/submit`, { headSha: state.head, expectedRevision: context.task.workRevision });
+      }
+      return await gitState(binding);
+    } finally { this.taskLocks.delete(lock); }
   }
   async clearFolder(pid) {
     const owner = await this.owner();
@@ -217,6 +287,7 @@ export class DesktopRuntime {
       return { folder, binding };
     }
     if (action !== "start" || !folder) throw Error("로컬 폴더를 연결해주세요.");
+    await this.api(`/api/workspace/projects/${pid}/tasks/${id}/git/context`, {});
     if (!task.assignees.some(a => a.userId === owner.user.id) ||
         !["todo", "in_progress"].includes(task.status) || task.assignees.some(a => a.completedAt))
       throw Error("진행 가능한 업무의 담당자만 브랜치를 연결할 수 있습니다.");
@@ -237,10 +308,12 @@ export class DesktopRuntime {
       owner.settings.taskWorkspaces[key] = prepared;
       await this.save();
       await this.assertOwner(owner.key);
+      await verifyBinding(prepared, project.repositoryUrls || []);
+      await pushBranch(prepared);
       try {
         await this.api(`/api/workspace/projects/${pid}/tasks/${id}`, {
           expectedVersion: task.version, status: "in_progress",
-          workBranch: prepared.branch, repositoryUrl: prepared.repositoryUrl,
+          workBranch: prepared.branch, liveBranch: prepared.baseBranch, repositoryUrl: prepared.repositoryUrl,
         }, "PATCH");
       } catch (error) {
         throw Error(`로컬 작업 폴더는 준비됐지만 업무 연결에 실패했습니다. 다시 시작하면 기존 폴더를 재사용합니다. ${error.message}`);

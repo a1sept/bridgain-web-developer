@@ -1,4 +1,6 @@
 export type TaskWorkspace = { folder?: string; binding?: { path: string; branch: string; baseBranch: string; repositoryUrl: string } };
+export type GitState = { files: { path: string; status: string; originalPath?: string }[]; head: string; remoteSha: string | null; ahead: number | null; behind: number | null; checkedAt: string; history: { sha: string; subject: string; author: string; date: string }[] };
+export type RepositoryState = { path: string; repositoryUrl: string; branch: string; authorConfigured?: boolean };
 export type AiProviderName = "codex" | "claude";
 export type Connection = {
   connected: boolean;
@@ -30,6 +32,9 @@ export type DesktopEvent = {
   name?: string;
 };
 export type DesktopBridge = {
+  cloneProject?: (pid: string, repositoryUrl: string) => Promise<RepositoryState | null>;
+  repositoryState?: (pid: string) => Promise<RepositoryState | null>;
+  taskGit?: (pid: string, id: string, action?: string, options?: Record<string, unknown>) => Promise<any>;
   taskWorkspace: (projectId: string, taskId: string, action?: "state" | "start" | "open",
     options?: { branch: string; baseBranch: string; existing: boolean }) => Promise<TaskWorkspace>;
   connectServer: (url: string) => Promise<void>;

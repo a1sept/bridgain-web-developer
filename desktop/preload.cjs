@@ -9,6 +9,9 @@ contextBridge.exposeInMainWorld(
   Object.freeze({
     connectServer: (url) => call("connect-server", url),
     taskWorkspace: (pid, id, action, options) => call("task-workspace", pid, id, action, options),
+    taskGit: (pid, id, action, options) => call("task-git", pid, id, action, options),
+    cloneProject: (pid, url) => call("clone-project", pid, url),
+    repositoryState: (pid) => call("repository-state", pid),
     state: () => call("state"),
     syncProjects: () => call("sync-projects"),
     openCodex: (sessionId) => call("open-codex", sessionId),

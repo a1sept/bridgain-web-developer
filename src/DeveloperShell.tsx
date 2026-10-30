@@ -289,7 +289,6 @@ export default function DeveloperShell(p: Props) {
                   meetings: "meetings.read",
                   documents: "documents.read",
                   activity: "activity.read",
-                  settings: "project.settings",
                 };
                 return (
                   !permission[key] ||

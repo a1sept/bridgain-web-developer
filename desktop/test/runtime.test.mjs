@@ -4,12 +4,20 @@ import { mkdtemp, mkdir, realpath } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { DesktopRuntime } from "../runtime.mjs";
+import { execFile } from "node:child_process";
+import { promisify } from "node:util";
+const exec = promisify(execFile);
+async function repository(cwd) {
+  await exec("git", ["init", "-b", "main", cwd]);
+  await exec("git", ["remote", "add", "origin", "https://github.com/example/project"], { cwd });
+}
 const pid = "abcdef01-1234-4321-abcd-123456789012",
   sid = "abcdef02-1234-4321-abcd-123456789012";
 async function fixture() {
   const directory = await mkdtemp(join(tmpdir(), "bridgain-ai-test-"));
   const cwd = join(directory, "project");
   await mkdir(cwd);
+  await repository(cwd);
   let user = { id: "dev1", accountType: "team" };
   const calls = [],
     events = [];
@@ -18,6 +26,7 @@ async function fixture() {
     api: async (path, body) => {
       calls.push({ path, body });
       if (path === "/api/auth/me") return { user };
+      if (path === "/api/workspace") return { projects: [pid, "abcdef03-1234-4321-abcd-123456789012"].map(id => ({ id, repositoryUrls: ["https://github.com/example/project"] })) };
       if (path.endsWith("/" + sid))
         return {
           session: { provider: "codex", localSessionId: null },
@@ -61,6 +70,7 @@ test("each project keeps its own folder, including after reload and disconnect",
   const otherPid = "abcdef03-1234-4321-abcd-123456789012";
   const otherFolder = join(cwd, "other-project");
   await mkdir(otherFolder);
+  await repository(otherFolder);
   await runtime.folder(pid);
   runtime.chooseFolder = async () => otherFolder;
   await runtime.folder(otherPid);

@@ -45,6 +45,7 @@ test("server failure retains prepared worktree; retry syncs status only after pr
     if (url === "/api/auth/me") return { user: { id: "dev", accountType: "team" } };
     if (url === "/api/workspace") return { projects: [{ id: pid, repositoryUrls: [f.remote] }] };
     if (url.endsWith("/tasks")) return { tasks: [task] };
+    if (url.endsWith("/git/context")) return { task, repositoryUrls: [f.remote] };
     if (body) { patches.push(body); if (fail) throw Error("offline"); }
     return {};
   } });

@@ -141,8 +141,13 @@ export default function ProjectChannel({
     setItems([]);
     setSelected(null);
     void load();
+    const timer = window.setInterval(() => { if (!document.hidden) void load(); }, 15000);
+    const refresh = () => void load();
+    window.addEventListener("focus", refresh);
     return () => {
       epoch.current++;
+      clearInterval(timer);
+      window.removeEventListener("focus", refresh);
     };
   }, [load]);
   const loadReplies = useCallback(

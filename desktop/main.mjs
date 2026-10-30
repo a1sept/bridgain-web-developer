@@ -25,7 +25,7 @@ async function main() {
   async function api(path, body, method = "POST") {
     if (!origin || !path.startsWith("/api/") || path.includes(".."))
       throw Error("서버 연결을 확인해주세요.");
-    const headers = {};
+    const headers = { "X-Bridgain-App": "developer" };
     if (body !== undefined) {
       const response = await window.webContents.session.fetch(
         origin + "/api/auth/csrf",
@@ -132,12 +132,13 @@ async function main() {
     api,
     chooseFolder: async () => {
       const result = await dialog.showOpenDialog(window, {
-        title: "프로젝트 폴더 연결",
-        properties: ["openDirectory"],
+        title: "로컬 작업 디렉토리 선택",
+        properties: ["openDirectory", "createDirectory"],
       });
       return result.canceled ? null : result.filePaths[0];
     },
     openPath: (path) => shell.openPath(path),
+    openEditor: (path) => shell.openExternal(`vscode://file${pathToFileURL(path).pathname}`),
     openCodex: (url) => shell.openExternal(url),
     openAuth: (url, provider = "claude") =>
       shell.openExternal(authUrl(url, provider)),
@@ -148,6 +149,9 @@ async function main() {
   await runtime.load();
   handle("connect-server", connectServer, true);
   handle("task-workspace", (pid, id, action, options) => runtime.taskWorkspace(pid, id, action, options));
+  handle("task-git", (pid, id, action, options) => runtime.taskGit(pid, id, action, options));
+  handle("clone-project", (pid, url) => runtime.cloneProject(pid, url));
+  handle("repository-state", (pid) => runtime.repositoryState(pid));
   handle("state", () => runtime.state());
   handle("sync-projects", () => runtime.syncProjects());
   handle("open-codex", (id) => runtime.openCodex(id));
@@ -159,6 +163,7 @@ async function main() {
   handle("stop", (id) => runtime.stop(id));
   handle("release", () => runtime.release());
   window.webContents.setWindowOpenHandler(({ url }) => {
+    if (origin && url === "about:blank") return { action: "allow", overrideBrowserWindowOptions: { width: 760, height: 820, webPreferences: { nodeIntegration: false, contextIsolation: true, sandbox: true, partition: "persist:bridgain" } } };
     try {
       const parsed = new URL(url);
       if (
@@ -169,6 +174,16 @@ async function main() {
         void shell.openExternal(url);
     } catch {}
     return { action: "deny" };
+  });
+  window.webContents.on("did-create-window", child => {
+    // OAuth stays in the authenticated Electron session; child IPC is rejected by validateSender.
+    const allowed = url => {
+      try { const u = new URL(url); return url === "about:blank" || (!u.username && !u.password && (u.origin === origin || u.origin === "https://github.com")); }
+      catch { return false; }
+    };
+    child.webContents.on("will-navigate", (event, url) => { if (!allowed(url)) event.preventDefault(); });
+    child.webContents.on("will-redirect", (event, url) => { if (!allowed(url)) event.preventDefault(); });
+    child.webContents.setWindowOpenHandler(() => ({ action: "deny" }));
   });
   window.webContents.on("will-navigate", (event, url) => {
     if (origin && new URL(url).origin !== origin) event.preventDefault();

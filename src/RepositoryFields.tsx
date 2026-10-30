@@ -60,12 +60,14 @@ export default function RepositoryFields({
   disabled = false,
   relations = [],
   onRelationsChange,
+  connectionOnly = false,
 }: {
   value: string[];
   onChange: (value: string[]) => void;
   disabled?: boolean;
   relations?: RepositoryRelation[];
   onRelationsChange?: (value: RepositoryRelation[]) => void;
+  connectionOnly?: boolean;
 }) {
   const [discoveries, setDiscoveries] = useState<
     Record<string, { data?: Discovery; error?: string }>
@@ -275,6 +277,7 @@ export default function RepositoryFields({
         (r.owner?.login ?? r.fullName.split("/")[0]) === activeAccount) &&
       r.fullName.toLowerCase().includes(query.trim().toLowerCase()),
   );
+  if (connectionOnly) return <section className="repo-fields"><h3>내 GitHub 계정</h3><p>{status?.connected ? "GitHub 연결됨" : "PR 제출·검토를 위해 내 GitHub 계정을 연결해주세요."}</p><button type="button" disabled={busy || connecting || !status?.configured} onClick={() => void connect()}>{connecting ? "GitHub 승인 대기…" : status?.connected ? "GitHub 다시 인증" : "GitHub 연결"}</button>{connecting && <button type="button" onClick={stopConnection}>취소</button>}{error && <p role="alert">{error}</p>}</section>;
   return (
     <fieldset className="repo-fields" disabled={disabled}>
       <legend>
