@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import type { GitState } from "./desktop";
 import { workflowApi } from "./Approvals";
 import "./task-code.css";
+import CodeDiff, { FileStatus } from "./CodeDiff";
 
 export function useTaskGit(pid: string, id: string, enabled: boolean, onChanged: () => void) {
   const [state, setState] = useState<GitState>();
@@ -53,9 +54,9 @@ export function LocalCode({ git, history = false, editable }: { git: Git; histor
   if (!git.state) return <p className="td-muted">{git.error || "로컬 Git 상태 확인 중…"}</p>;
   if (history) return <div className="tc-history">{git.state.history.map(c => <div key={c.sha}><strong>{c.subject}</strong><small>{c.sha.slice(0, 10)} · {c.author} · {new Date(c.date).toLocaleString()}</small></div>)}</div>;
   return <section className="tc-code" aria-label="로컬 코드 변경사항"><p className="td-muted">저장된 파일의 변경을 4초마다 확인합니다. 원격 상태는 마지막 fetch 기준입니다.</p>
-    <div className="tc-files">{git.state.files.map(f => <div key={f.path}><input type="checkbox" aria-label={`${f.path} 커밋 선택`} checked={git.selected.includes(f.path)} disabled={!editable || git.busy} onChange={e => git.setSelected(s => e.target.checked ? [...s, f.path] : s.filter(p => p !== f.path))} /><button type="button" aria-pressed={git.file === f.path} onClick={() => git.setFile(f.path)}>{f.path} <small>{f.status}</small></button></div>)}</div>
+    <div className="tc-files">{git.state.files.map(f => <div key={f.path}><input type="checkbox" aria-label={`${f.path} 커밋 선택`} checked={git.selected.includes(f.path)} disabled={!editable || git.busy} onChange={e => git.setSelected(s => e.target.checked ? [...s, f.path] : s.filter(p => p !== f.path))} /><button type="button" aria-pressed={git.file === f.path} onClick={() => git.setFile(f.path)}>{f.path} <FileStatus status={f.status} /></button></div>)}</div>
     {!git.state.files.length && <p>미커밋 변경사항이 없습니다.</p>}
-    {git.file && <><h3>{git.file}</h3><pre className="tc-diff">{git.diff || "차이 확인 중…"}</pre></>}
+    {git.file && <><h3>{git.file}</h3><CodeDiff diff={git.diff} empty="차이 확인 중…" /></>}
   </section>;
 }
 export function GitControls({ git, editable }: { git: Git; editable: boolean }) {
@@ -83,6 +84,6 @@ export function RemoteTaskCode({ projectId, taskId }: { projectId: string; taskI
     {data && <><p className="td-muted">PR 커밋 {data.headSha.slice(0, 10)}{data.approvedHeadSha && ` · 승인 커밋 ${data.approvedHeadSha.slice(0, 10)}`} · <a href={data.pullRequestUrl} target="_blank" rel="noreferrer">GitHub에서 보기</a></p>
       {data.limited && <p>최대 300개 파일을 표시합니다. 전체 내용은 GitHub에서 확인해주세요.</p>}
       <label>변경 파일<select value={file} onChange={e => setFile(e.target.value)}>{data.files.map(f => <option key={f.path} value={f.path}>{f.path}</option>)}</select></label>
-      <pre className="tc-diff">{data.files.find(f => f.path === file)?.diff || "변경사항 없음"}</pre></>}
+      <CodeDiff diff={data.files.find(f => f.path === file)?.diff || ""} /></>}
   </section>;
 }
