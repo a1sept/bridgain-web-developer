@@ -1,7 +1,6 @@
 import AiWorkspace from "./ai/AiWorkspace";
 import ProjectWorkspace from "./ProjectWorkspace";
 import LiveWorkspace from "./LiveWorkspace";
-import RepositoryFields from "./RepositoryFields";
 import { useEffect, useRef, useState, type FormEvent } from "react";
 
 const APP: string = "developer";
@@ -80,8 +79,6 @@ function errorText(error: unknown) {
     : messages[error.code] || error.message;
 }
 const initialUrl = new URL(window.location.href);
-// An account hint only: OAuth still requires this browser's authenticated session and CSRF.
-const githubDesktopUser = /^#github-connect=([a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12})$/i.exec(initialUrl.hash)?.[1];
 const retiredEmailLink = ["/verify-email", "/reset-password"].includes(
   initialUrl.pathname,
 );
@@ -355,26 +352,6 @@ function AuthApp() {
               다시 시도
             </button>
           )}
-        </main>
-      </div>
-    );
-  if (user?.accountType === "team" &&
-    githubDesktopUser)
-    return (
-      <div className="loading-shell">
-        <Brand />
-        <main>
-          <h1>데스크톱 GitHub 연결</h1>
-          <p>{user.displayName} · {user.email}</p>
-          {user.id === githubDesktopUser ? <>
-            <p>아래에서 GitHub 연결을 완료한 뒤 데스크톱 앱으로 돌아가세요. 앱이 연결 상태를 자동으로 확인합니다.</p>
-            <RepositoryFields value={[]} onChange={() => {}} connectionOnly expectedUserId={githubDesktopUser} />
-          </> : <p role="alert">데스크톱과 다른 Bridgain 계정입니다. 로그아웃한 뒤 앱에서 사용하는 계정으로 로그인해주세요.</p>}
-          <button type="button" onClick={() => void run(async () => {
-            await api("logout", {});
-            setUser(null);
-          })} disabled={busy}>다른 계정으로 로그인</button>
-          {error && <p role="alert">{error}</p>}
         </main>
       </div>
     );

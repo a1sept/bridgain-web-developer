@@ -3,7 +3,8 @@ import { join } from "node:path";
 import { pathToFileURL } from "node:url";
 import { readFile, writeFile, mkdir } from "node:fs/promises";
 import { DesktopRuntime } from "./runtime.mjs";
-import { serverOrigin, providerName, authUrl, githubBrowserUrl } from "./security.mjs";
+import { serverOrigin, providerName, authUrl } from "./security.mjs";
+import { GithubAuth } from "./github-auth.mjs";
 // Complete ESM evaluation before waiting for Electron to emit ready.
 async function main() {
   if (!app.requestSingleInstanceLock()) {
@@ -23,21 +24,22 @@ async function main() {
   const root = join(app.getPath("userData"), "bridgain");
   const landing = join(import.meta.dirname, "welcome.html");
   async function api(path, body, method = "POST") {
-    if (!origin || !path.startsWith("/api/") || path.includes(".."))
+    const requestOrigin = origin;
+    if (!requestOrigin || !path.startsWith("/api/") || path.includes(".."))
       throw Error("서버 연결을 확인해주세요.");
     const headers = { "X-Bridgain-App": "developer" };
     if (body !== undefined) {
       const response = await window.webContents.session.fetch(
-        origin + "/api/auth/csrf",
+        requestOrigin + "/api/auth/csrf",
         { credentials: "include", redirect: "error" },
       );
       if (!response.ok) throw Error("다시 로그인해주세요.");
       const csrf = await response.json();
       headers["Content-Type"] = "application/json";
       headers["X-CSRF-Token"] = csrf.csrfToken;
-      headers.Origin = origin;
+      headers.Origin = requestOrigin;
     }
-    const response = await window.webContents.session.fetch(origin + path, {
+    const response = await window.webContents.session.fetch(requestOrigin + path, {
       method: body === undefined ? "GET" : method,
       credentials: "include",
       headers,
@@ -77,6 +79,7 @@ async function main() {
   }
   async function connectServer(url) {
     const next = serverOrigin(url);
+    await githubAuth.cancel();
     runtime.release();
     origin = next;
     runtime.origin = next;
@@ -114,7 +117,8 @@ async function main() {
         submenu: [
           {
             label: "서버 연결 변경",
-            click: () => {
+            click: async () => {
+              await githubAuth.cancel();
               runtime.release();
               origin = "";
               void window.loadFile(landing);
@@ -147,11 +151,29 @@ async function main() {
     },
   });
   await runtime.load();
-  handle("connect-server", connectServer, true);
-  handle("connect-github", async () => {
-    const result = await api("/api/workspace/github/desktop-connect", {});
-    await shell.openExternal(githubBrowserUrl(result.url));
+  const githubAuth = new GithubAuth({
+    api,
+    apiFactory: () => {
+      const startedOrigin = origin;
+      return async (path, body) => {
+        if (origin !== startedOrigin) throw Error("서버가 변경되어 GitHub 연결을 취소했습니다.");
+        return api(path, body);
+      };
+    },
+    openBrowser: url => shell.openExternal(url),
+    confirmAccount: async account => {
+      if (!account || typeof account.login !== "string") throw Error("GitHub 계정을 확인하지 못했습니다.");
+      const { response } = await dialog.showMessageBox(window, {
+        type: "question", title: "GitHub 계정 연결", message: `${account.login} 계정을 연결할까요?`,
+        detail: "현재 Bridgain 계정에서 이 GitHub 계정을 사용합니다.",
+        buttons: ["연결", "취소"], defaultId: 0, cancelId: 1,
+      });
+      return response === 0;
+    },
   });
+  handle("connect-server", connectServer, true);
+  handle("connect-github", () => githubAuth.connect());
+  handle("cancel-github", () => githubAuth.cancel());
   handle("task-workspace", (pid, id, action, options) => runtime.taskWorkspace(pid, id, action, options));
   handle("task-git", (pid, id, action, options) => runtime.taskGit(pid, id, action, options));
   handle("clone-project", (pid, url) => runtime.cloneProject(pid, url));
@@ -165,7 +187,7 @@ async function main() {
   handle("clear-folder", (pid) => runtime.clearFolder(pid));
   handle("run", (pid, id, message) => runtime.run(pid, id, message));
   handle("stop", (id) => runtime.stop(id));
-  handle("release", () => runtime.release());
+  handle("release", async () => { await githubAuth.cancel(); return runtime.release(); });
   window.webContents.setWindowOpenHandler(({ url }) => {
     if (origin && url === "about:blank") return { action: "allow", overrideBrowserWindowOptions: { width: 760, height: 820, webPreferences: { nodeIntegration: false, contextIsolation: true, sandbox: true, partition: "persist:bridgain" } } };
     try {
@@ -200,7 +222,7 @@ async function main() {
         runtime.release();
     },
   );
-  app.on("before-quit", () => runtime.release());
+  app.on("before-quit", () => { void githubAuth.cancel(); runtime.release(); });
   app.on("window-all-closed", () => app.quit());
   const configured = process.env.BRIDGAIN_DEVELOPER_URL;
   let saved;

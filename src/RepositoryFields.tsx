@@ -32,7 +32,7 @@ type Status = {
   connected: boolean;
   installUrl: string | null;
 };
-async function github(path: string, mutation = false, body?: object) {
+async function github(path: string, mutation = false) {
   const headers: Record<string, string> = {};
   if (mutation) {
     const csrf = await fetch("/api/auth/csrf", {
@@ -42,14 +42,12 @@ async function github(path: string, mutation = false, body?: object) {
     if (!csrf.ok)
       throw new Error("보안 확인에 실패했어요. 다시 로그인해주세요.");
     headers["X-CSRF-Token"] = (await csrf.json()).csrfToken;
-    if (body) headers["Content-Type"] = "application/json";
   }
   const response = await fetch(`/api/workspace/github/${path}`, {
     method: mutation ? "POST" : "GET",
     credentials: "same-origin",
     cache: "no-store",
     headers,
-    body: body ? JSON.stringify(body) : undefined,
   });
   const data = await response.json();
   if (!response.ok)
@@ -63,7 +61,6 @@ export default function RepositoryFields({
   relations = [],
   onRelationsChange,
   connectionOnly = false,
-  expectedUserId,
 }: {
   value: string[];
   onChange: (value: string[]) => void;
@@ -71,7 +68,6 @@ export default function RepositoryFields({
   relations?: RepositoryRelation[];
   onRelationsChange?: (value: RepositoryRelation[]) => void;
   connectionOnly?: boolean;
-  expectedUserId?: string;
 }) {
   const [discoveries, setDiscoveries] = useState<
     Record<string, { data?: Discovery; error?: string }>
@@ -143,6 +139,7 @@ export default function RepositoryFields({
   const [connecting, setConnecting] = useState(false);
   const activeFlow = useRef<{
     popup: Window | null;
+    cancel?: () => Promise<void>;
     timer?: ReturnType<typeof setTimeout>;
   } | null>(null);
   function stopConnection() {
@@ -150,6 +147,7 @@ export default function RepositoryFields({
     activeFlow.current = null;
     if (flow?.timer) clearTimeout(flow.timer);
     flow?.popup?.close();
+    void flow?.cancel?.().catch(() => {});
     setConnecting(false);
   }
   async function refresh() {
@@ -187,6 +185,7 @@ export default function RepositoryFields({
       activeFlow.current = null;
       if (flow?.timer) clearTimeout(flow.timer);
       flow?.popup?.close();
+      void flow?.cancel?.().catch(() => {});
       channel?.close();
       window.removeEventListener("focus", onFocus);
     };
@@ -197,7 +196,7 @@ export default function RepositoryFields({
       return;
     }
     const desktop = window.bridgainDesktop;
-    if (desktop && !desktop.connectGithub) {
+    if (desktop && (!desktop.connectGithub || !desktop.cancelGithub)) {
       setError("데스크톱 앱을 업데이트하고 다시 실행해주세요.");
       return;
     }
@@ -211,13 +210,14 @@ export default function RepositoryFields({
       return;
     }
     if (popup) popup.opener = null;
-    const flow: { popup: Window | null; timer?: ReturnType<typeof setTimeout> } = {
+    const flow: { popup: Window | null; cancel?: () => Promise<void>; timer?: ReturnType<typeof setTimeout> } = {
       popup,
+      cancel: desktop?.cancelGithub,
     };
     activeFlow.current = flow;
     setConnecting(true);
     setError("");
-    const deadline = Date.now() + 10 * 60 * 1000;
+    let deadline = Date.now() + 10 * 60 * 1000;
     async function check() {
       if (activeFlow.current !== flow) return;
       try {
@@ -257,8 +257,10 @@ export default function RepositoryFields({
     try {
       if (desktop?.connectGithub) {
         await desktop.connectGithub();
+        // Give repository installation its own window after native OAuth finishes.
+        deadline = Date.now() + 10 * 60 * 1000;
       } else {
-        const { url } = await github("connect", true, expectedUserId ? { expectedUserId } : undefined);
+        const { url } = await github("connect", true);
         if (activeFlow.current !== flow) return;
         if (popup) popup.location.href = url;
       }
@@ -291,7 +293,7 @@ export default function RepositoryFields({
         (r.owner?.login ?? r.fullName.split("/")[0]) === activeAccount) &&
       r.fullName.toLowerCase().includes(query.trim().toLowerCase()),
   );
-  if (connectionOnly) return <section className="repo-fields"><h3>내 GitHub 계정</h3><p>{status?.connected ? "GitHub 연결됨" : "PR 제출·검토를 위해 내 GitHub 계정을 연결해주세요."}</p><button type="button" disabled={busy || connecting || !status?.configured} onClick={() => void connect()}>{connecting ? "GitHub 승인 대기…" : status?.connected ? "GitHub 다시 인증" : "GitHub 연결"}</button>{connecting && <><p role="status">브라우저에서 같은 Bridgain 계정으로 로그인한 뒤 GitHub 연결을 완료해주세요.</p><button type="button" onClick={stopConnection}>취소</button></>}{error && <p role="alert">{error}</p>}</section>;
+  if (connectionOnly) return <section className="repo-fields"><h3>내 GitHub 계정</h3><p>{status?.connected ? "GitHub 연결됨" : "PR 제출·검토를 위해 내 GitHub 계정을 연결해주세요."}</p><button type="button" disabled={busy || connecting || !status?.configured} onClick={() => void connect()}>{connecting ? "GitHub 승인 대기…" : status?.connected ? "GitHub 다시 인증" : "GitHub 연결"}</button>{connecting && <><p role="status">{window.bridgainDesktop ? "기본 브라우저에서 GitHub 인증을 완료한 뒤 앱에서 연결할 계정을 확인해주세요." : "GitHub 창에서 로그인을 완료하고 접근을 승인해주세요."}</p><button type="button" onClick={stopConnection}>취소</button></>}{error && <p role="alert">{error}</p>}</section>;
   return (
     <fieldset className="repo-fields" disabled={disabled}>
       <legend>
@@ -314,7 +316,7 @@ export default function RepositoryFields({
       {connecting && (
         <div className="repo-connect" role="status">
           <span>
-            브라우저에서 같은 Bridgain 계정으로 로그인한 뒤 GitHub 연결을 완료해주세요. 목록은 자동으로 표시됩니다.
+            {window.bridgainDesktop ? "기본 브라우저에서 GitHub 인증을 완료한 뒤 앱에서 연결할 계정을 확인해주세요." : "GitHub 창에서 로그인을 완료하고 접근을 승인해주세요."} 목록은 자동으로 표시됩니다.
           </span>
           <button type="button" onClick={stopConnection}>
             취소

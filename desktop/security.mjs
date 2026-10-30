@@ -20,11 +20,19 @@ export function serverOrigin(value) {
 }
 export function githubBrowserUrl(value) {
   const url = new URL(value);
-  if (!["https:", "http:"].includes(url.protocol) || url.username || url.password ||
-      url.pathname !== "/" || url.search ||
-      !/^#github-connect=[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i.test(url.hash))
+  if (url.origin !== "https://github.com" || url.username || url.password ||
+      url.pathname !== "/login/oauth/authorize" || url.hash ||
+      !/^desktop\.[a-f0-9]{64}$/.test(url.searchParams.get("state") || "") ||
+      url.searchParams.get("code_challenge_method") !== "S256" ||
+      !url.searchParams.get("client_id") || !url.searchParams.get("code_challenge"))
     throw Error("GitHub 연결 페이지 주소를 확인해주세요.");
-  // The authenticated server supplies its configured public frontend, including development HTTP.
+  return url.href;
+}
+export function githubInstallationUrl(value) {
+  const url = new URL(value);
+  if (url.origin !== "https://github.com" || url.username || url.password || url.search || url.hash ||
+      !/^\/apps\/[a-z0-9-]+\/installations\/new$/.test(url.pathname))
+    throw Error("GitHub 앱 설치 주소를 확인해주세요.");
   return url.href;
 }
 export function providerName(value) {

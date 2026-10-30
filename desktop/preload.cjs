@@ -8,6 +8,7 @@ contextBridge.exposeInMainWorld(
   "bridgainDesktop",
   Object.freeze({
     connectGithub: () => call("connect-github"),
+    cancelGithub: () => call("cancel-github"),
     connectServer: (url) => call("connect-server", url),
     taskWorkspace: (pid, id, action, options) => call("task-workspace", pid, id, action, options),
     taskGit: (pid, id, action, options) => call("task-git", pid, id, action, options),
