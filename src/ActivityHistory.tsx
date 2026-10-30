@@ -71,7 +71,8 @@ const labels: Record<string, string> = {
   task_status_changed: "업무 상태 변경",
   qa_started: "QA 테스트 시작",
   qa_completed: "QA 담당자 작업 완료",
-  deploy_ready: "배포 준비 중 · 메인 머지 완료",
+  deploy_ready: "main 병합 완료 · 배포 대기",
+  deploy_started: "배포 시작",
   deploy_completed: "배포 완료",
   deploy_failed: "배포 실패",
 };

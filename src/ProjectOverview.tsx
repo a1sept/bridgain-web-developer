@@ -55,6 +55,9 @@ const types: Record<string, string> = {
 const statuses: Record<string, string> = {
   todo: "진행 전",
   in_progress: "진행 중",
+  review_pending: "작업 완료 · 승인 대기",
+  deploy_pending: "배포 대기",
+  deploying: "배포 중",
   done: "개발 완료",
   released: "배포 완료",
   completed: "완료",

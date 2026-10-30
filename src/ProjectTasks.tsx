@@ -95,7 +95,7 @@ const reviewStatuses: Record<string, string> = {
 const statuses = {
   todo: "진행 전",
   in_progress: "진행 중",
-  review_pending: "작업 승인 대기",
+  review_pending: "작업 완료 · 승인 대기",
   deploy_pending: "배포 대기",
   deploying: "배포 중",
   done: "작업 완료",

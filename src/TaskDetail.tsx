@@ -7,7 +7,7 @@ import RichTextContent from "./editor/RichTextContent";
 import ControlIcon from "./components/ControlIcon";
 import "./task-detail.css";
 import { useTaskGit, LocalCode, GitControls, RemoteTaskCode } from "./TaskCode";
-const statuses: Record<string, string> = { todo: "진행 전", in_progress: "진행 중", review_pending: "작업 승인 대기", deploy_pending: "배포 대기", deploying: "배포 중", done: "승인 완료", released: "배포 완료" };
+const statuses: Record<string, string> = { todo: "진행 전", in_progress: "진행 중", review_pending: "작업 완료 · 승인 대기", deploy_pending: "배포 대기", deploying: "배포 중", done: "승인 완료", released: "배포 완료" };
 const priorities = { urgent: "긴급", high: "높음", normal: "보통", low: "낮음" };
 type Review = { reviewers: { userId: string; displayName: string; status: string; note?: string }[]; assignees: ProjectTask["assignees"]; events?: { action: string; note: string; actorName?: string }[] };
 export default function TaskDetail({ task, projectId, projectName, userId, onClose, onRequest, onTask, onChanged, onDeployments, onApprovals }: {
@@ -61,21 +61,35 @@ export default function TaskDetail({ task, projectId, projectName, userId, onClo
   const assignees = review?.assignees || task.assignees;
   const mine = assignees.find(a => a.userId === userId);
   const reviewer = review?.reviewers.find(a => a.userId === userId);
+  const codeReview = task.completionMode === "code";
+  const legacyMergePending = codeReview && task.status === "deploy_pending" && !task.mergeCommit;
+  const mergeRetry = codeReview && !task.mergeCommit && !!review?.reviewers.length && review.reviewers.every(a => a.status === "approved");
+  const canApprove = !!reviewer && (task.status === "review_pending" || legacyMergePending) && (reviewer.status !== "approved" || mergeRetry);
   const progressing = ["todo", "in_progress"].includes(task.status);
   const editable = !!mine && progressing && !assignees.some(a => a.completedAt);
   async function run(action: () => Promise<unknown>) {
     if (busy) return;
     setBusy(true); setError("");
     try { await action(); onChanged(); setRefresh(v => v + 1); }
-    catch (e) { setError(e instanceof Error ? e.message : "처리에 실패했습니다."); setRefresh(v => v + 1); }
+    catch (e) { setError(e instanceof Error ? e.message : "처리에 실패했습니다."); onChanged(); setRefresh(v => v + 1); }
     finally { setBusy(false); }
   }
   async function patch(values: Record<string, unknown>) {
     await workflowApi(path, { expectedVersion: task.version, ...values }, "PATCH");
   }
   async function act(action: string) {
-    await workflowApi(`${path}/work`, { action, note, expectedRevision: task.workRevision });
+    const result = await workflowApi<{ mergeFailed?: boolean; error?: string }>(`${path}/work`, { action, note, expectedRevision: task.workRevision, ...(action === "approve" && codeReview ? { expectedHeadSha: task.reviewHeadSha || task.approvedHeadSha } : {}) });
+    if (result?.mergeFailed) throw new Error(result.error || "main 병합에 실패했습니다. 원인을 확인한 뒤 다시 시도해주세요.");
     setNote(""); setRejecting(false);
+  }
+  async function approve() {
+    if (codeReview) {
+      const sha = task.reviewHeadSha || task.approvedHeadSha;
+      if (!task.repositoryUrl || !task.pullRequestUrl || !sha) throw new Error("저장소·PR·검토 커밋 정보를 다시 불러온 뒤 승인해주세요.");
+      const finalVote = review?.reviewers.every(a => a.userId === userId || a.status === "approved");
+      if (!window.confirm(`저장소: ${task.repositoryUrl}\nPR: ${task.pullRequestUrl}\n검토 커밋: ${sha}\n대상 브랜치: main\n\n${finalVote ? "최종 승인 후 이 커밋의 PR을 main에 병합합니다." : "이번 승인을 기록하고, 마지막 필수 승인자가 승인하면 main에 병합합니다."}\n변경 내용을 확인했으며 계속 진행할까요?`)) return;
+    }
+    await act("approve");
   }
   return <div className="td-layout">
     <header className="td-header"><div><small>{projectName}</small><h2>{task.title}</h2></div>
@@ -123,12 +137,14 @@ export default function TaskDetail({ task, projectId, projectName, userId, onClo
         {editable && task.status === "todo" && task.completionMode !== "code" && <button disabled={busy} onClick={() => void run(() => patch({ status: "in_progress" }))}>작업 시작</button>}
         {mine && progressing && task.stageKey && !(localGit && task.completionMode === "code") && <button disabled={busy || !review || !!mine.completedAt || pr !== (task.pullRequestUrl || "") || deployUrl !== (task.deploymentUrl || "")} onClick={() => void run(() => act("complete"))}>{mine.completedAt ? "내 작업 완료됨" : "내 작업 완료"}</button>}
         {mine?.completedAt && progressing && <p className="td-muted">다른 담당자의 작업 완료를 기다리고 있습니다.</p>}
-        {task.status === "review_pending" && <p className="td-muted">작업 승인 대기</p>}
-        {reviewer && task.status === "review_pending" && reviewer.status !== "approved" && <button disabled={busy} onClick={() => void run(() => act("approve"))}>작업 승인</button>}
-        {reviewer && (["review_pending", "deploy_pending", "done"].includes(task.status) || (task.status === "in_progress" && assignees.some(a => a.completedAt))) && <button disabled={busy} onClick={() => setRejecting(v => !v)}>재작업 요청</button>}
+        {task.status === "review_pending" && <p className="td-muted">작업 완료 · 승인 대기</p>}
+        {legacyMergePending && <p className="td-muted">기존 승인은 완료됐지만 main 병합이 남아 있습니다. 업무에서 병합을 완료하면 배포 목록에 표시됩니다.</p>}
+        {codeReview && (task.status === "review_pending" || legacyMergePending) && <p className="td-muted">코드 작업에서 변경 내용을 확인해주세요. 마지막 필수 승인 시 main에 병합하며, 병합 성공 후 배포 대기로 이동합니다.</p>}
+        {canApprove && <button disabled={busy || !review || (codeReview && !(task.reviewHeadSha || task.approvedHeadSha))} onClick={() => void run(approve)}>{codeReview ? mergeRetry ? "main 병합 다시 시도" : "승인 및 main 병합" : "작업 승인"}</button>}
+        {reviewer && !task.mergeCommit && (["review_pending", "deploy_pending", "done"].includes(task.status) || (task.status === "in_progress" && assignees.some(a => a.completedAt))) && <button disabled={busy} onClick={() => setRejecting(v => !v)}>재작업 요청</button>}
         {rejecting && <label>재작업 사유<textarea maxLength={5000} value={note} onChange={e => setNote(e.target.value)} /><button disabled={busy || !note.trim()} onClick={() => void run(() => act("changes_requested"))}>재작업 요청 보내기</button></label>}
         {!task.stageKey && onApprovals && <button onClick={onApprovals}>승인함 열기</button>}
-        {["deploy_pending", "deploying", "released"].includes(task.status) && onDeployments && <button onClick={onDeployments}>배포 화면 열기</button>}
+        {["deploy_pending", "deploying", "released"].includes(task.status) && (!codeReview || !!task.mergeCommit) && onDeployments && <button onClick={onDeployments}>배포 화면 열기</button>}
         <button disabled={busy} onClick={() => { onChanged(); setRefresh(v => v + 1); }}>최신 상태 확인</button>
       </section>
     </aside>

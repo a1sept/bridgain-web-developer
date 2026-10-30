@@ -221,7 +221,7 @@ export default function Approvals({
         {workItems.length ? (
           workItems.map((item) => (
             <button type="button" className="approval-row" key={item.id} onClick={() => setSelectedWork(item)}>
-              <strong>{item.title}</strong><span>{item.projectName}</span><span>{item.stageName}</span><span className="approval-status pending">작업 승인 대기</span>
+              <strong>{item.title}</strong><span>{item.projectName}</span><span>{item.stageName}</span><span className="approval-status pending">작업 완료 · 승인 대기</span>
             </button>
           ))
         ) : (

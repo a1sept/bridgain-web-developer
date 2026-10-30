@@ -20,6 +20,7 @@ const labels: Record<string, string> = {
   approved: "작업 승인",
   changes_requested: "재작업 요청",
   released: "배포 완료",
+  merged: "main 병합 완료 · 배포 대기",
   deploy_started: "배포 시작",
   unlocked: "후행 업무 열림",
   predecessor_changed: "선행 작업 변경 · 재승인 필요",

@@ -92,7 +92,7 @@ export default function RequestTaskLinks({
                   {
                     (
                       {
-                        review_pending: "작업 승인 대기",
+                        review_pending: "작업 완료 · 승인 대기",
                         deploy_pending: "배포 대기",
                         deploying: "배포 중",
                         todo: "진행 전",

@@ -167,6 +167,7 @@ export default function WorkReview({
                 changes_requested: "재작업 요청",
                 refresh: "최신 확인",
                 predecessor_changed: "선행 업무 변경",
+                merged: "main 병합 완료 · 배포 대기",
                 deploy_started: "배포 시작",
                 released: "배포 완료",
                 approved_head_changed: "코드 변경으로 승인 초기화",
