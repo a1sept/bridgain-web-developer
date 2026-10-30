@@ -1,5 +1,5 @@
 import { prepareTaskWorkspace } from "./task-workspace.mjs";
-import { inspectRepository, cloneRepository, verifyBinding, gitState, fileDiff, commitFiles, pushBranch, submissionState, git } from "./local-git.mjs";
+import { inspectRepository, cloneRepository, verifyBinding, gitState, fileDiff, commitDetail, commitFiles, pushBranch, submissionState, git } from "./local-git.mjs";
 import { projectTool } from "./project-files.mjs";
 import { mkdir, readFile, writeFile, rename, realpath } from "node:fs/promises";
 import { join } from "node:path";
@@ -223,7 +223,7 @@ export class DesktopRuntime {
   }
   async taskGit(pid, id, action = "state", options = {}) {
     pid = identifier(pid); id = identifier(id);
-    if (!["state", "diff", "commit", "push", "fetch", "submit", "editor"].includes(action)) throw Error("지원하지 않는 Git 작업입니다.");
+    if (!["state", "diff", "commitDetail", "commit", "push", "fetch", "submit", "editor"].includes(action)) throw Error("지원하지 않는 Git 작업입니다.");
     const owner = await this.owner();
     const write = ["commit", "push", "submit"].includes(action);
     const context = await this.api(`/api/workspace/projects/${pid}/tasks/${id}/git/context`, write ? {} : undefined);
@@ -236,6 +236,7 @@ export class DesktopRuntime {
     this.taskLocks.add(lock);
     try {
       await this.assertOwner(owner.key);
+      if (action === "commitDetail") return await commitDetail(binding, options.sha);
       if (action === "diff") return await fileDiff(binding, options.path);
       if (action === "commit") return await commitFiles(binding, options.paths, options.message, options.expectedHead);
       if (action === "push") return await pushBranch(binding);

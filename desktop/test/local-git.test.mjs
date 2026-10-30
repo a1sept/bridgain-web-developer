@@ -5,7 +5,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
-import { inspectRepository, verifyBinding, gitState, fileDiff, commitFiles, pushBranch, submissionState, cloneRepository } from "../local-git.mjs";
+import { inspectRepository, verifyBinding, gitState, fileDiff, commitFiles, pushBranch, submissionState, cloneRepository, commitDetail } from "../local-git.mjs";
 import { prepareTaskWorkspace } from "../task-workspace.mjs";
 const exec = promisify(execFile);
 async function fixture() {
@@ -64,4 +64,44 @@ test("selected commit does not include unrelated staged files; rename commits bo
   await commitFiles(b, ["renamed.txt"], "rename only", state.head);
   const contents = (await exec("git", ["show", "HEAD:other.txt"], { cwd: b.path })).stdout;
   assert.equal(contents, "other\n"); assert.ok((await gitState(b)).files.some(x => x.path === "other.txt"));
+});
+
+test("commit details show root, rename and binary changes without reading working edits", async () => {
+  const f = await fixture(), b = f.binding;
+  const root = (await gitState(b)).head;
+  const initial = await commitDetail(b, root);
+  assert.equal(initial.files.length, 2);
+  assert.ok(initial.files.every(file => file.status === "A"));
+  assert.match(initial.files.find(file => file.path === "file.txt").diff, /\+before/);
+  await exec("git", ["mv", "file.txt", "renamed file.txt"], { cwd: b.path });
+  await writeFile(join(b.path, "image.bin"), Buffer.from([0, 1, 2, 3]));
+  await exec("git", ["add", "."], { cwd: b.path });
+  await exec("git", ["commit", "-m", "rename and binary"], { cwd: b.path });
+  const head = (await gitState(b)).head;
+  await writeFile(join(b.path, "renamed file.txt"), "uncommitted secret");
+  const detail = await commitDetail(b, head);
+  const renamed = detail.files.find(file => file.path === "renamed file.txt");
+  assert.equal(renamed.status, "R"); assert.equal(renamed.originalPath, "file.txt");
+  assert.match(renamed.diff, /rename from file.txt/);
+  assert.doesNotMatch(JSON.stringify(detail), /uncommitted secret/);
+  assert.match(detail.files.find(file => file.path === "image.bin").diff, /Binary files/);
+  assert.equal(detail.limited, false);
+});
+test("commit details reject options, revisions and commits outside task history", async () => {
+  const f = await fixture(), b = f.binding;
+  for (const sha of ["HEAD", "--help", "HEAD~1", "a".repeat(39), null])
+    await assert.rejects(commitDetail(b, sha), /유효한/);
+  await writeFile(join(f.folder, "outside.txt"), "outside task");
+  await f.git("add", "."); await f.git("commit", "-m", "outside");
+  await assert.rejects(commitDetail(b, await f.git("rev-parse", "HEAD")), /업무 브랜치/);
+});
+test("commit details bound large patch output", async () => {
+  const f = await fixture(), b = f.binding;
+  await writeFile(join(b.path, "large.txt"), "large line\n".repeat(40000));
+  await exec("git", ["add", "."], { cwd: b.path });
+  await exec("git", ["commit", "-m", "large"], { cwd: b.path });
+  const detail = await commitDetail(b, (await gitState(b)).head);
+  assert.equal(detail.limited, true);
+  assert.equal(detail.files[0].limited, true);
+  assert.ok(detail.files[0].diff.length < 256 * 1024);
 });

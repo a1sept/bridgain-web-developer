@@ -86,6 +86,47 @@ export async function fileDiff(binding, path) {
   }
   return { diff: (await git(binding.path, "diff", "--no-ext-diff", "--no-textconv", "HEAD", "--", path, ...(file.originalPath ? [file.originalPath] : []))).slice(0, 256 * 1024) };
 }
+// Read committed objects only: never inspect current files or run repository diff helpers.
+export async function commitDetail(binding, sha) {
+  if (typeof sha !== "string" || !/^(?:[a-f0-9]{40}|[a-f0-9]{64})$/i.test(sha))
+    throw Error("유효한 커밋을 선택해주세요.");
+  sha = (await git(binding.path, "rev-parse", "--verify", `${sha}^{commit}`)).trim();
+  try { await git(binding.path, "merge-base", "--is-ancestor", sha, "HEAD"); }
+  catch { throw Error("현재 업무 브랜치의 커밋 이력을 선택해주세요."); }
+  const parents = (await git(binding.path, "rev-list", "--parents", "-n", "1", sha)).trim().split(" ");
+  // Merge commits are compared with their first parent; root commits with the empty tree.
+  const revisions = parents.length > 1 ? [parents[1], sha] : [sha];
+  const common = ["diff-tree", "--root", "-r", "--no-commit-id", "--no-ext-diff", "--no-textconv", "--no-color", "-M"];
+  const entries = (await git(binding.path, ...common, "--name-status", "-z", ...revisions, "--")).split("\0");
+  const files = [];
+  let limited = false, remaining = 2 * 1024 * 1024;
+  for (let i = 0; i < entries.length && entries[i];) {
+    if (files.length >= 300) { limited = true; break; }
+    const status = entries[i++];
+    const firstPath = entries[i++];
+    const originalPath = /^[RC]/.test(status) ? firstPath : undefined;
+    const path = originalPath ? entries[i++] : firstPath;
+    const file = { path, status: status[0], ...(originalPath ? { originalPath } : {}), diff: "", limited: false };
+    const budget = Math.min(256 * 1024, remaining);
+    if (!budget) {
+      file.diff = "전체 미리보기 크기 제한으로 생략되었습니다."; file.limited = limited = true;
+    } else {
+      try {
+        const { stdout } = await exec("git", ["--literal-pathspecs", ...common, "-p", ...revisions, "--", path, ...(originalPath ? [originalPath] : [])], {
+          cwd: binding.path, timeout: 30000, maxBuffer: budget,
+          env: { ...process.env, GIT_TERMINAL_PROMPT: "0", GCM_INTERACTIVE: "never", GIT_OPTIONAL_LOCKS: "0" },
+        });
+        file.diff = stdout; remaining -= Buffer.byteLength(stdout);
+      } catch (e) {
+        if (e.code !== "ERR_CHILD_PROCESS_STDIO_MAXBUFFER") throw Error("커밋 변경 내용을 읽지 못했습니다. 다시 시도해주세요.");
+        file.diff = "파일 변경 내용이 커서 미리보기를 생략했습니다."; file.limited = limited = true;
+        remaining -= budget;
+      }
+    }
+    files.push(file);
+  }
+  return { sha, files, limited };
+}
 export async function commitFiles(binding, paths, message, expectedHead) {
   const state = await gitState(binding);
   if (state.head !== expectedHead) throw Error("커밋이 변경되었습니다. 최신 상태를 확인해주세요.");

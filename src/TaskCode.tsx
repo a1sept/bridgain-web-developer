@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import type { GitState } from "./desktop";
+import type { GitState, GitCommitDetail } from "./desktop";
 import { workflowApi } from "./Approvals";
 import "./task-code.css";
 import CodeDiff, { FileStatus } from "./CodeDiff";
@@ -7,6 +7,7 @@ import CodeDiff, { FileStatus } from "./CodeDiff";
 export function useTaskGit(pid: string, id: string, enabled: boolean, onChanged: () => void) {
   const [state, setState] = useState<GitState>();
   const [error, setError] = useState("");
+  const [readError, setReadError] = useState("");
   const [notice, setNotice] = useState("");
   const [busy, setBusy] = useState(false);
   const [selected, setSelected] = useState<string[]>([]);
@@ -20,12 +21,12 @@ export function useTaskGit(pid: string, id: string, enabled: boolean, onChanged:
     if (!enabled || !bridge?.taskGit || lock.current) return;
     lock.current = true;
     const version = epoch.current;
-    try { const result: GitState = await bridge.taskGit(pid, id); if (version === epoch.current) { setState(result); setError(""); setSelected(s => s.filter(path => result.files.some(f => f.path === path))); } }
-    catch (e) { if (version === epoch.current) setError((e as Error).message); }
+    try { const result: GitState = await bridge.taskGit(pid, id); if (version === epoch.current) { setState(result); setReadError(""); setSelected(s => s.filter(path => result.files.some(f => f.path === path))); } }
+    catch (e) { if (version === epoch.current) setReadError((e as Error).message); }
     finally { lock.current = false; }
   }
   useEffect(() => {
-    epoch.current++; setState(undefined); setFile(""); setDiff(""); setSelected([]);
+    epoch.current++; setState(undefined); setError(""); setReadError(""); setNotice(""); setFile(""); setDiff(""); setSelected([]);
     void read(); const timer = window.setInterval(() => { if (!document.hidden) void read(); }, 4000);
     const focus = () => void read(); window.addEventListener("focus", focus);
     return () => { epoch.current++; clearInterval(timer); window.removeEventListener("focus", focus); };
@@ -47,16 +48,65 @@ export function useTaskGit(pid: string, id: string, enabled: boolean, onChanged:
     } catch (e) { setError((e as Error).message); if (kind === "submit") onChanged(); }
     finally { lock.current = false; setBusy(false); }
   }
-  return { state, error, notice, busy, selected, setSelected, file, setFile, diff, message, setMessage, action };
+  return { pid, id, state, error: error || readError, notice, busy, selected, setSelected, file, setFile, diff, message, setMessage, action };
 }
 type Git = ReturnType<typeof useTaskGit>;
 export function LocalCode({ git, history = false, editable }: { git: Git; history?: boolean; editable: boolean }) {
   if (!git.state) return <p className="td-muted">{git.error || "로컬 Git 상태 확인 중…"}</p>;
-  if (history) return <div className="tc-history">{git.state.history.map(c => <div key={c.sha}><strong>{c.subject}</strong><small>{c.sha.slice(0, 10)} · {c.author} · {new Date(c.date).toLocaleString()}</small></div>)}</div>;
+  if (history) return <CommitHistory key={`${git.pid}:${git.id}`} projectId={git.pid} taskId={git.id} commits={git.state.history} />;
   return <section className="tc-code" aria-label="로컬 코드 변경사항"><p className="td-muted">저장된 파일의 변경을 4초마다 확인합니다. 원격 상태는 마지막 fetch 기준입니다.</p>
     <div className="tc-files">{git.state.files.map(f => <div key={f.path}><input type="checkbox" aria-label={`${f.path} 커밋 선택`} checked={git.selected.includes(f.path)} disabled={!editable || git.busy} onChange={e => git.setSelected(s => e.target.checked ? [...s, f.path] : s.filter(p => p !== f.path))} /><button type="button" aria-pressed={git.file === f.path} onClick={() => git.setFile(f.path)}>{f.path} <FileStatus status={f.status} /></button></div>)}</div>
     {!git.state.files.length && <p>미커밋 변경사항이 없습니다.</p>}
     {git.file && <><h3>{git.file}</h3><CodeDiff diff={git.diff} empty="차이 확인 중…" /></>}
+  </section>;
+}
+function CommitHistory({ projectId, taskId, commits }: { projectId: string; taskId: string; commits: GitState["history"] }) {
+  const [selectedSha, setSelectedSha] = useState(commits[0]?.sha || "");
+  const [detail, setDetail] = useState<GitCommitDetail>();
+  const [file, setFile] = useState("");
+  const [error, setError] = useState("");
+  const [revision, setRevision] = useState(0);
+  const commit = commits.find(item => item.sha === selectedSha) ?? commits[0];
+  const sha = commit?.sha || "";
+  useEffect(() => {
+    let active = true;
+    setDetail(undefined); setFile(""); setError("");
+    if (!sha) return;
+    const bridge = window.bridgainDesktop;
+    if (!bridge?.taskGit) { setError("커밋 변경 이력은 데스크톱 앱에서 확인해주세요."); return; }
+    bridge.taskGit(projectId, taskId, "commitDetail", { sha }).then((result: GitCommitDetail) => {
+      if (!active) return;
+      if (result.sha !== sha || !Array.isArray(result.files)) { setError("커밋 정보를 읽지 못했어요. 데스크톱 앱을 업데이트해주세요."); return; }
+      setDetail(result); setFile(result.files[0]?.path || "");
+    }).catch(e => { if (active) setError(e instanceof Error ? e.message : "커밋 변경 내용을 불러오지 못했어요."); });
+    return () => { active = false; };
+  }, [projectId, taskId, sha, revision]);
+  const current = detail?.sha === sha ? detail : undefined;
+  const selectedFile = current?.files.find(item => item.path === file);
+  if (!commits.length) return <p className="td-muted">아직 커밋 이력이 없습니다.</p>;
+  return <section className="tc-code tc-history-browser" aria-label="커밋 변경 이력">
+    <nav className="tc-commit-list" aria-label="커밋 목록">
+      <h3>커밋 <span>{commits.length}</span></h3>
+      {commits.map(item => <button type="button" key={item.sha} className="tc-commit-item" aria-pressed={sha === item.sha} onClick={() => setSelectedSha(item.sha)}>
+        <strong>{item.subject}</strong>
+        <span className="tc-commit-meta"><code>{item.sha.slice(0, 7)}</code><span>{item.author}</span></span>
+        <time dateTime={item.date}>{new Date(item.date).toLocaleString()}</time>
+      </button>)}
+    </nav>
+    <section className="tc-commit-detail" aria-label="선택한 커밋의 변경 내용" aria-busy={!current && !error}>
+      <div className="tc-commit-heading"><h3>{commit?.subject}</h3><p><code>{sha.slice(0, 10)}</code> · {commit?.author}</p><p>이 커밋에서 변경된 파일과 이전 버전 대비 차이입니다.</p></div>
+      {error && <div className="tc-history-error" role="alert"><p>{error}</p><button type="button" onClick={() => setRevision(value => value + 1)}>다시 불러오기</button></div>}
+      {!current && !error && <p className="td-muted" role="status">커밋 변경 내용을 불러오는 중…</p>}
+      {current && <>
+        <div className="tc-commit-files" role="group" aria-label="커밋의 변경 파일">
+          <h3>변경 파일 <span>{current.files.length}개</span></h3>
+          {current.files.map(item => <button type="button" key={item.path} aria-pressed={file === item.path} onClick={() => setFile(item.path)}><span>{item.path}</span><FileStatus status={item.status} /></button>)}
+        </div>
+        {current.limited && <p className="td-muted" role="status">큰 커밋은 일부 파일이나 변경 내용만 표시합니다.</p>}
+        {!current.files.length && <p className="td-muted">이 커밋에는 표시할 파일 변경이 없습니다.</p>}
+        {selectedFile && <div className="tc-commit-patch"><h3>{selectedFile.path}</h3>{selectedFile.originalPath && <p className="td-muted">이전 경로: {selectedFile.originalPath}</p>}{selectedFile.limited && <p className="td-muted" role="status">이 파일의 변경 내용은 일부만 표시합니다.</p>}<CodeDiff diff={selectedFile.diff} empty="텍스트 차이가 없는 파일입니다." /></div>}
+      </>}
+    </section>
   </section>;
 }
 export function GitControls({ git, editable }: { git: Git; editable: boolean }) {
