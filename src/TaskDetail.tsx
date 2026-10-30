@@ -77,9 +77,9 @@ export default function TaskDetail({ task, projectId, projectName, userId, onClo
     setNote(""); setRejecting(false);
   }
   return <div className="td-layout">
-    <section className="td-information" aria-label="업무 정보">
-      <header className="td-header"><div><small>{projectName}</small><h2>{task.title}</h2></div>
-        <button type="button" aria-label="업무 상세 닫기" onClick={onClose}><ControlIcon name="close" size={16} /></button></header>
+    <header className="td-header"><div><small>{projectName}</small><h2>{task.title}</h2></div>
+      <button type="button" aria-label="업무 상세 닫기" onClick={onClose}><ControlIcon name="close" size={16} /></button></header>
+    <section className="td-information" aria-label="업무 정보" tabIndex={0}>
       {task.completionMode === "code" && <nav className="td-code-tabs" aria-label="업무 상세 보기"><button aria-pressed={tab === "info"} onClick={() => setTab("info")}>업무 정보</button><button aria-pressed={tab === "code"} onClick={() => setTab("code")}>코드 작업</button>{localGit && <button aria-pressed={tab === "history"} onClick={() => setTab("history")}>커밋 이력</button>}</nav>}
       {tab !== "info" ? <div className="td-body">{localGit ? <LocalCode git={git} history={tab === "history"} editable={!!mine && progressing && !mine.completedAt} /> : task.pullRequestUrl ? <RemoteTaskCode projectId={projectId} taskId={task.id} /> : <p className="td-muted">데스크톱 앱에서 로컬 작업 디렉토리와 업무 브랜치를 연결해주세요.</p>}</div> :
       <div className="td-body">
@@ -97,7 +97,7 @@ export default function TaskDetail({ task, projectId, projectName, userId, onClo
         <section><h3>업무 내용</h3><RichTextContent value={task.description} document={task.descriptionDocument} /></section>
       </div>}
     </section>
-    <aside className="td-work" aria-label="업무 작업 패널">
+    <aside className="td-work" aria-label="업무 작업 패널" tabIndex={0}>
       <h3>로컬 작업</h3>
       {task.status === "in_progress" && review?.events?.some(e => e.action === "changes_requested") && <div className="td-rework"><strong>재작업 요청</strong><p>{review.events.find(e => e.action === "changes_requested")?.note}</p><small>기존 브랜치에서 수정·푸시 후 같은 PR로 재제출해주세요.</small></div>}
       {!bridge?.taskWorkspace ? <p className="td-muted">로컬 폴더와 브랜치 연결은 데스크톱 앱에서 사용할 수 있습니다.</p> : <>
