@@ -999,17 +999,25 @@
 }
 .rb-request-filters {
   display: flex;
-  gap: 10px;
+  flex-wrap: wrap;
+  gap: 8px;
   align-items: center;
-  margin-bottom: 22px;
+  margin-bottom: 14px;
 }
-.rb-shell .rb-request-filters input {
+.rb-shell .rb-request-filters > input[type="search"] {
   flex: 1 1 280px;
+  width: auto;
   min-width: 160px;
+  height: 34px;
+  min-height: 34px;
+  padding: 7px 10px;
+  border-radius: 6px;
+  font-size: 12px;
+  line-height: 18px;
 }
-.rb-shell .rb-request-filters select {
-  flex: 0 1 160px;
-  width: 160px;
+.rb-request-filters > .bg-filter-bar {
+  padding: 0;
+  border-bottom: 0;
 }
 .rb-request-list-title {
   display: flex;
@@ -1026,15 +1034,9 @@
   font-size: 13px;
 }
 @media (max-width: 900px) {
-  .rb-request-filters {
-    flex-wrap: wrap;
-  }
-  .rb-shell .rb-request-filters input {
+  .rb-shell .rb-request-filters > input[type="search"] {
     flex-basis: 100%;
-  }
-  .rb-shell .rb-request-filters select {
-    flex: 1 1 130px;
-    width: auto;
+    min-width: 0;
   }
 }
 @media (max-width: 600px) {

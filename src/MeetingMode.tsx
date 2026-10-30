@@ -1,6 +1,7 @@
 import RichTextEditor from "./editor/RichTextEditor";
 import type { RichDocument } from "./editor/document";
 import { Fragment, useEffect, useRef, useState, type ReactNode } from "react";
+import ControlIcon from "./components/ControlIcon";
 import MeetingRequestForm from "./MeetingRequestForm";
 import StagePlanEditor, { type StagePlan } from "./StagePlanEditor";
 import "./meeting-mode.css";
@@ -53,6 +54,7 @@ export default function MeetingMode({
   error,
   onNotes,
   onPlan,
+  onMoveRequest,
   onSave,
   onExit,
   lifecycleLabel, onLifecycle, header, footer, overviewInfo, newRequestOpen, onCancelRequest, onCreateRequest,
@@ -90,6 +92,7 @@ export default function MeetingMode({
   error: string;
   onNotes: (s: string, document: RichDocument) => void;
   onPlan: (id: string, change: Partial<MeetingRequestPlan>) => void;
+  onMoveRequest?: (id: string, targetId: string, after: boolean) => void;
   onSave: () => void;
   onExit: () => void;
 }) {
@@ -99,6 +102,9 @@ export default function MeetingMode({
   const [selected, setSelected] = useState<string | null>(null),
     [hideNav, setHideNav] = useState(false),
     [query, setQuery] = useState("");
+  const [dragged, setDragged] = useState<string | null>(null);
+  const [dropTarget, setDropTarget] = useState<{ id: string; after: boolean } | null>(null);
+  const canReorder = !readOnly && !busy && !!onMoveRequest;
   const [collapsedByRequest, setCollapsedByRequest] = useState<
     Record<string, string[]>
   >({});
@@ -251,17 +257,41 @@ export default function MeetingMode({
                       {renderConnector?.(plans.indexOf(p), "gap")}
                     </fieldset>
                   )}
-                  <button
-                    type="button"
-                    key={p.requestId}
-                    aria-current={selected === p.requestId ? "page" : undefined}
-                    onClick={() => setSelected(p.requestId)}
-                  >
-                    <small>
-                      {plans.indexOf(p) + 1}. {priorities[p.priority]}
-                    </small>
-                    <span>{requestTitle(p.requestId)}</span>
-                  </button>
+                  <div className={`mm-request-row${dragged === p.requestId ? " is-dragging" : ""}${dropTarget?.id === p.requestId ? dropTarget.after ? " drop-after" : " drop-before" : ""}`}
+                    onDragOver={e => {
+                      if (!canReorder || !dragged || dragged === p.requestId) return;
+                      e.preventDefault(); e.dataTransfer.dropEffect = "move";
+                      const rect = e.currentTarget.getBoundingClientRect();
+                      setDropTarget({ id: p.requestId, after: e.clientY > rect.top + rect.height / 2 });
+                    }}
+                    onDragLeave={e => { if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setDropTarget(null); }}
+                    onDrop={e => {
+                      e.preventDefault();
+                      if (canReorder && dragged && dragged !== p.requestId) {
+                        const rect = e.currentTarget.getBoundingClientRect();
+                        onMoveRequest?.(dragged, p.requestId, e.clientY > rect.top + rect.height / 2);
+                      }
+                      setDragged(null); setDropTarget(null);
+                    }}>
+                    {onMoveRequest && !readOnly && <button type="button" className="mm-request-drag"
+                      disabled={!canReorder} draggable={canReorder}
+                      aria-label={`${requestTitle(p.requestId)} 순서 이동`}
+                      title="드래그하여 이동 · 위/아래 방향키로 한 칸 이동"
+                      onDragStart={e => { if (!canReorder) { e.preventDefault(); return; } setDragged(p.requestId); e.dataTransfer.effectAllowed = "move"; e.dataTransfer.setData("text/plain", p.requestId); }}
+                      onDragEnd={() => { setDragged(null); setDropTarget(null); }}
+                      onKeyDown={e => {
+                        if (!canReorder || !["ArrowUp", "ArrowDown"].includes(e.key)) return;
+                        e.preventDefault();
+                        const after = e.key === "ArrowDown", target = plans[plans.indexOf(p) + (after ? 1 : -1)];
+                        if (target) onMoveRequest?.(p.requestId, target.requestId, after);
+                      }}><ControlIcon name="more" /></button>}
+                    <button type="button" className="mm-request-open"
+                      aria-current={selected === p.requestId ? "page" : undefined}
+                      onClick={() => setSelected(p.requestId)}>
+                      <small>{plans.indexOf(p) + 1}. {priorities[p.priority]}</small>
+                      <span>{requestTitle(p.requestId)}</span>
+                    </button>
+                  </div>
                 </Fragment>
               ))}
             {!readOnly && (

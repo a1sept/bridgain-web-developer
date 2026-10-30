@@ -1,6 +1,7 @@
 import { UrgentApproval } from "./Approvals";
 import { useAi } from "./ai/AiWorkspace";
 import RequestTaskLinks from "./RequestTaskLinks";
+import FilterBar from "./components/FilterBar";
 import RequestConversation from "./RequestConversation";
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import "./request-board.css";
@@ -1037,45 +1038,21 @@ export default function RequestBoard({
             </nav>
             <div className="rb-request-filters">
               <input
+                type="search"
                 aria-label="요청 검색"
                 placeholder="요청 제목 검색"
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
               />
-              <select
-                aria-label="요청 상태 필터"
-                value={filter}
-                onChange={(e) => setFilter(e.target.value)}
-              >
-                <option value="">전체 상태</option>
-                {Object.entries(listStages).map(([key, label]) => (
-                  <option key={key} value={key}>
-                    {label}
-                  </option>
-                ))}
-              </select>
-              <select
-                aria-label="우선순위 필터"
-                value={priorityFilter}
-                onChange={(e) => setPriorityFilter(e.target.value)}
-              >
-                <option value="">전체 우선순위</option>
-                {Object.entries(priorities).map(([key, label]) => (
-                  <option key={key} value={key}>
-                    {label}
-                  </option>
-                ))}
-              </select>
-              {origin === "development" && (
-                <select
-                  aria-label="작성자 필터"
-                  value={mineOnly ? "mine" : "all"}
-                  onChange={(e) => setMineOnly(e.target.value === "mine")}
-                >
-                  <option value="all">전체 작성자</option>
-                  <option value="mine">내가 작성</option>
-                </select>
-              )}
+              <FilterBar
+                label="요청 필터"
+                filters={[
+                  { id: "status", label: "상태", options: Object.entries(listStages).map(([value, label]) => ({ value, label })), values: filter ? [filter] : [], onChange: values => setFilter(values[0] || "") },
+                  { id: "priority", label: "우선순위", options: Object.entries(priorities).map(([value, label]) => ({ value, label })), values: priorityFilter ? [priorityFilter] : [], onChange: values => setPriorityFilter(values[0] || "") },
+                  ...(origin === "development" ? [{ id: "author", label: "작성자", options: [{ value: "mine", label: "내가 작성" }], values: mineOnly ? ["mine"] : [], onChange: (values: string[]) => setMineOnly(values.includes("mine")) }] : []),
+                ]}
+                onClear={() => { setFilter(""); setPriorityFilter(""); setMineOnly(false); }}
+              />
             </div>
             <div className="rb-request-list-title">
               <h2>요청 목록</h2>

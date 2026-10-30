@@ -955,6 +955,17 @@ export default function ProjectResources({
                 setPlans(current=>current.filter(p=>p.requestId!==id));
                 setTransfers(current=>{const next={...current};delete next[id];return next;});
               }} onTask={onTask}
+              onMoveRequest={(id, targetId, after) => {
+                if (busy || meetingReadOnly) return;
+                setPlans(current => {
+                  const moved = current.find(p => p.requestId === id);
+                  if (!moved || id === targetId || !current.some(p => p.requestId === targetId)) return current;
+                  const next = current.filter(p => p.requestId !== id);
+                  const target = next.findIndex(p => p.requestId === targetId);
+                  next.splice(target + (after ? 1 : 0), 0, moved);
+                  return next;
+                });
+              }}
               onNotes={(text, document) => { setContent(text); setNotesDocument(document); }} onPlan={patchPlan} onSave={() => void saveDuringMeeting()}
               onExit={() => {setRequestPickerOpen(false);setMeetingMode(false);}} />}
             {section !== "meetings" && <footer><button type="button" disabled={busy} onClick={closeEditor}>취소</button><button type="submit" className="pr-primary" disabled={busy || !title.trim() || (editing === "new" ? !canCreate : !canUpdate)}>저장하기</button></footer>}
