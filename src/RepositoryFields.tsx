@@ -87,31 +87,6 @@ export default function RepositoryFields({
   connectionOnly?: boolean;
 }) {
   const [status, setStatus] = useState<Status | null>(null);
-  const [urlInput, setUrlInput] = useState("");
-  const [urlError, setUrlError] = useState("");
-  function addUrl() {
-    const match =
-      /^https:\/\/github\.com\/([a-z0-9](?:[a-z0-9-]{0,38}))\/([a-z0-9_.-]{1,100})\/?$/i.exec(
-        urlInput.trim(),
-      );
-    const name = match?.[2].replace(/\.git$/i, "");
-    if (!match || !name || /^\.+$/.test(name)) {
-      setUrlError("https://github.com/소유자/저장소 형식으로 입력해주세요.");
-      return;
-    }
-    const url = `https://github.com/${match[1]}/${name}`;
-    if (value.some((item) => item.toLowerCase() === url.toLowerCase())) {
-      setUrlError("이미 목록에 추가된 저장소입니다.");
-      return;
-    }
-    if (value.length >= 20) {
-      setUrlError("저장소는 최대 20개까지 등록할 수 있어요.");
-      return;
-    }
-    changeUrls([...value, url]);
-    setUrlInput("");
-    setUrlError("");
-  }
   const [discoveries, setDiscoveries] = useState<
     Record<string, { data?: Discovery; error?: string }>
   >({});
@@ -477,46 +452,9 @@ export default function RepositoryFields({
         관리자가 등록하고 저장한 저장소는 프로젝트 참여자 모두에게 표시됩니다.
       </p>
       {!disabled && (
-        <div className="repo-url-entry">
-          <label>
-            GitHub 저장소 URL
-            <input
-              aria-label="프로젝트 공용 GitHub 저장소 URL"
-              type="url"
-              value={urlInput}
-              placeholder="https://github.com/소유자/저장소"
-              onChange={(event) => {
-                setUrlInput(event.target.value);
-                setUrlError("");
-              }}
-              onKeyDown={(event) => {
-                if (event.key === "Enter") {
-                  event.preventDefault();
-                  addUrl();
-                }
-              }}
-            />
-          </label>
-          <button type="button" disabled={!urlInput.trim()} onClick={addUrl}>
-            목록에 추가
-          </button>
-        </div>
-      )}
-      {urlError && <p role="alert">{urlError}</p>}
-      <p>
-        URL 등록은 GitHub 접근 권한을 부여하지 않습니다. 비공개 저장소의 코드
-        조회·PR 처리를 위해 저장소 소유자가 프로젝트의 서버 연동 접근을 허용해야
-        합니다.
-      </p>
-      {!disabled && (
-        <p>
-          목록을 변경한 뒤 프로젝트 설정을 저장해주세요. ({value.length}/20개)
-        </p>
-      )}
-      {!disabled && (
         <section className="repo-personal-picker">
           <h4>
-            내 GitHub에서 찾아 추가 <small>선택 사항</small>
+            GitHub 저장소 선택 <small>선택 사항</small>
           </h4>
           {!status && !error && <p role="status">개인 GitHub 연결 확인 중…</p>}
           {status && !status.configured && <p>GitHub 연결 준비 중</p>}

@@ -2,7 +2,7 @@ import MeetingApprovalStatus from "./MeetingApprovalStatus";
 import type { ProjectTask } from "./ProjectTasks";
 import MeetingMode, { type MeetingRequestPlan } from "./MeetingMode";
 import type { RichDocument } from "./editor/document";
-import FilterBar from "./components/FilterBar";
+import FilterBar, { type FilterDefinition } from "./components/FilterBar";
 import { createPortal } from "react-dom";
 import RichTextContent from "./editor/RichTextContent";
 import MemberPicker from "./MemberPicker";
@@ -48,6 +48,7 @@ export type Approval = {
   status: string;
   requestedBy?: string;
   requesterName: string;
+  createdAt?: string;
   canApprove: boolean;
   canCancel: boolean;
   approvers: (Approver & { status: string; note?: string })[];
@@ -102,13 +103,36 @@ type WorkApproval = {
   status: string;
   workRevision: number;
   canApprove: boolean;
+  updatedAt?: string;
 };
+function daysSince(iso?: string) {
+  if (!iso) return 0;
+  const ms = Date.now() - new Date(iso).getTime();
+  return Number.isFinite(ms) ? Math.floor(ms / 86_400_000) : 0;
+}
+function relativeTime(iso?: string) {
+  if (!iso) return "";
+  const date = new Date(iso);
+  const diff = Date.now() - date.getTime();
+  if (!Number.isFinite(diff)) return "";
+  const minutes = Math.floor(diff / 60_000);
+  if (minutes < 1) return "방금";
+  if (minutes < 60) return `${minutes}분 전`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours}시간 전`;
+  const days = Math.floor(hours / 24);
+  if (days < 7) return `${days}일 전`;
+  return date.toLocaleDateString("ko-KR", { month: "numeric", day: "numeric" });
+}
+type ApprovalTab = "todo" | "mine" | "all";
 export default function Approvals({
   projectId,
+  userId,
   onChanged,
   onTask,
 }: {
   projectId?: string;
+  userId?: string;
   onChanged?: () => void;
   onTask?: (projectId: string, taskId: string) => void;
 }) {
@@ -141,10 +165,11 @@ export default function Approvals({
     [error, setError] = useState(""),
     [busy, setBusy] = useState(false),
     [revision, setRevision] = useState(0),
-    [filter, setFilter] = useState("pending"),
+    [filter, setFilter] = useState(""),
     [projectFilter, setProjectFilter] = useState(""),
-    [source, setSource] = useState(""),
-    [origin, setOrigin] = useState("");
+    [kind, setKind] = useState(""),
+    [origin, setOrigin] = useState(""),
+    [tab, setTab] = useState<ApprovalTab>("todo");
   useEffect(() => {
     let live = true;
     workflowApi<{ approvals: Approval[]; workApprovals?: WorkApproval[] }>(
@@ -192,64 +217,265 @@ export default function Approvals({
     cancelled: "취소",
     cancelled_by_requester: "취소",
   };
-  const visibleItems = items.filter(
-    (i) =>
-      (!filter || i.status === filter) &&
-      (!projectFilter || i.projectId === projectFilter) &&
-      (!source || i.source === source) &&
-      (!origin || i.plans.some((p) => p.origin === origin)),
+  const kindLabels: Record<string, string> = {
+    work: "작업 검토",
+    meeting: "회의 업무화",
+    urgent: "긴급 업무화",
+  };
+  const todoApprovals = items.filter((i) => i.canApprove);
+  const todoCount = workItems.length + todoApprovals.length;
+  const mineCount = userId
+    ? items.filter((i) => i.requestedBy === userId).length
+    : 0;
+  const tabItems: Approval[] =
+    tab === "todo"
+      ? todoApprovals
+      : tab === "mine"
+        ? items.filter((i) => i.requestedBy === userId)
+        : items;
+  const matchesCommon = (i: Approval) =>
+    (!projectFilter || i.projectId === projectFilter) &&
+    (!kind || i.source === kind) &&
+    (!origin || i.plans.some((p) => p.origin === origin));
+  const visibleItems = tabItems.filter(
+    (i) => matchesCommon(i) && (tab !== "all" || !filter || i.status === filter),
   );
+  const visibleWork =
+    tab === "todo"
+      ? workItems.filter(
+          (w) =>
+            (!projectFilter || w.projectId === projectFilter) &&
+            (!kind || kind === "work") &&
+            !origin,
+        )
+      : [];
+  const projectOptions = Array.from(
+    new Map(
+      [...items, ...workItems].map((i) => [i.projectId, i.projectName]),
+    ),
+  ).map(([value, label]) => ({ value, label }));
+  const filters: FilterDefinition[] = [
+    ...(tab === "all"
+      ? [
+          {
+            id: "status",
+            label: "승인 상태",
+            options: Object.entries(labels)
+              .filter(([v]) => v !== "cancelled_by_requester")
+              .map(([value, label]) => ({ value, label })),
+            values: filter ? [filter] : [],
+            onChange: (v: string[]) => setFilter(v[0] || ""),
+          },
+        ]
+      : []),
+    ...(!projectId
+      ? [
+          {
+            id: "project",
+            label: "프로젝트",
+            options: projectOptions,
+            values: projectFilter ? [projectFilter] : [],
+            onChange: (v: string[]) => setProjectFilter(v[0] || ""),
+          },
+        ]
+      : []),
+    {
+      id: "kind",
+      label: "승인 종류",
+      options: Object.entries(kindLabels)
+        .filter(([v]) => tab === "todo" || v !== "work")
+        .map(([value, label]) => ({ value, label })),
+      values: kind ? [kind] : [],
+      onChange: (v) => setKind(v[0] || ""),
+    },
+    {
+      id: "origin",
+      label: "요청 종류",
+      options: [
+        { value: "customer", label: "고객 요청" },
+        { value: "development", label: "개발 요청" },
+      ],
+      values: origin ? [origin] : [],
+      onChange: (v) => setOrigin(v[0] || ""),
+    },
+  ];
+  function clearFilters() {
+    setFilter("");
+    setProjectFilter("");
+    setKind("");
+    setOrigin("");
+  }
+  function renderApproval(item: Approval) {
+    const approved = item.approvers.filter((a) => a.status === "approved").length;
+    const late = item.status === "pending" && daysSince(item.createdAt) >= 3;
+    return (
+      <div className="approval-row" key={item.id}>
+        <button
+          type="button"
+          className="approval-row-open"
+          onClick={() => setSelectedId(item.id)}
+        >
+          <span className="approval-row-title">
+            <span className={`approval-kind ${item.source}`}>
+              {kindLabels[item.source] || item.source}
+            </span>
+            <strong>{item.title}</strong>
+          </span>
+          <span className="approval-row-meta">
+            {!projectId && <span>{item.projectName}</span>}
+            <span>요청 {item.plans.length}건</span>
+            <span>요청자 {item.requesterName}</span>
+            {item.status === "pending" && (
+              <span>
+                승인 {approved}/{item.approvers.length}
+              </span>
+            )}
+            <span className={late ? "approval-late" : undefined}>
+              {late
+                ? `${daysSince(item.createdAt)}일째 대기`
+                : relativeTime(item.createdAt)}
+            </span>
+          </span>
+        </button>
+        <span className="approval-row-side">
+          {item.canApprove ? (
+            <>
+              <button
+                type="button"
+                className="pw-secondary"
+                disabled={busy}
+                onClick={() => void act(item, "reject")}
+              >
+                반려
+              </button>
+              <button
+                type="button"
+                className="pw-primary"
+                disabled={busy}
+                onClick={() => void act(item, "approve")}
+              >
+                승인
+              </button>
+            </>
+          ) : (
+            <span className={`approval-status ${item.status}`}>
+              {labels[item.status] || item.status}
+            </span>
+          )}
+        </span>
+      </div>
+    );
+  }
+  function renderWork(item: WorkApproval) {
+    const late = daysSince(item.updatedAt) >= 3;
+    return (
+      <div className="approval-row" key={item.id}>
+        <button
+          type="button"
+          className="approval-row-open"
+          onClick={() => setSelectedWork(item)}
+        >
+          <span className="approval-row-title">
+            <span className="approval-kind work">{kindLabels.work}</span>
+            <strong>{item.title}</strong>
+          </span>
+          <span className="approval-row-meta">
+            {!projectId && <span>{item.projectName}</span>}
+            {item.stageName && <span>{item.stageName} 단계</span>}
+            {item.updatedAt && (
+              <span className={late ? "approval-late" : undefined}>
+                {late
+                  ? `${daysSince(item.updatedAt)}일째 대기`
+                  : relativeTime(item.updatedAt)}
+              </span>
+            )}
+          </span>
+        </button>
+        <span className="approval-row-side">
+          <span className="approval-status pending">작업 완료 · 승인 대기</span>
+        </span>
+      </div>
+    );
+  }
+  const empty =
+    tab === "todo"
+      ? ["처리할 승인이 없어요", "새 승인 요청이나 작업 검토가 배정되면 여기에 표시돼요."]
+      : tab === "mine"
+        ? ["내가 요청한 승인이 없어요", "회의 또는 긴급 승인 요청을 올리면 여기에서 진행 상황을 볼 수 있어요."]
+        : items.length
+          ? ["조건에 맞는 승인 요청이 없어요", "필터를 변경해 다른 승인 요청을 확인하세요."]
+          : ["승인 요청이 없어요", "회의 또는 긴급 승인 요청이 등록되면 여기에 표시돼요."];
+  const nothing = !visibleItems.length && !visibleWork.length;
   return (
     <section className="pw-panel approvals-page">
       <header className="approvals-heading">
-        <span>WORKFLOW APPROVALS</span>
-        <h1>승인함</h1>
-        <p>
-          업무화 승인은 요청별 단계 업무를 생성합니다. 작업 승인은 담당자가
-          완료한 결과를 검토합니다.
-        </p>
+        <div>
+          <span>WORKFLOW APPROVALS</span>
+          <h1>승인함</h1>
+          <p>
+            {todoCount
+              ? `처리할 승인 ${todoCount}건 · 작업 검토 ${workItems.length} · 업무화 승인 ${todoApprovals.length}`
+              : "처리할 승인이 없어요. 업무화 승인은 단계 업무를 만들고, 작업 검토는 완료된 결과를 확인해요."}
+          </p>
+        </div>
+        <button
+          type="button"
+          className="pw-secondary"
+          onClick={() => setRevision((v) => v + 1)}
+        >
+          새로고침
+        </button>
       </header>
       {error && (
         <p className="approvals-error" role="alert">
           {error}
         </p>
       )}
-      <section className="approval-work-inbox">
-        <h2>
-          내 작업 승인 대기 <small>{workItems.length}건</small>
-        </h2>
-        {workItems.length ? (
-          workItems.map((item) => (
-            <button type="button" className="approval-row" key={item.id} onClick={() => setSelectedWork(item)}>
-              <strong>{item.title}</strong><span>{item.projectName}</span><span>{item.stageName}</span><span className="approval-status pending">작업 완료 · 승인 대기</span>
-            </button>
-          ))
-        ) : (
-          <p className="pw-muted">검토할 작업 승인이 없습니다.</p>
-        )}
-      </section>
-      <h2>업무화 승인</h2>
+      <div className="approvals-tabs" role="tablist" aria-label="승인 보기">
+        {(
+          [
+            ["todo", "처리 필요", todoCount],
+            ...(userId ? [["mine", "내가 요청한", mineCount] as const] : []),
+            ["all", "전체", items.length],
+          ] as const
+        ).map(([key, label, count]) => (
+          <button
+            type="button"
+            role="tab"
+            key={key}
+            aria-selected={tab === key}
+            onClick={() => setTab(key)}
+          >
+            {label}
+            <span>{count}</span>
+          </button>
+        ))}
+      </div>
       <div className="approvals-filters">
-        <FilterBar filters={[
-          { id: "status", label: "승인 상태", options: Object.entries(labels).map(([value, label]) => ({value, label})), values: filter ? [filter] : [], onChange: v => setFilter(v[0] || "") },
-          ...(!projectId ? [{ id: "project", label: "프로젝트", options: Array.from(new Map(items.map(i => [i.projectId, i.projectName]))).map(([value, label]) => ({value, label})), values: projectFilter ? [projectFilter] : [], onChange: (v: string[]) => setProjectFilter(v[0] || "") }] : []),
-          { id: "source", label: "승인 출처", options: [{value: "meeting", label: "회의"}, {value: "urgent", label: "긴급"}], values: source ? [source] : [], onChange: v => setSource(v[0] || "") },
-          { id: "origin", label: "요청 종류", options: [{value: "customer", label: "고객 요청"}, {value: "development", label: "개발 요청"}], values: origin ? [origin] : [], onChange: v => setOrigin(v[0] || "") },
-        ]} onClear={() => {setFilter("");setProjectFilter("");setSource("");setOrigin("");}} />
-        <button
-          className="pw-secondary"
-          onClick={() => setRevision((v) => v + 1)}
-        >
-          새로고침
-        </button>
+        <FilterBar filters={filters} onClear={clearFilters} label="승인 필터" />
       </div>
-      <div className="approval-list" aria-label="업무화 승인 목록">
-        {visibleItems.map(item => <button type="button" className="approval-row" key={item.id} onClick={() => setSelectedId(item.id)}>
-          <strong>{item.title}<small>{item.source === "meeting" ? "회의" : "긴급"} · 요청 {item.plans.length}건</small></strong>
-          <span>{item.projectName}</span><span>요청자 {item.requesterName}</span>
-          <span className={`approval-status ${item.status}`}>{labels[item.status] || item.status}</span>
-        </button>)}
-      </div>
+      {nothing ? (
+        <div className="approvals-empty">
+          <span aria-hidden="true">✓</span>
+          <h2>{empty[0]}</h2>
+          <p>{empty[1]}</p>
+        </div>
+      ) : (
+        <div className="approval-list" aria-label="승인 목록">
+          {tab === "todo" && visibleWork.length > 0 && (
+            <h2 className="approval-group">
+              작업 검토 <small>{visibleWork.length}건</small>
+            </h2>
+          )}
+          {visibleWork.map(renderWork)}
+          {tab === "todo" && visibleItems.length > 0 && (
+            <h2 className="approval-group">
+              업무화 승인 <small>{visibleItems.length}건</small>
+            </h2>
+          )}
+          {visibleItems.map(renderApproval)}
+        </div>
+      )}
       {createPortal(<dialog ref={dialog} className={`approval-dialog ${items.find(i => i.id === selectedId)?.source === "meeting" ? "approval-dialog-meeting" : ""}`}
         aria-label="승인 요청 상세" onCancel={e => {e.preventDefault();closeDetail();}} onClose={() => {setSelectedId(null);setSelectedWork(null);}}>
         <div className="approval-dialog-toolbar"><nav aria-label="승인 요청 위치">{items.find(i => i.id === selectedId)?.source === "meeting" ? <>회의실 <span aria-hidden="true">›</span> <strong>{items.find(i => i.id === selectedId)?.title}</strong></> : "승인 요청 상세"}</nav><button type="button" className="pw-secondary" disabled={busy} onClick={closeDetail}>닫기</button></div>
@@ -352,21 +578,6 @@ export default function Approvals({
       ))}
         {selectedWork && <article className="approval-detail"><h2>{selectedWork.title}</h2><p className="approval-meta">{selectedWork.projectName} · {selectedWork.stageName}</p><ApprovalWorkDetail key={selectedWork.id} item={selectedWork} /><button type="button" className="pw-primary" onClick={() => {closeDetail();onTask?.(selectedWork.projectId, selectedWork.id);}}>업무 열고 검토</button></article>}
       </dialog>, document.body)}
-      {!visibleItems.length && (
-        <div className="approvals-empty">
-          <span aria-hidden="true">✓</span>
-          <h2>
-            {items.length
-              ? "조건에 맞는 승인 요청이 없어요"
-              : "승인 요청이 없어요"}
-          </h2>
-          <p>
-            {items.length
-              ? "필터를 변경해 다른 승인 요청을 확인하세요."
-              : "회의 또는 긴급 승인 요청이 등록되면 여기에 표시돼요."}
-          </p>
-        </div>
-      )}
     </section>
   );
 }

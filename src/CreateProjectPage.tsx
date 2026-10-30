@@ -207,13 +207,6 @@ export default function CreateProjectPage({
                 ))}
               </select>
               <p className="cp-help">선택한 팀의 프로젝트로 생성돼요.</p>
-              <RepositoryFields
-                relations={repositoryRelations}
-                onRelationsChange={setRepositoryRelations}
-                value={repositoryUrls}
-                onChange={setRepositoryUrls}
-                disabled={busy}
-              />
             </section>
             <section className="cp-panel" aria-labelledby="cp-people">
               <h2 id="cp-people">함께할 사람</h2>
@@ -343,6 +336,15 @@ export default function CreateProjectPage({
                 프로젝트 생성 시 초대가 전달되며, 상대방이 수락하면 참여합니다.
               </p>
             </section>
+            <section className="cp-panel cp-repository-panel" aria-label="프로젝트 저장소 등록">
+              <RepositoryFields
+                relations={repositoryRelations}
+                onRelationsChange={setRepositoryRelations}
+                value={repositoryUrls}
+                onChange={setRepositoryUrls}
+                disabled={busy}
+              />
+            </section>
           </div>
           {error && (
             <p className="cp-error cp-submit-error" role="alert">
@@ -357,6 +359,7 @@ export default function CreateProjectPage({
             </p>
             <button
               type="submit"
+              className="pw-primary cp-create-button"
               disabled={busy || searching !== null || !name.trim()}
             >
               {busy ? "생성 중…" : "생성하기"}

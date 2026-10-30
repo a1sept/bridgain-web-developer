@@ -736,6 +736,7 @@ export default function LiveWorkspace({
               {view === "activity" && <ActivityHistory currentUser={user} refreshKey={dashboardRefresh} />}
               {view === "approvals" && (
                 <Approvals
+                  userId={user.id}
                   onTask={(pid, tid) => {
                     window.sessionStorage.setItem("bridgain-task", tid);
                     openProject(pid, "tasks");
@@ -799,6 +800,7 @@ export default function LiveWorkspace({
                 projectSection === "approvals" && (
                   <Approvals
                     projectId={project.id}
+                    userId={user.id}
                     onTask={(pid, tid) => {
                       window.sessionStorage.setItem("bridgain-task", tid);
                       openProject(pid, "tasks");
