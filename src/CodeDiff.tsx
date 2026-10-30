@@ -1,3 +1,5 @@
+import { useState } from "react";
+import ControlIcon from "./components/ControlIcon";
 export function FileStatus({ status }: { status: string }) {
   const value = status.trim();
   const kind = value.includes("U") || value === "AA" || value === "DD" ? "conflict"
@@ -41,4 +43,27 @@ export default function CodeDiff({ diff, empty = "변경사항 없음" }: { diff
       </div>)}
     </div>
   </div>;
+}
+
+export function FileDiffList({ files }: { files: { path: string; status: string; diff: string; originalPath?: string; limited?: boolean }[] }) {
+  if (!files.length) return <p className="td-muted">변경된 파일이 없습니다.</p>;
+  return <div className="tc-file-diffs">{files.map((file, index) => <FileDiffItem key={file.path} file={file} initialOpen={index === 0} />)}</div>;
+}
+function FileDiffItem({ file, initialOpen }: { file: { path: string; status: string; diff: string; originalPath?: string; limited?: boolean }; initialOpen: boolean }) {
+  const [open, setOpen] = useState(initialOpen);
+  let inHunk = false, added = 0, removed = 0;
+  for (const line of file.diff.split("\n")) {
+    if (line.startsWith("diff --git ")) inHunk = false;
+    else if (line.startsWith("@@ ")) inHunk = true;
+    else if (inHunk && line.startsWith("+")) added++;
+    else if (inHunk && line.startsWith("-")) removed++;
+  }
+  return <details className="tc-file-diff" open={open} onToggle={event => setOpen(event.currentTarget.open)}>
+    <summary><span className="tc-file-chevron"><ControlIcon name="chevron" /></span>
+      <span className="tc-file-name">{file.originalPath && <small>{file.originalPath} → </small>}{file.path}</span>
+      <FileStatus status={file.status} />
+      <span className="tc-file-counts" aria-label={`추가 ${added}줄, 삭제 ${removed}줄`}><span>+{added}</span><span>−{removed}</span></span>
+    </summary>
+    {open && <div className="tc-file-patch">{file.limited && <p className="td-muted">크기 제한으로 일부 변경 내용을 생략했습니다.</p>}<CodeDiff diff={file.diff} empty="텍스트 변경 내용이 없습니다." /></div>}
+  </details>;
 }

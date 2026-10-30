@@ -41,3 +41,18 @@
 .tc-history-error{padding:10px 12px;background:#fff0f1;border-radius:6px;color:#b43a48;font-size:12px;overflow-wrap:anywhere}
 .tc-history-error p{margin:0 0 8px}
 @media(max-width:900px){.tc-history-browser{grid-template-columns:minmax(0,1fr)}.tc-commit-list{max-height:230px}}
+
+.tc-file-diffs{display:grid;gap:12px;margin-top:12px;min-width:0}
+.tc-file-diff{min-width:0;border:1px solid #dfe5ef;border-radius:7px;overflow:hidden}
+.tc-file-diff>summary{display:flex;align-items:center;gap:8px;padding:9px 12px;background:#f6f8fc;cursor:pointer;list-style:none;font-size:12px;line-height:18px}
+.tc-file-diff>summary::-webkit-details-marker{display:none}
+.tc-file-diff>summary:hover{background:#edf2ff}
+.tc-file-diff>summary:focus-visible{outline:2px solid #436bf0;outline-offset:-2px}
+.tc-file-chevron{flex-shrink:0;transform:rotate(-90deg)}
+.tc-file-diff[open]>summary .tc-file-chevron{transform:rotate(0)}
+.tc-file-name{flex:1;min-width:0;overflow-wrap:anywhere;font-family:ui-monospace,SFMono-Regular,Consolas,monospace;font-weight:600}
+.tc-file-name small{font-weight:400;color:#65748b}
+.tc-file-counts{display:flex;gap:6px;flex-shrink:0;font-family:ui-monospace,SFMono-Regular,Consolas,monospace}
+.tc-file-counts>span:first-child{color:#166534}.tc-file-counts>span:last-child{color:#991b1b}
+.tc-file-patch{padding:10px;min-width:0;border-top:1px solid #dfe5ef}
+@media(max-width:480px){.tc-file-diff>summary{flex-wrap:wrap}.tc-file-name{flex-basis:calc(100% - 30px)}.tc-file-counts{margin-left:auto}}

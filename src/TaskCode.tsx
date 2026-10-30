@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import type { GitState, GitCommitDetail } from "./desktop";
 import { workflowApi } from "./Approvals";
 import "./task-code.css";
-import CodeDiff, { FileStatus } from "./CodeDiff";
+import CodeDiff, { FileStatus, FileDiffList } from "./CodeDiff";
 
 export function useTaskGit(pid: string, id: string, enabled: boolean, onChanged: () => void) {
   const [state, setState] = useState<GitState>();
@@ -124,16 +124,15 @@ export function GitControls({ git, editable }: { git: Git; editable: boolean }) 
 }
 export function RemoteTaskCode({ projectId, taskId }: { projectId: string; taskId: string }) {
   const [data, setData] = useState<{ headSha: string; approvedHeadSha?: string; pullRequestUrl: string; limited: boolean; files: { path: string; status: string; diff: string }[] }>();
-  const [file, setFile] = useState(""); const [error, setError] = useState(""); const [revision, setRevision] = useState(0);
+  const [error, setError] = useState(""); const [revision, setRevision] = useState(0);
   useEffect(() => { let active = true; setData(undefined); setError("");
-    workflowApi<NonNullable<typeof data>>(`/projects/${projectId}/tasks/${taskId}/git/code`).then(r => { if (active) { setData(r); setFile(r.files[0]?.path || ""); } }).catch(e => { if (active) setError(e.message); });
+    workflowApi<NonNullable<typeof data>>(`/projects/${projectId}/tasks/${taskId}/git/code`).then(r => { if (active) { setData(r); } }).catch(e => { if (active) setError(e.message); });
     return () => { active = false; };
   }, [projectId, taskId, revision]);
   return <section className="tc-code"><h3>GitHub PR 변경 코드</h3><button type="button" onClick={() => setRevision(v => v + 1)}>최신 PR 확인</button>
     {error && <p role="alert">{error}</p>}{!data && !error && <p>PR 코드 확인 중…</p>}
     {data && <><p className="td-muted">PR 커밋 {data.headSha.slice(0, 10)}{data.approvedHeadSha && ` · 승인 커밋 ${data.approvedHeadSha.slice(0, 10)}`} · <a href={data.pullRequestUrl} target="_blank" rel="noreferrer">GitHub에서 보기</a></p>
       {data.limited && <p>최대 300개 파일을 표시합니다. 전체 내용은 GitHub에서 확인해주세요.</p>}
-      <label>변경 파일<select value={file} onChange={e => setFile(e.target.value)}>{data.files.map(f => <option key={f.path} value={f.path}>{f.path}</option>)}</select></label>
-      <CodeDiff diff={data.files.find(f => f.path === file)?.diff || ""} /></>}
+      <FileDiffList key={`${taskId}:${data.headSha}`} files={data.files} /></>}
   </section>;
 }
