@@ -29,6 +29,21 @@ type Repository = {
   defaultBranch: string;
   owner?: { login: string; avatarUrl: string; type: string };
 };
+function RepositoryCard({ url, repository }: { url: string; repository?: Repository }) {
+  const fullName = repository?.fullName ?? url.replace("https://github.com/", "");
+  const owner = repository?.owner?.login ?? fullName.split("/")[0];
+  return <span className="repo-option-card">
+    {repository?.owner?.avatarUrl
+      ? <img className="repo-avatar" src={repository.owner.avatarUrl} alt="" />
+      : <span className="repo-avatar repo-avatar-fallback" aria-hidden="true">{owner.slice(0, 1).toUpperCase()}</span>}
+    <span className="repo-name">
+      <span className="repo-title"><strong>{fullName.split("/").slice(1).join("/") || fullName}</strong>
+        <span className="repo-visibility">{repository ? repository.private ? "Private" : "Public" : "공개 여부 미확인"}</span>
+      </span>
+      <small>{owner}{repository?.defaultBranch ? ` · ${repository.defaultBranch}` : ""}</small>
+    </span>
+  </span>;
+}
 type Status = {
   configured: boolean;
   connected: boolean;
@@ -76,19 +91,34 @@ export default function RepositoryFields({
   const [urlInput, setUrlInput] = useState("");
   const [urlError, setUrlError] = useState("");
   function addUrl() {
-    const match = /^https:\/\/github\.com\/([a-z0-9](?:[a-z0-9-]{0,38}))\/([a-z0-9_.-]{1,100})\/?$/i.exec(urlInput.trim());
+    const match =
+      /^https:\/\/github\.com\/([a-z0-9](?:[a-z0-9-]{0,38}))\/([a-z0-9_.-]{1,100})\/?$/i.exec(
+        urlInput.trim(),
+      );
     const name = match?.[2].replace(/\.git$/i, "");
-    if (!match || !name || /^\.+$/.test(name)) { setUrlError("https://github.com/소유자/저장소 형식으로 입력해주세요."); return; }
+    if (!match || !name || /^\.+$/.test(name)) {
+      setUrlError("https://github.com/소유자/저장소 형식으로 입력해주세요.");
+      return;
+    }
     const url = `https://github.com/${match[1]}/${name}`;
-    if (value.some(item => item.toLowerCase() === url.toLowerCase())) { setUrlError("이미 목록에 추가된 저장소입니다."); return; }
-    if (value.length >= 20) { setUrlError("저장소는 최대 20개까지 등록할 수 있어요."); return; }
-    changeUrls([...value, url]); setUrlInput(""); setUrlError("");
+    if (value.some((item) => item.toLowerCase() === url.toLowerCase())) {
+      setUrlError("이미 목록에 추가된 저장소입니다.");
+      return;
+    }
+    if (value.length >= 20) {
+      setUrlError("저장소는 최대 20개까지 등록할 수 있어요.");
+      return;
+    }
+    changeUrls([...value, url]);
+    setUrlInput("");
+    setUrlError("");
   }
   const [discoveries, setDiscoveries] = useState<
     Record<string, { data?: Discovery; error?: string }>
   >({});
   useEffect(() => {
-    if (!onRelationsChange || disabled || !optionalOpen || !status?.connected) return;
+    if (!onRelationsChange || disabled || !optionalOpen || !status?.connected)
+      return;
     let active = true;
     for (const url of value) {
       if (discoveries[url]?.data || discoveries[url]?.error) continue;
@@ -108,7 +138,13 @@ export default function RepositoryFields({
     return () => {
       active = false;
     };
-  }, [value.join("|"), !!onRelationsChange, disabled, optionalOpen, status?.connected]);
+  }, [
+    value.join("|"),
+    !!onRelationsChange,
+    disabled,
+    optionalOpen,
+    status?.connected,
+  ]);
   function changeUrls(next: string[]) {
     onChange(next);
     onRelationsChange?.(
@@ -127,7 +163,9 @@ export default function RepositoryFields({
       return;
     }
     const edges = new Map(
-      relations.filter(r => r.parentUrl !== data.parentUrl).map((r) => [`${r.parentUrl}:${r.path}`, r]),
+      relations
+        .filter((r) => r.parentUrl !== data.parentUrl)
+        .map((r) => [`${r.parentUrl}:${r.path}`, r]),
     );
     for (const child of children)
       edges.set(`${child.parentUrl}:${child.path}`, {
@@ -198,13 +236,16 @@ export default function RepositoryFields({
       window.removeEventListener("focus", onFocus);
     };
   }, [disabled, connectionOnly, optionalOpen]);
-  useEffect(() => () => {
-    const flow = activeFlow.current;
-    activeFlow.current = null;
-    if (flow?.timer) clearTimeout(flow.timer);
-    flow?.popup?.close();
-    void flow?.cancel?.().catch(() => {});
-  }, []);
+  useEffect(
+    () => () => {
+      const flow = activeFlow.current;
+      activeFlow.current = null;
+      if (flow?.timer) clearTimeout(flow.timer);
+      flow?.popup?.close();
+      void flow?.cancel?.().catch(() => {});
+    },
+    [],
+  );
   async function connect() {
     if (activeFlow.current) {
       activeFlow.current.popup?.focus();
@@ -215,17 +256,19 @@ export default function RepositoryFields({
       setError("데스크톱 앱을 업데이트하고 다시 실행해주세요.");
       return;
     }
-    const popup = desktop ? null : window.open(
-      "about:blank",
-      "_blank",
-      "popup,width=760,height=820",
-    );
+    const popup = desktop
+      ? null
+      : window.open("about:blank", "_blank", "popup,width=760,height=820");
     if (!desktop && !popup) {
       setError("팝업을 허용한 후 다시 연결해주세요.");
       return;
     }
     if (popup) popup.opener = null;
-    const flow: { popup: Window | null; cancel?: () => Promise<void>; timer?: ReturnType<typeof setTimeout> } = {
+    const flow: {
+      popup: Window | null;
+      cancel?: () => Promise<void>;
+      timer?: ReturnType<typeof setTimeout>;
+    } = {
       popup,
       cancel: desktop?.cancelGithub,
     };
@@ -287,249 +330,345 @@ export default function RepositoryFields({
       setError(e instanceof Error ? e.message : "연결하지 못했어요.");
     }
   }
-  const repositoryOptions = repositories.map(repo => ({
+  const repositoryOptions = repositories.map((repo) => ({
     value: repo.url,
     label: `${repo.fullName} · ${repo.private ? "비공개" : "공개"} · ${repo.defaultBranch}`,
   }));
   for (const url of value) {
-    if (!repositoryOptions.some(option => option.value === url))
-      repositoryOptions.push({ value: url, label: url.replace("https://github.com/", "") });
+    if (!repositoryOptions.some((option) => option.value === url))
+      repositoryOptions.push({
+        value: url,
+        label: url.replace("https://github.com/", ""),
+      });
   }
-  if (connectionOnly) return <section className="repo-fields repo-personal-connection">
-    <div className="repo-personal-header">
-      <h3>내 GitHub 계정 연결</h3>
-      <span className={`repo-connection-badge${status?.connected ? " is-connected" : ""}`}>
-        <ControlIcon name={status?.connected ? "check" : "plus"} size={14} />
-        {status?.connected ? "연결됨" : "선택 사항"}
-      </span>
-      <button type="button" disabled={busy || connecting || !status?.configured} onClick={() => void connect()}>
-        {connecting ? "GitHub 승인 대기…" : status?.connected ? "다시 인증" : "GitHub 연결"}
-      </button>
-    </div>
-    <p>{status?.connected ? "내 GitHub 저장소를 찾아 선택할 수 있어요." : "개인 GitHub 연결로 저장소를 찾아 선택할 수 있습니다. 프로젝트의 서버 연동 권한이 설정되어 있으면 개인 연결 없이 코드 조회·PR 검토를 진행할 수 있습니다."}</p>
-    {connecting && <><p role="status">{window.bridgainDesktop ? "기본 브라우저에서 GitHub 인증을 완료한 뒤 앱에서 연결할 계정을 확인해주세요." : "GitHub 창에서 로그인을 완료하고 접근을 승인해주세요."}</p><button type="button" onClick={stopConnection}>취소</button></>}
-    {error && <p role="alert">{error}</p>}
-  </section>;
+  if (connectionOnly)
+    return (
+      <section className="repo-fields repo-personal-connection">
+        <div className="repo-personal-header">
+          <h3>내 GitHub 계정 연결</h3>
+          <span
+            className={`repo-connection-badge${status?.connected ? " is-connected" : ""}`}
+          >
+            <ControlIcon
+              name={status?.connected ? "check" : "plus"}
+              size={14}
+            />
+            {status?.connected ? "연결됨" : "선택 사항"}
+          </span>
+          <button
+            type="button"
+            disabled={busy || connecting || !status?.configured}
+            onClick={() => void connect()}
+          >
+            {connecting
+              ? "GitHub 승인 대기…"
+              : status?.connected
+                ? "다시 인증"
+                : "GitHub 연결"}
+          </button>
+        </div>
+        <p>
+          {status?.connected
+            ? "내 GitHub 저장소를 찾아 선택할 수 있어요."
+            : "개인 GitHub 연결로 저장소를 찾아 선택할 수 있습니다. 프로젝트의 서버 연동 권한이 설정되어 있으면 개인 연결 없이 코드 조회·PR 검토를 진행할 수 있습니다."}
+        </p>
+        {connecting && (
+          <>
+            <p role="status">
+              {window.bridgainDesktop
+                ? "기본 브라우저에서 GitHub 인증을 완료한 뒤 앱에서 연결할 계정을 확인해주세요."
+                : "GitHub 창에서 로그인을 완료하고 접근을 승인해주세요."}
+            </p>
+            <button type="button" onClick={stopConnection}>
+              취소
+            </button>
+          </>
+        )}
+        {error && <p role="alert">{error}</p>}
+      </section>
+    );
   return (
     <fieldset className="repo-fields" disabled={disabled}>
       <legend>
         프로젝트 저장소 등록 <small>프로젝트 공용</small>
       </legend>
-      <p>관리자가 등록하고 저장한 저장소는 프로젝트 참여자 모두에게 표시됩니다.</p>
-      <div className="repo-selected-summary" aria-label="프로젝트 저장소 목록">
-        {value.map(url => <div key={url}><ControlIcon name="check" size={14} />
-          <div className="repo-shared-identity"><strong>{url.replace("https://github.com/", "")}</strong><code>{url}</code>
-            {!!relations.filter(item => item.parentUrl === url).length && <span>등록된 서브모듈 {relations.filter(item => item.parentUrl === url).length}개</span>}
-          </div>
-          {!disabled && <button type="button" aria-label={`${url} 목록에서 제거`} onClick={() => changeUrls(value.filter(item => item !== url))}>제거</button>}
-        </div>)}
-        {!value.length && <p>등록된 저장소가 없습니다.</p>}
-      </div>
-      {!disabled && <div className="repo-url-entry">
-        <label>GitHub 저장소 URL<input aria-label="프로젝트 공용 GitHub 저장소 URL" type="url" value={urlInput} placeholder="https://github.com/소유자/저장소" onChange={event => { setUrlInput(event.target.value); setUrlError(""); }} onKeyDown={event => { if (event.key === "Enter") { event.preventDefault(); addUrl(); } }} /></label>
-        <button type="button" disabled={!urlInput.trim()} onClick={addUrl}>목록에 추가</button>
-      </div>}
+      <p>
+        관리자가 등록하고 저장한 저장소는 프로젝트 참여자 모두에게 표시됩니다.
+      </p>
+      {!disabled && (
+        <div className="repo-url-entry">
+          <label>
+            GitHub 저장소 URL
+            <input
+              aria-label="프로젝트 공용 GitHub 저장소 URL"
+              type="url"
+              value={urlInput}
+              placeholder="https://github.com/소유자/저장소"
+              onChange={(event) => {
+                setUrlInput(event.target.value);
+                setUrlError("");
+              }}
+              onKeyDown={(event) => {
+                if (event.key === "Enter") {
+                  event.preventDefault();
+                  addUrl();
+                }
+              }}
+            />
+          </label>
+          <button type="button" disabled={!urlInput.trim()} onClick={addUrl}>
+            목록에 추가
+          </button>
+        </div>
+      )}
       {urlError && <p role="alert">{urlError}</p>}
-      <p>URL 등록은 GitHub 접근 권한을 부여하지 않습니다. 비공개 저장소의 코드 조회·PR 처리를 위해 저장소 소유자가 프로젝트의 서버 연동 접근을 허용해야 합니다.</p>
-      {!disabled && <p>목록을 변경한 뒤 프로젝트 설정을 저장해주세요. ({value.length}/20개)</p>}
-      {!disabled && <details className="repo-personal-picker" open={optionalOpen} onToggle={event => setOptionalOpen(event.currentTarget.open)}>
-        <summary>내 GitHub에서 찾아 추가 <small>선택 사항</small></summary>
-      {!status && !error && <p role="status">개인 GitHub 연결 확인 중…</p>}
-      {status && !status.configured && <p>GitHub 연결 준비 중</p>}
-      {status?.configured && !status.connected && (
-        <div className="repo-connect">
-          <span>개인 계정을 연결하면 접근 가능한 저장소를 검색할 수 있어요.</span>
-          <button
-            type="button"
-            disabled={busy || connecting}
-            onClick={() => void connect()}
-          >
-            GitHub 연결
-          </button>
-        </div>
+      <p>
+        URL 등록은 GitHub 접근 권한을 부여하지 않습니다. 비공개 저장소의 코드
+        조회·PR 처리를 위해 저장소 소유자가 프로젝트의 서버 연동 접근을 허용해야
+        합니다.
+      </p>
+      {!disabled && (
+        <p>
+          목록을 변경한 뒤 프로젝트 설정을 저장해주세요. ({value.length}/20개)
+        </p>
       )}
-      {connecting && (
-        <div className="repo-connect" role="status">
-          <span>
-            {window.bridgainDesktop ? "기본 브라우저에서 GitHub 인증을 완료한 뒤 앱에서 연결할 계정을 확인해주세요." : "GitHub 창에서 로그인을 완료하고 접근을 승인해주세요."} 목록은 자동으로 표시됩니다.
-          </span>
-          <button type="button" onClick={stopConnection}>
-            취소
-          </button>
-        </div>
-      )}
-      {status?.connected && (
-        <>
-          <div className="repo-toolbar">
-            <span className="repo-connection-badge is-connected"><ControlIcon name="check" size={14} />GitHub 연결됨</span>
-            {!disabled && <div className="repo-actions">
+      {!disabled && (
+        <details
+          className="repo-personal-picker"
+          open={optionalOpen}
+          onToggle={(event) => setOptionalOpen(event.currentTarget.open)}
+        >
+          <summary>
+            내 GitHub에서 찾아 추가 <small>선택 사항</small>
+          </summary>
+          {!status && !error && <p role="status">개인 GitHub 연결 확인 중…</p>}
+          {status && !status.configured && <p>GitHub 연결 준비 중</p>}
+          {status?.configured && !status.connected && (
+            <div className="repo-connect">
+              <span>
+                개인 계정을 연결하면 접근 가능한 저장소를 검색할 수 있어요.
+              </span>
               <button
                 type="button"
-                disabled={busy}
-                onClick={() => void refresh()}
-                aria-label="저장소 목록 새로고침"
+                disabled={busy || connecting}
+                onClick={() => void connect()}
               >
-                {busy ? "불러오는 중…" : "새로고침"}
+                GitHub 연결
               </button>
-              <details className="repo-options">
-                <summary>연결 설정</summary>
-                <div>
+            </div>
+          )}
+          {connecting && (
+            <div className="repo-connect" role="status">
+              <span>
+                {window.bridgainDesktop
+                  ? "기본 브라우저에서 GitHub 인증을 완료한 뒤 앱에서 연결할 계정을 확인해주세요."
+                  : "GitHub 창에서 로그인을 완료하고 접근을 승인해주세요."}{" "}
+                목록은 자동으로 표시됩니다.
+              </span>
+              <button type="button" onClick={stopConnection}>
+                취소
+              </button>
+            </div>
+          )}
+          {status?.connected && (
+            <>
+              <div className="repo-toolbar">
+                <span className="repo-connection-badge is-connected">
+                  <ControlIcon name="check" size={14} />
+                  GitHub 연결됨
+                </span>
+                {!disabled && (
+                  <div className="repo-actions">
+                    <button
+                      type="button"
+                      disabled={busy}
+                      onClick={() => void refresh()}
+                      aria-label="저장소 목록 새로고침"
+                    >
+                      {busy ? "불러오는 중…" : "새로고침"}
+                    </button>
+                    <details className="repo-options">
+                      <summary>연결 설정</summary>
+                      <div>
+                        <a
+                          href={status.installUrl!}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                        >
+                          저장소 접근 관리 ↗
+                        </a>
+                        <button
+                          type="button"
+                          disabled={busy || connecting}
+                          onClick={() => void connect()}
+                        >
+                          다시 인증
+                        </button>
+                      </div>
+                    </details>
+                  </div>
+                )}
+              </div>
+              {!disabled && !busy && (
+                <FilterBar
+                  label="프로젝트 GitHub 저장소 선택"
+                  filters={[
+                    {
+                      id: "repository",
+                      label: "저장소 검색",
+                      multiple: true,
+                      options: repositoryOptions,
+                      values: value,
+                      closeOnSelect: true,
+                      trigger: "search",
+                      hideSelectedTags: true,
+                      renderOption: option => <RepositoryCard url={option.value} repository={repositories.find(item => item.url === option.value)} />,
+                      onChange: (next) => {
+                        if (next.length > 20) {
+                          setError("저장소는 최대 20개까지 연결할 수 있어요.");
+                          return;
+                        }
+                        setError("");
+                        changeUrls(next);
+                      },
+                    },
+                  ]}
+                  onClear={() => changeUrls([])}
+                />
+              )}
+              {busy && <p role="status">저장소를 불러오는 중…</p>}
+              {!disabled && !busy && !value.length && (
+                <p>‘저장소 검색’을 눌러 이름이나 계정으로 검색하세요.</p>
+              )}
+              {!connecting && !busy && !error && !repositories.length && (
+                <div className="repo-empty">
+                  <strong>접근할 수 있는 저장소가 없어요</strong>
+                  <span>GitHub 연결 설정에서 저장소 접근을 허용해주세요.</span>
+                </div>
+              )}
+              <div className="repo-footer">
+                <span>{value.length}/20개 선택</span>
+                {!disabled && (
                   <a
                     href={status.installUrl!}
                     target="_blank"
                     rel="noopener noreferrer"
                   >
-                    저장소 접근 관리 ↗
+                    저장소 추가 ↗
                   </a>
-                  <button
-                    type="button"
-                    disabled={busy || connecting}
-                    onClick={() => void connect()}
-                  >
-                    다시 인증
-                  </button>
-                </div>
-              </details>
-            </div>}
-          </div>
-          {!disabled && !busy && <FilterBar
-            label="프로젝트 GitHub 저장소 선택"
-            filters={[{ id: "repository", label: "저장소 선택", multiple: true,
-              options: repositoryOptions, values: value,
-              renderOption: option => {
-                const repo = repositories.find(item => item.url === option.value);
-                if (!repo) return option.label;
-                const owner = repo.owner?.login ?? repo.fullName.split("/")[0];
-                return <span className="repo-option-card">
-                  {repo.owner?.avatarUrl
-                    ? <img className="repo-avatar" src={repo.owner.avatarUrl} alt="" />
-                    : <span className="repo-avatar repo-avatar-fallback" aria-hidden="true">{owner.slice(0, 1).toUpperCase()}</span>}
-                  <span className="repo-name">
-                    <span className="repo-title"><strong>{repo.fullName.split("/").slice(1).join("/") || repo.fullName}</strong>
-                      <span className="repo-visibility">{repo.private ? "Private" : "Public"}</span>
-                    </span>
-                    <small>{owner} · {repo.defaultBranch}</small>
-                  </span>
-                </span>;
-              },
-              onChange: next => {
-                if (next.length > 20) { setError("저장소는 최대 20개까지 연결할 수 있어요."); return; }
-                setError(""); changeUrls(next);
-              },
-            }]}
-            onClear={() => changeUrls([])}
-          />}
-          {busy && <p role="status">저장소를 불러오는 중…</p>}
-          {!disabled && !busy && !value.length && <p>‘저장소 선택’을 눌러 이름이나 계정으로 검색하세요.</p>}
-          {!connecting && !busy && !error && !repositories.length && <div className="repo-empty">
-            <strong>접근할 수 있는 저장소가 없어요</strong>
-            <span>GitHub 연결 설정에서 저장소 접근을 허용해주세요.</span>
-          </div>}
-          <div className="repo-footer">
-            <span>{value.length}/20개 선택</span>
-            {!disabled && <a
-              href={status.installUrl!}
-              target="_blank"
-              rel="noopener noreferrer"
-            >
-              저장소 추가 ↗
-            </a>}
-          </div>
-        </>
-      )}
-      {onRelationsChange && status?.connected && optionalOpen &&
-        value.map((url) => {
-          const state = discoveries[url];
-          const data = state?.data;
-          return (
-            <section
-              className="repo-submodules"
-              key={url}
-              aria-label={`${url} 서브모듈`}
-            >
-              <div className="repo-submodule-heading">
-                <strong>{url.replace("https://github.com/", "")}</strong>
-                <small>
-                  {data
-                    ? `서브모듈 ${data.submodules.length}개`
-                    : state?.error
-                      ? "조회 실패"
-                      : "서브모듈 확인 중…"}
-                </small>
+                )}
               </div>
-              {state?.error && (
-                <p role="alert">
-                  {state.error}
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setDiscoveries((current) => {
-                        const next = { ...current };
-                        delete next[url];
-                        return next;
-                      });
-                      void github(
-                        `submodules?repositoryUrl=${encodeURIComponent(url)}`,
-                      )
-                        .then((data) =>
-                          setDiscoveries((current) => ({
-                            ...current,
-                            [url]: { data },
-                          })),
-                        )
-                        .catch((e) =>
-                          setDiscoveries((current) => ({
-                            ...current,
-                            [url]: { error: e.message },
-                          })),
-                        );
-                    }}
-                  >
-                    다시 조회
-                  </button>
-                </p>
-              )}
-              {data?.submodules.map((child) => (
-                <div className="repo-submodule-item" key={child.path}>
-                  <span>
-                    {child.childUrl?.replace("https://github.com/", "") ??
-                      child.rawUrl}
+            </>
+          )}
+          {onRelationsChange &&
+            status?.connected &&
+            optionalOpen &&
+            value.map((url) => {
+              const state = discoveries[url];
+              const data = state?.data;
+              return (
+                <section
+                  className="repo-submodules"
+                  key={url}
+                  aria-label={`${url} 서브모듈`}
+                >
+                  <div className="repo-submodule-heading">
+                    <strong>{url.replace("https://github.com/", "")}</strong>
                     <small>
-                      {child.path} · {child.commit.slice(0, 7)}
+                      {data
+                        ? `서브모듈 ${data.submodules.length}개`
+                        : state?.error
+                          ? "조회 실패"
+                          : "서브모듈 확인 중…"}
                     </small>
-                  </span>
-                  <small>
-                    {!child.available
-                      ? child.reason
-                      : relations.some(
-                            (r) =>
-                              r.parentUrl === child.parentUrl &&
-                              r.path === child.path &&
-                              r.childUrl === child.childUrl &&
-                              r.commit === child.commit,
+                  </div>
+                  {state?.error && (
+                    <p role="alert">
+                      {state.error}
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setDiscoveries((current) => {
+                            const next = { ...current };
+                            delete next[url];
+                            return next;
+                          });
+                          void github(
+                            `submodules?repositoryUrl=${encodeURIComponent(url)}`,
                           )
-                        ? "연결됨"
-                        : "연결 가능"}
-                  </small>
-                </div>
-              ))}
-              {!!data?.submodules.some((child) => child.available) && (
-                <button type="button" onClick={() => includeChildren(data)}>
-                  하위 저장소 함께 연결
-                </button>
-              )}
-            </section>
-          );
-        })}
-      {error && (
-        <p role="alert">
-          {error}{" "}
-          <button type="button" disabled={busy} onClick={() => void refresh()}>
-            다시 시도
-          </button>
-        </p>
+                            .then((data) =>
+                              setDiscoveries((current) => ({
+                                ...current,
+                                [url]: { data },
+                              })),
+                            )
+                            .catch((e) =>
+                              setDiscoveries((current) => ({
+                                ...current,
+                                [url]: { error: e.message },
+                              })),
+                            );
+                        }}
+                      >
+                        다시 조회
+                      </button>
+                    </p>
+                  )}
+                  {data?.submodules.map((child) => (
+                    <div className="repo-submodule-item" key={child.path}>
+                      <span>
+                        {child.childUrl?.replace("https://github.com/", "") ??
+                          child.rawUrl}
+                        <small>
+                          {child.path} · {child.commit.slice(0, 7)}
+                        </small>
+                      </span>
+                      <small>
+                        {!child.available
+                          ? child.reason
+                          : relations.some(
+                                (r) =>
+                                  r.parentUrl === child.parentUrl &&
+                                  r.path === child.path &&
+                                  r.childUrl === child.childUrl &&
+                                  r.commit === child.commit,
+                              )
+                            ? "연결됨"
+                            : "연결 가능"}
+                      </small>
+                    </div>
+                  ))}
+                  {!!data?.submodules.some((child) => child.available) && (
+                    <button type="button" onClick={() => includeChildren(data)}>
+                      하위 저장소 함께 연결
+                    </button>
+                  )}
+                </section>
+              );
+            })}
+          {error && (
+            <p role="alert">
+              {error}{" "}
+              <button
+                type="button"
+                disabled={busy}
+                onClick={() => void refresh()}
+              >
+                다시 시도
+              </button>
+            </p>
+          )}
+        </details>
       )}
-      </details>}
+      <div className="repo-selected-summary" aria-label="선택된 프로젝트 저장소">
+        {value.map(url => <div key={url}>
+          <RepositoryCard url={url} repository={repositories.find(item => item.url === url)} />
+          <span className="repo-selected-status"><ControlIcon name="check" size={14} />선택됨</span>
+          {!!relations.filter(item => item.parentUrl === url).length && <span>등록된 서브모듈 {relations.filter(item => item.parentUrl === url).length}개</span>}
+          {!disabled && <button type="button" aria-label={`${url} 목록에서 제거`} onClick={() => changeUrls(value.filter(item => item !== url))}>제거</button>}
+        </div>)}
+        {!value.length && <p>등록된 저장소가 없습니다.</p>}
+      </div>
     </fieldset>
   );
 }

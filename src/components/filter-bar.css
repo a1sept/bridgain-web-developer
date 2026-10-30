@@ -78,3 +78,9 @@
   .bg-filter-bar .bg-filter-remove, .bg-filter-bar .bg-filter-tag button, .bg-filter-popover .bg-filter-tag button { width: 28px; height: 28px; }
   .bg-filter-options .bg-filter-option { min-height: 44px; }
 }
+
+/* Search-style picker trigger; other filters retain their compact chips. */
+.bg-filter-group-search { flex: 1 0 100%; }
+.bg-filter-bar .bg-filter-group-search .bg-filter-chip { width: 100%; border-style: solid; border-radius: 7px; }
+.bg-filter-bar .bg-filter-group-search .bg-filter-trigger { width: 100%; padding: 7px 12px; border-radius: 7px; text-align: left; }
+.bg-filter-group-search .bg-filter-chevron { margin-left: auto; }
