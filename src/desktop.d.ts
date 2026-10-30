@@ -1,3 +1,4 @@
+export type RepositoryAccessResult = { ok: boolean; code: "ok" | "authentication" | "permission" | "not_found_or_no_access" | "network" | "git_missing" | "unknown"; message: string; repositoryUrl: string };
 export type GitCommitDetail = { sha: string; files: { path: string; status: string; originalPath?: string; diff: string; limited?: boolean }[]; limited: boolean };
 export type TaskWorkspace = { folder?: string; binding?: { path: string; branch: string; baseBranch: string; repositoryUrl: string } };
 export type GitState = { files: { path: string; status: string; originalPath?: string }[]; head: string; remoteSha: string | null; ahead: number | null; behind: number | null; checkedAt: string; history: { sha: string; subject: string; author: string; date: string }[] };
@@ -35,6 +36,7 @@ export type DesktopEvent = {
 export type DesktopBridge = {
   connectGithub?: () => Promise<void>;
   cancelGithub?: () => Promise<void>;
+  checkRepositoryAccess?: (pid: string, repositoryUrl: string) => Promise<RepositoryAccessResult>;
   cloneProject?: (pid: string, repositoryUrl: string) => Promise<RepositoryState | null>;
   repositoryState?: (pid: string) => Promise<RepositoryState | null>;
   taskGit?: (pid: string, id: string, action?: string, options?: Record<string, unknown>) => Promise<any>;

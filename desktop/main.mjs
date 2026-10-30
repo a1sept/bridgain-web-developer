@@ -176,6 +176,7 @@ async function main() {
   handle("cancel-github", () => githubAuth.cancel());
   handle("task-workspace", (pid, id, action, options) => runtime.taskWorkspace(pid, id, action, options));
   handle("task-git", (pid, id, action, options) => runtime.taskGit(pid, id, action, options));
+  handle("check-repository-access", (pid, url) => runtime.checkRepositoryAccess(pid, url));
   handle("clone-project", (pid, url) => runtime.cloneProject(pid, url));
   handle("repository-state", (pid) => runtime.repositoryState(pid));
   handle("state", () => runtime.state());

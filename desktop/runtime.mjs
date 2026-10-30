@@ -1,5 +1,5 @@
 import { prepareTaskWorkspace } from "./task-workspace.mjs";
-import { inspectRepository, cloneRepository, verifyBinding, gitState, fileDiff, commitDetail, commitFiles, pushBranch, submissionState, git } from "./local-git.mjs";
+import { inspectRepository, cloneRepository, checkRepositoryAccess, verifyBinding, gitState, fileDiff, commitDetail, commitFiles, pushBranch, submissionState, git } from "./local-git.mjs";
 import { projectTool } from "./project-files.mjs";
 import { mkdir, readFile, writeFile, rename, realpath } from "node:fs/promises";
 import { join } from "node:path";
@@ -191,6 +191,16 @@ export class DesktopRuntime {
     await this.save();
     await this.syncProjects();
     return folder;
+  }
+  async checkRepositoryAccess(pid, repositoryUrl) {
+    pid = identifier(pid);
+    const owner = await this.owner();
+    const snapshot = await this.api("/api/workspace");
+    const project = snapshot.projects?.find(p => p.id === pid);
+    if (!project) throw Error("프로젝트 접근 권한을 확인해주세요.");
+    const result = await checkRepositoryAccess(repositoryUrl, project.repositoryUrls || []);
+    await this.assertOwner(owner.key);
+    return result;
   }
   async cloneProject(pid, repositoryUrl) {
     pid = identifier(pid);

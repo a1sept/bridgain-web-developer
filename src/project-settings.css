@@ -32,3 +32,21 @@
 .project-local-actions{align-items:center;gap:8px}
 .project-local-actions .project-local-disconnect{margin-left:auto}
 @media(max-width:600px){.project-local-heading{gap:10px}.project-local-facts>div{grid-template-columns:1fr;gap:3px}.project-local-folder,.project-local-facts{padding:12px}.project-local-actions .project-local-disconnect{margin-left:0}.project-local-repository{max-width:none}}
+.project-personal-github,.project-repo-access{margin-bottom:24px}
+.project-personal-github .repo-personal-connection{border-bottom:0;margin-bottom:12px;padding-bottom:0}
+.project-repo-access-card{border:1px solid #dce5ef;border-radius:8px;padding:14px 16px;margin-top:14px;display:grid;gap:12px;min-width:0;font-size:12px;line-height:1.6;color:#344158}
+.project-repo-access-card>strong{font-size:13px;overflow-wrap:anywhere}
+.project-repo-access-card>p{margin:0;color:#65748b}
+.project-repo-access-card>button,.project-repo-external{justify-self:start}
+.project-repo-external{font-size:12px;color:#466ded;text-decoration:underline;text-underline-offset:3px}
+.project-access-note{display:grid;gap:6px;font-size:12px;color:#46566f}
+.project-access-note input{box-sizing:border-box;width:100%;border:1px solid #dce4ef;border-radius:7px;padding:7px 10px;font:inherit;line-height:18px;color:#27354b;background:#fff}
+.project-access-note input:focus-visible{outline:2px solid #8aafff;outline-offset:2px}
+.project-access-request{border-top:1px solid #e3e9f2;padding-top:12px;display:flex;align-items:center;justify-content:space-between;gap:12px}
+.project-access-request>div{min-width:0;display:grid;gap:4px}
+.project-access-request span{color:#65748b;font-size:11px}
+.project-access-request p{margin:0;white-space:pre-wrap;overflow-wrap:anywhere}
+.project-access-check{display:grid;justify-items:start;gap:8px}
+.project-access-check p{font-size:12px;line-height:1.6;margin:0}
+.project-access-check .project-local-ready{color:#216746}.project-access-check .project-local-warning{color:#855b13}
+@media(max-width:600px){.project-access-request{align-items:flex-start;flex-direction:column}.project-repo-access-card{padding:12px}}

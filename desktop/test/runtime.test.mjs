@@ -202,3 +202,9 @@ test("failed sync cannot pass an unverified saved project ID into a run", async 
   await runtime.prepareRun(pid, sid, "research");
   assert.equal(prepared.codexProjectId, undefined);
 });
+test("repository access IPC checks server project membership and registered URL before Git", async () => {
+  const { runtime, calls } = await fixture();
+  await assert.rejects(runtime.checkRepositoryAccess("abcdef99-1234-4321-abcd-123456789012", "https://github.com/example/project"), /프로젝트 접근/);
+  await assert.rejects(runtime.checkRepositoryAccess(pid, "https://github.com/other/project"), /등록된/);
+  assert.ok(calls.some(call => call.path === "/api/workspace"));
+});

@@ -1,10 +1,11 @@
 import { useEffect, useRef, useState, type FormEvent } from "react";
+import RepositoryAccess from "./RepositoryAccess";
 import StageSettings from "./StageSettings";
 import RepositoryFields, { type RepositoryRelation } from "./RepositoryFields";
 import "./project-settings.css";
 import "./project-members.css";
 import { useAi } from "./ai/AiWorkspace";
-import type { RepositoryState } from "./desktop";
+import type { RepositoryState, RepositoryAccessResult } from "./desktop";
 
 type ProjectValues = {
   name: string;
@@ -36,7 +37,15 @@ export default function ProjectSettings({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
-  const [repository, setRepository] = useState(project.repositoryUrls?.[0] || "");
+  const [repository, setRepository] = useState(
+    project.repositoryUrls?.[0] || "",
+  );
+  const [access, setAccess] = useState<RepositoryAccessResult | null>(null);
+  const [checkingAccess, setCheckingAccess] = useState(false);
+  const accessRequestSection = useRef<HTMLDivElement>(null);
+  const accessRequestVersion = useRef(0);
+  const accessContext = useRef({ projectId: project.id, repository });
+  accessContext.current = { projectId: project.id, repository };
   const [localRepo, setLocalRepo] = useState<RepositoryState | null>(null);
   const lock = useRef(false);
   const saveLock = useRef(false);
@@ -88,22 +97,80 @@ export default function ProjectSettings({
   }, [project.id]);
   useEffect(() => {
     let active = true;
-    if (folder && bridge?.repositoryState) bridge.repositoryState(project.id).then(r => { if (active) setLocalRepo(r); }).catch(e => { if (active) setError(e.message); });
+    if (folder && bridge?.repositoryState)
+      bridge
+        .repositoryState(project.id)
+        .then((r) => {
+          if (active) setLocalRepo(r);
+        })
+        .catch((e) => {
+          if (active) setError(e.message);
+        });
     else setLocalRepo(null);
-    return () => { active = false; };
+    return () => {
+      active = false;
+    };
   }, [folder, project.id, notice]);
+  useEffect(() => {
+    setAccess(null);
+    setCheckingAccess(false);
+    return () => {
+      accessRequestVersion.current += 1;
+    };
+  }, [repository, project.id]);
+  async function checkAccess() {
+    if (!bridge?.checkRepositoryAccess) {
+      setError("접근 확인을 위해 데스크톱 앱을 업데이트해주세요.");
+      return;
+    }
+    const requestVersion = ++accessRequestVersion.current;
+    const requestProject = project.id;
+    const requestRepository = repository;
+    const isCurrent = () =>
+      requestVersion === accessRequestVersion.current &&
+      accessContext.current.projectId === requestProject &&
+      accessContext.current.repository === requestRepository;
+    setCheckingAccess(true);
+    setError("");
+    setAccess(null);
+    try {
+      const result = await bridge.checkRepositoryAccess(
+        requestProject,
+        requestRepository,
+      );
+      if (isCurrent()) setAccess(result);
+    } catch (e) {
+      if (isCurrent())
+        setError(
+          e instanceof Error ? e.message : "저장소 접근을 확인하지 못했어요.",
+        );
+    } finally {
+      if (isCurrent()) setCheckingAccess(false);
+    }
+  }
   async function change(clear = false, clone = false) {
     if (!bridge || lock.current) return;
+    if (clone && (!access?.ok || access.repositoryUrl !== repository)) {
+      setError("선택한 저장소의 접근 권한을 먼저 재확인해주세요.");
+      return;
+    }
     lock.current = true;
     setBusy(true);
     setError("");
     setNotice("");
     try {
       if (clear) await bridge.clearFolder(project.id);
-      else if (clone) { if (!bridge.cloneProject) throw Error("Bridgain 데스크톱 앱을 업데이트해주세요."); if (!(await bridge.cloneProject(project.id, repository))) return; }
-      else if (!(await bridge.chooseFolder(project.id))) return;
+      else if (clone) {
+        if (!bridge.cloneProject)
+          throw Error("Bridgain 데스크톱 앱을 업데이트해주세요.");
+        if (!(await bridge.cloneProject(project.id, repository))) return;
+      } else if (!(await bridge.chooseFolder(project.id))) return;
       await ai.refreshFolders();
-      setNotice(clear ? "디렉토리 연결을 해제했어요." : "Git 저장소를 확인하고 로컬 작업 디렉토리를 연결했어요.");
+      setNotice(
+        clear
+          ? "디렉토리 연결을 해제했어요."
+          : "Git 저장소를 확인하고 로컬 작업 디렉토리를 연결했어요.",
+      );
     } catch (e) {
       setError(
         e instanceof Error ? e.message : "폴더 설정을 변경하지 못했어요.",
@@ -123,10 +190,12 @@ export default function ProjectSettings({
         </div>
       </div>
       <div className="pm-tabs" role="tablist" aria-label="프로젝트 설정">
-        {([
-          ["general", "일반"],
-          ["categories", "업무 카테고리"],
-        ] as const).map(([id, label]) => (
+        {(
+          [
+            ["general", "일반"],
+            ["categories", "업무 카테고리"],
+          ] as const
+        ).map(([id, label]) => (
           <button
             key={id}
             type="button"
@@ -223,53 +292,232 @@ export default function ProjectSettings({
             </button>
           )}
         </form>
+        <div ref={accessRequestSection} tabIndex={-1}>
+          <RepositoryAccess
+            key={project.id}
+            projectId={project.id}
+            repositoryUrls={project.repositoryUrls || []}
+          />
+        </div>
+        <section
+          className="pw-panel project-personal-github"
+          aria-label="내 GitHub 계정 연결"
+        >
+          <RepositoryFields value={[]} onChange={() => {}} connectionOnly />
+          <p className="project-local-help">
+            프로젝트의 공용 저장소 등록과 별개인 내 계정 연결입니다. PC에서 Git
+            작업에 사용하는 인증과 저장소 접근 권한도 별도로 확인합니다.
+          </p>
+        </section>
         <section className="pw-panel project-local">
           <header className="project-local-heading">
             <div>
-              <h2>내 로컬 작업 디렉토리</h2>
+              <h2>내 PC 작업 폴더 연결</h2>
               <p>현재 프로젝트 · 내 계정 · 이 PC의 연결 정보</p>
             </div>
-            {bridge && <span className={`project-local-status ${folder && localRepo ? "is-connected" : folder ? "is-pending" : "is-empty"}`}>
-              <span aria-hidden="true" className="project-local-status-dot" />
-              {folder && localRepo ? "연결됨" : folder ? error ? "연결 확인 필요" : "연결 확인 중" : "미연결"}
-            </span>}
+            {bridge && (
+              <span
+                className={`project-local-status ${folder && localRepo ? "is-connected" : folder ? "is-pending" : "is-empty"}`}
+              >
+                <span aria-hidden="true" className="project-local-status-dot" />
+                {folder && localRepo
+                  ? "연결됨"
+                  : folder
+                    ? error
+                      ? "연결 확인 필요"
+                      : "연결 확인 중"
+                    : "미연결"}
+              </span>
+            )}
           </header>
-          {error && <p className="pw-error project-local-message" role="alert">{error}</p>}
-          {notice && <p className="lw-notice project-local-message" role="status">{notice}</p>}
+          {error && (
+            <p className="pw-error project-local-message" role="alert">
+              {error}
+            </p>
+          )}
+          {notice && (
+            <p className="lw-notice project-local-message" role="status">
+              {notice}
+            </p>
+          )}
           {bridge ? (
             <>
-              {folder ? <div className="project-local-card" aria-label="연결된 로컬 저장소">
-                <div className="project-local-folder">
-                  <span className="project-local-label">작업 폴더</span>
-                  <strong>{folder.replace(/[\\/]+$/, "").split(/[\\/]/).at(-1) || folder}</strong>
-                  <code>{folder}</code>
+              {folder ? (
+                <div
+                  className="project-local-card"
+                  aria-label="연결된 로컬 저장소"
+                >
+                  <div className="project-local-folder">
+                    <span className="project-local-label">작업 폴더</span>
+                    <strong>
+                      {folder
+                        .replace(/[\\/]+$/, "")
+                        .split(/[\\/]/)
+                        .at(-1) || folder}
+                    </strong>
+                    <code>{folder}</code>
+                  </div>
+                  <dl className="project-local-facts">
+                    <div>
+                      <dt>GitHub 저장소</dt>
+                      <dd>
+                        {localRepo?.repositoryUrl?.replace(
+                          "https://github.com/",
+                          "",
+                        ) || "확인 중"}
+                      </dd>
+                    </div>
+                    <div>
+                      <dt>현재 브랜치</dt>
+                      <dd>
+                        <span className="project-local-branch">
+                          {localRepo
+                            ? localRepo.branch || "브랜치 없음"
+                            : "확인 중"}
+                        </span>
+                      </dd>
+                    </div>
+                    <div>
+                      <dt>Git 작성자</dt>
+                      <dd
+                        className={
+                          localRepo?.authorConfigured
+                            ? "project-local-ready"
+                            : "project-local-warning"
+                        }
+                      >
+                        {localRepo
+                          ? localRepo.authorConfigured
+                            ? "설정 완료"
+                            : "user.name / user.email 설정 필요"
+                          : "확인 중"}
+                      </dd>
+                    </div>
+                  </dl>
                 </div>
-                <dl className="project-local-facts">
-                  <div><dt>GitHub 저장소</dt><dd>{localRepo?.repositoryUrl?.replace("https://github.com/", "") || "확인 중"}</dd></div>
-                  <div><dt>현재 브랜치</dt><dd><span className="project-local-branch">{localRepo ? localRepo.branch || "브랜치 없음" : "확인 중"}</span></dd></div>
-                  <div><dt>Git 작성자</dt><dd className={localRepo?.authorConfigured ? "project-local-ready" : "project-local-warning"}>{localRepo ? localRepo.authorConfigured ? "설정 완료" : "user.name / user.email 설정 필요" : "확인 중"}</dd></div>
-                </dl>
-              </div> : <div className="project-local-empty">
-                <strong>아직 연결된 작업 폴더가 없어요.</strong>
-                <p>이 PC의 Git 저장소를 연결하거나, 새 폴더에 저장소를 내려받으세요.</p>
-              </div>}
+              ) : (
+                <div className="project-local-empty">
+                  <strong>아직 연결된 작업 폴더가 없어요.</strong>
+                  <p>
+                    이 PC의 Git 저장소를 연결하거나, 새 폴더에 저장소를
+                    내려받으세요.
+                  </p>
+                </div>
+              )}
               <div className="project-local-connect">
-                <label className="project-local-repository">다운로드할 GitHub 저장소
-                  <select value={repository} onChange={e => setRepository(e.target.value)} disabled={busy}>
-                    <option value="">저장소 선택</option>{project.repositoryUrls?.map(url => <option key={url} value={url}>{url.replace("https://github.com/", "")}</option>)}
+                <label className="project-local-repository">
+                  다운로드할 GitHub 저장소
+                  <select
+                    value={repository}
+                    onChange={(e) => setRepository(e.target.value)}
+                    disabled={busy || checkingAccess}
+                  >
+                    <option value="">저장소 선택</option>
+                    {project.repositoryUrls?.map((url) => (
+                      <option key={url} value={url}>
+                        {url.replace("https://github.com/", "")}
+                      </option>
+                    ))}
                   </select>
                 </label>
+                <div className="project-access-check">
+                  <button
+                    type="button"
+                    className="pw-secondary"
+                    disabled={busy || checkingAccess || !repository}
+                    onClick={() => void checkAccess()}
+                  >
+                    {checkingAccess
+                      ? "접근 확인 중…"
+                      : "내 PC 저장소 접근 재확인"}
+                  </button>
+                  {access && (
+                    <p
+                      role="status"
+                      className={
+                        access.ok
+                          ? "project-local-ready"
+                          : "project-local-warning"
+                      }
+                    >
+                      {access.message}
+                    </p>
+                  )}
+                  {access &&
+                    ["permission", "not_found_or_no_access"].includes(
+                      access.code,
+                    ) && (
+                      <>
+                        <p>
+                          저장소 주소를 확인한 뒤 담당자에게 접근을
+                          요청해주세요. GitHub 초대를 수락하면 다시 확인할 수
+                          있습니다.
+                        </p>
+                        <button
+                          type="button"
+                          className="pw-secondary"
+                          onClick={() => {
+                            accessRequestSection.current?.focus({
+                              preventScroll: true,
+                            });
+                            accessRequestSection.current?.scrollIntoView({
+                              behavior: "smooth",
+                              block: "start",
+                            });
+                          }}
+                        >
+                          담당자 접근 요청으로 이동
+                        </button>
+                      </>
+                    )}
+                </div>
                 <div className="lw-actions project-local-actions">
-                  <button type="button" className={folder ? "pw-secondary" : "pw-primary"} disabled={busy} onClick={() => void change()}>
+                  <button
+                    type="button"
+                    className={folder ? "pw-secondary" : "pw-primary"}
+                    disabled={busy}
+                    onClick={() => void change()}
+                  >
                     {busy ? "처리 중…" : "기존 디렉토리 연결"}
                   </button>
-                  <button type="button" className="pw-secondary" disabled={busy || !repository} onClick={() => void change(false, true)}>새 프로젝트에 연결</button>
-                  {folder && <button type="button" className="pw-secondary project-local-disconnect" disabled={busy} onClick={() => void change(true)}>연결 해제</button>}
+                  <button
+                    type="button"
+                    className="pw-secondary"
+                    disabled={
+                      busy ||
+                      checkingAccess ||
+                      !repository ||
+                      !access?.ok ||
+                      access.repositoryUrl !== repository
+                    }
+                    onClick={() => void change(false, true)}
+                  >
+                    새 디렉토리에 내려받기
+                  </button>
+                  {folder && (
+                    <button
+                      type="button"
+                      className="pw-secondary project-local-disconnect"
+                      disabled={busy}
+                      onClick={() => void change(true)}
+                    >
+                      연결 해제
+                    </button>
+                  )}
                 </div>
               </div>
-              <p className="project-local-help">기존 디렉토리는 Git 저장소를 확인해 연결합니다. 새 프로젝트는 빈 폴더에 다운로드하며, 이 PC의 GitHub 인증을 사용합니다. 연결을 해제해도 파일은 남습니다.</p>
+              <p className="project-local-help">
+                기존 디렉토리는 Git 저장소를 확인해 연결합니다. 새 디렉토리에
+                내려받기는 접근 재확인 후 빈 폴더에 저장소를 다운로드하며, 이
+                PC의 GitHub 인증을 사용합니다. 연결을 해제해도 파일은 남습니다.
+              </p>
             </>
-          ) : <p className="project-local-help">Bridgain 데스크톱 앱에서 이 프로젝트를 열고 작업 폴더를 연결해주세요.</p>}
+          ) : (
+            <p className="project-local-help">
+              Bridgain 데스크톱 앱에서 이 프로젝트를 열고 작업 폴더를
+              연결해주세요.
+            </p>
+          )}
         </section>
       </div>
       <div

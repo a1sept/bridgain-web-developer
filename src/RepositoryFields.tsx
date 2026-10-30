@@ -297,7 +297,7 @@ export default function RepositoryFields({
   }
   if (connectionOnly) return <section className="repo-fields repo-personal-connection">
     <div className="repo-personal-header">
-      <h3>내 GitHub 계정</h3>
+      <h3>내 GitHub 계정 연결</h3>
       <span className={`repo-connection-badge${status?.connected ? " is-connected" : ""}`}>
         <ControlIcon name={status?.connected ? "check" : "plus"} size={14} />
         {status?.connected ? "연결됨" : "선택 사항"}
@@ -313,7 +313,7 @@ export default function RepositoryFields({
   return (
     <fieldset className="repo-fields" disabled={disabled}>
       <legend>
-        GitHub 저장소 <small>프로젝트 공용</small>
+        프로젝트 저장소 등록 <small>프로젝트 공용</small>
       </legend>
       <p>관리자가 등록하고 저장한 저장소는 프로젝트 참여자 모두에게 표시됩니다.</p>
       <div className="repo-selected-summary" aria-label="프로젝트 저장소 목록">

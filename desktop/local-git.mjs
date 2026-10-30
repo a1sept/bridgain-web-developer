@@ -25,12 +25,47 @@ export async function inspectRepository(folder, allowedRepositories) {
     throw Error("프로젝트에 등록된 GitHub 저장소와 origin이 다릅니다.");
   return { path, repositoryUrl: remote, branch: (await git(path, "branch", "--show-current")).trim() };
 }
-export async function cloneRepository(folder, url, allowedRepositories) {
-  if (!/^https:\/\/github\.com\/[\w.-]+\/[\w.-]+$/.test(url) || !allowedRepositories.includes(url))
+function registeredRepository(url, allowedRepositories) {
+  if (typeof url !== "string" || !/^https:\/\/github\.com\/[\w.-]+\/[\w.-]+$/.test(url) || !allowedRepositories.includes(url))
     throw Error("프로젝트에 등록된 GitHub 저장소를 선택해주세요.");
+  return url;
+}
+// Inspect errors privately. Never return stderr/helper output, which may contain credentials.
+export function repositoryAccessFailure(error) {
+  const detail = `${error?.stderr || ""} ${error?.message || ""}`;
+  if (error?.code === "ENOENT") return { code: "git_missing", message: "이 PC에 Git을 설치한 뒤 다시 확인해주세요." };
+  if (/could not resolve|failed to connect|connection (?:timed out|refused|reset)|network is unreachable|ssl certificate|certificate verify|unable to access.*(?:timeout|timed out)|proxy.*(?:resolve|connect)/i.test(detail) || error?.killed || error?.code === "ETIMEDOUT")
+    return { code: "network", message: "GitHub에 연결하지 못했습니다. 네트워크·프록시·인증서 설정을 확인한 뒤 다시 시도해주세요." };
+  if (/repository not found|requested URL returned error: 404|\bHTTP[^\n]*\b404\b/i.test(detail))
+    return { code: "not_found_or_no_access", message: "저장소를 찾을 수 없거나 현재 Git 인증으로 접근할 수 없습니다. 저장소 주소와 접근 권한을 함께 확인해주세요." };
+  if (/authentication failed|could not read (?:username|password)|terminal prompts disabled|invalid username or (?:password|token)|bad credentials|requested URL returned error: 401|permission denied \(publickey\)/i.test(detail))
+    return { code: "authentication", message: "이 PC의 GitHub Git 인증이 필요하거나 만료되었습니다. Git 인증을 완료한 뒤 접근을 다시 확인해주세요." };
+  if (/requested URL returned error: 403|access denied|permission to .* denied|access to .* denied|not allowed to (?:access|download|read)|authorization failed/i.test(detail))
+    return { code: "permission", message: "GitHub가 현재 Git 인증의 접근을 거부했습니다. 계정의 저장소 권한과 조직 접근 정책을 확인해주세요." };
+  return { code: "unknown", message: "Git 저장소 접근을 확인하지 못했습니다. PC의 Git 인증과 저장소 주소를 확인한 뒤 다시 시도해주세요." };
+}
+export async function checkRepositoryAccess(url, allowedRepositories, run = exec) {
+  registeredRepository(url, allowedRepositories);
+  try {
+    await run("git", ["ls-remote", "--heads", "--", url], {
+      timeout: 30000, maxBuffer: 4 * 1024 * 1024,
+      env: { ...process.env, GIT_TERMINAL_PROMPT: "0", GCM_INTERACTIVE: "never", GIT_OPTIONAL_LOCKS: "0" },
+    });
+    return { ok: true, code: "ok", repositoryUrl: url, message: "이 PC에서 저장소를 읽을 수 있습니다. 내려받기를 진행할 수 있어요. 쓰기 권한은 별도입니다." };
+  } catch (error) {
+    return { ok: false, ...repositoryAccessFailure(error), repositoryUrl: url };
+  }
+}
+export async function cloneRepository(folder, url, allowedRepositories) {
+  registeredRepository(url, allowedRepositories);
   const path = await realpath(folder);
   if ((await readdir(path)).length) throw Error("다운로드할 빈 디렉토리를 선택해주세요. 기존 파일은 덮어쓰지 않습니다.");
-  await git(path, "clone", "--", url, ".");
+  const access = await checkRepositoryAccess(url, allowedRepositories);
+  if (!access.ok) throw Error(access.message);
+  try {
+    await exec("git", ["clone", "--", url, "."], { cwd: path, timeout: 120000, maxBuffer: 4 * 1024 * 1024,
+      env: { ...process.env, GIT_TERMINAL_PROMPT: "0", GCM_INTERACTIVE: "never", GIT_OPTIONAL_LOCKS: "0" } });
+  } catch (error) { throw Error(repositoryAccessFailure(error).message); }
   return inspectRepository(path, allowedRepositories);
 }
 export async function verifyBinding(binding, allowedRepositories) {

@@ -12,6 +12,7 @@ contextBridge.exposeInMainWorld(
     connectServer: (url) => call("connect-server", url),
     taskWorkspace: (pid, id, action, options) => call("task-workspace", pid, id, action, options),
     taskGit: (pid, id, action, options) => call("task-git", pid, id, action, options),
+    checkRepositoryAccess: (pid, url) => call("check-repository-access", pid, url),
     cloneProject: (pid, url) => call("clone-project", pid, url),
     repositoryState: (pid) => call("repository-state", pid),
     state: () => call("state"),
