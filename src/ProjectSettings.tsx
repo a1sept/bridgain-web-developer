@@ -518,7 +518,7 @@ export default function ProjectSettings({
                     disabled={busy || checkingAccess || !repository}
                     onClick={() => void change(false, true)}
                   >
-                    새 디렉토리에 내려받기
+                    새 디렉토리 연결
                   </button>
                   {folder && (
                     <button
@@ -540,10 +540,15 @@ export default function ProjectSettings({
               </p>
             </>
           ) : (
-            <p className="project-local-help">
-              Bridgain 데스크톱 앱에서 이 프로젝트를 열고 작업 폴더를
-              연결해주세요.
-            </p>
+            <>
+              <div className="lw-actions project-local-actions">
+                <button type="button" className="pw-primary" disabled aria-describedby="project-local-desktop-help">기존 디렉토리 연결</button>
+                <button type="button" className="pw-secondary" disabled aria-describedby="project-local-desktop-help">새 디렉토리 연결</button>
+              </div>
+              <p id="project-local-desktop-help" className="project-local-help">
+                로컬 연결을 사용할 수 없습니다. Bridgain 데스크톱 앱의 프로젝트 설정에서 연결해주세요. 앱을 사용 중이라면 완전히 종료한 뒤 다시 실행해주세요.
+              </p>
+            </>
           )}
         </section>
       </div>

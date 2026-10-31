@@ -409,7 +409,7 @@ export default function RepositoryFields({
               name={status?.connected ? "check" : "plus"}
               size={14}
             />
-            {status?.connected ? "연결됨" : "선택 사항"}
+            {status?.connected ? "연결됨" : "연결 필요"}
           </span>
           <button
             type="button"
@@ -425,8 +425,8 @@ export default function RepositoryFields({
         </div>
         <p>
           {status?.connected
-            ? "내 GitHub 저장소를 찾아 선택할 수 있어요."
-            : "개인 GitHub 연결로 저장소를 찾아 선택할 수 있습니다. 프로젝트의 서버 연동 권한이 설정되어 있으면 개인 연결 없이 코드 조회·PR 검토를 진행할 수 있습니다."}
+            ? "내 계정의 저장소 권한으로 PR 요청·검토·머지를 처리합니다."
+            : "내 GitHub 계정으로 PR 요청·검토·머지를 처리합니다."}
         </p>
         {connecting && (
           <>

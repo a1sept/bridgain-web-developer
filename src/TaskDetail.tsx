@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import TaskMaterials from "./TaskMaterials";
+import RepositoryFields from "./RepositoryFields";
 import { waitingForPredecessors } from "./ProjectTasks";
 import type { ProjectTask } from "./ProjectTasks";
 import type { TaskWorkspace } from "./desktop";
@@ -123,7 +124,7 @@ export default function TaskDetail({ task, projectId, projectName, userId, onClo
       {waiting && <p className="td-waiting" role="status">선행 업무의 작업 승인이 완료되면 시작할 수 있습니다.</p>}
       {task.status === "in_progress" && review?.events?.some(e => e.action === "changes_requested") && <div className="td-rework"><strong>재작업 요청</strong><p>{review.events.find(e => e.action === "changes_requested")?.note}</p><small>{task.completionMode === "code" ? "기존 브랜치에서 수정·푸시 후 같은 PR로 재제출해주세요." : "문서와 메모를 보완한 뒤 다시 작업 완료를 요청해주세요."}</small></div>}
       <TaskMaterials key={task.id} task={task} projectId={projectId} editable={editable} onChanged={onChanged} onDirtyChange={setMaterialsDirty} />
-      {task.completionMode === "code" && <><h3>로컬 작업</h3>
+      {task.completionMode === "code" && <><RepositoryFields value={[]} onChange={() => {}} connectionOnly /><h3>로컬 작업</h3>
 
       {!bridge?.taskWorkspace ? <p className="td-muted">로컬 폴더와 브랜치 연결은 데스크톱 앱에서 사용할 수 있습니다.</p> : <>
         {localError && <p role="alert">{localError} <button disabled={busy} onClick={() => setRefresh(v => v + 1)}>다시 확인</button></p>}
