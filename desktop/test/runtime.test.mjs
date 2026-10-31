@@ -226,3 +226,48 @@ test("folder permission failure is structured and preserves existing binding; ca
   assert.equal(await runtime.folder(pid), null); assert.equal(checks, 1);
   assert.equal(owner.settings.folders[pid], await realpath(cwd));
 });
+
+test("folder bindings survive a new runtime instance without leaking between accounts or servers", async () => {
+  const { runtime, cwd, setUser } = await fixture();
+  await runtime.folder(pid);
+  const secondFolder = join(runtime.directory, "second-account");
+  await mkdir(secondFolder);
+  await repository(secondFolder);
+  setUser({ id: "dev2", accountType: "team" });
+  runtime.chooseFolder = async () => secondFolder;
+  await runtime.folder(pid);
+  const restarted = new DesktopRuntime({ directory: runtime.directory, api: runtime.api });
+  restarted.origin = runtime.origin;
+  await restarted.load();
+  assert.equal((await restarted.state()).folders[pid], await realpath(secondFolder));
+  setUser({ id: "dev1", accountType: "team" });
+  assert.equal((await restarted.state()).folders[pid], await realpath(cwd));
+  restarted.origin = "https://different-server.example.test";
+  assert.deepEqual((await restarted.state()).folders, {});
+  restarted.origin = runtime.origin;
+  assert.equal((await restarted.state()).folders[pid], await realpath(cwd));
+});
+
+test("clone saves the selected directory; cancel and authentication failure preserve it", async () => {
+  const { runtime, cwd } = await fixture();
+  await runtime.folder(pid);
+  const destination = join(runtime.directory, "clone");
+  await mkdir(destination);
+  runtime.chooseFolder = async () => destination;
+  runtime.gitAccessRun = async (_command, args, options) => {
+    if (args[0] === "clone") await repository(options.cwd);
+    return { stdout: "" };
+  };
+  const result = await runtime.cloneProject(pid, "https://github.com/example/project");
+  assert.equal(result.path, await realpath(destination));
+  await runtime.load();
+  assert.equal((await runtime.state()).folders[pid], await realpath(destination));
+  runtime.chooseFolder = async () => null;
+  assert.equal(await runtime.cloneProject(pid, "https://github.com/example/project"), null);
+  const empty = join(runtime.directory, "failed-clone");
+  await mkdir(empty);
+  runtime.chooseFolder = async () => empty;
+  runtime.gitAccessRun = async () => { throw { stderr: "Authentication failed" }; };
+  assert.equal((await runtime.cloneProject(pid, "https://github.com/example/project")).code, "authentication");
+  assert.equal((await runtime.state()).folders[pid], await realpath(destination));
+});
