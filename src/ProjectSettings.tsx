@@ -333,19 +333,11 @@ export default function ProjectSettings({
             </button>
           )}
         </form>
-        <div ref={accessRequestSection} tabIndex={-1}>
-          <RepositoryAccess
-            key={project.id}
-            projectId={project.id}
-            repositoryUrls={project.repositoryUrls || []}
-            refreshVersion={accessRefreshVersion}
-          />
-        </div>
         <section className="pw-panel project-local">
           <header className="project-local-heading">
             <div>
               <h2>내 PC 작업 폴더 연결</h2>
-              <p>현재 프로젝트 · 내 계정 · 이 PC의 연결 정보</p>
+              <p>이 PC에서 사용할 작업 폴더를 연결하세요.</p>
             </div>
             {bridge && (
               <span
@@ -389,6 +381,66 @@ export default function ProjectSettings({
                     </strong>
                     <code>{folder}</code>
                   </div>
+                </div>
+              ) : (
+                <div className="project-local-empty">
+                  기존 저장소 폴더를 선택하거나 새 폴더에 내려받으세요.
+                </div>
+              )}
+              <div className="project-local-connect">
+                {(project.repositoryUrls?.length || 0) > 1 ? (
+                  <label className="project-local-repository">
+                    작업할 저장소
+                    <select
+                      value={repository}
+                      onChange={(e) => setRepository(e.target.value)}
+                      disabled={busy || checkingAccess}
+                    >
+                      <option value="">저장소 선택</option>
+                      {project.repositoryUrls?.map((url) => (
+                        <option key={url} value={url}>
+                          {url.replace("https://github.com/", "")}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                ) : !folder && (
+                  <p className="project-local-selected-repo">{repository ? repository.replace("https://github.com/", "") : "프로젝트 저장소를 먼저 등록해주세요."}</p>
+                )}
+                <div className="lw-actions project-local-actions">
+                  <button
+                    type="button"
+                    className={folder ? "pw-secondary" : "pw-primary"}
+                    disabled={busy}
+                    onClick={() => void change()}
+                  >
+                    {busy ? "처리 중…" : "기존 디렉토리 연결"}
+                  </button>
+                  <button
+                    type="button"
+                    className="pw-secondary"
+                    disabled={busy || checkingAccess || !repository}
+                    onClick={() => void change(false, true)}
+                  >
+                    새 디렉토리 연결
+                  </button>
+                </div>
+              </div>
+              {access && (
+                <p
+                  role="status"
+                  className={
+                    access.ok
+                      ? "project-local-ready"
+                      : "project-local-warning"
+                  }
+                >
+                  {access.message}
+                </p>
+              )}
+              <details className="project-local-details" key={project.id}>
+                <summary>연결 상세 · 문제 해결</summary>
+                {folder && (
                   <dl className="project-local-facts">
                     <div>
                       <dt>GitHub 저장소</dt>
@@ -426,32 +478,7 @@ export default function ProjectSettings({
                       </dd>
                     </div>
                   </dl>
-                </div>
-              ) : (
-                <div className="project-local-empty">
-                  <strong>아직 연결된 작업 폴더가 없어요.</strong>
-                  <p>
-                    이 PC의 Git 저장소를 연결하거나, 새 폴더에 저장소를
-                    내려받으세요.
-                  </p>
-                </div>
-              )}
-              <div className="project-local-connect">
-                <label className="project-local-repository">
-                  다운로드할 GitHub 저장소
-                  <select
-                    value={repository}
-                    onChange={(e) => setRepository(e.target.value)}
-                    disabled={busy || checkingAccess}
-                  >
-                    <option value="">저장소 선택</option>
-                    {project.repositoryUrls?.map((url) => (
-                      <option key={url} value={url}>
-                        {url.replace("https://github.com/", "")}
-                      </option>
-                    ))}
-                  </select>
-                </label>
+                )}
                 <div className="project-access-check">
                   <button
                     type="button"
@@ -463,18 +490,6 @@ export default function ProjectSettings({
                       ? "접근 확인 중…"
                       : "내 PC 저장소 접근 재확인"}
                   </button>
-                  {access && (
-                    <p
-                      role="status"
-                      className={
-                        access.ok
-                          ? "project-local-ready"
-                          : "project-local-warning"
-                      }
-                    >
-                      {access.message}
-                    </p>
-                  )}
                   {access &&
                     ["permission", "not_found_or_no_access"].includes(
                       access.code,
@@ -503,23 +518,6 @@ export default function ProjectSettings({
                       </>
                     )}
                 </div>
-                <div className="lw-actions project-local-actions">
-                  <button
-                    type="button"
-                    className={folder ? "pw-secondary" : "pw-primary"}
-                    disabled={busy}
-                    onClick={() => void change()}
-                  >
-                    {busy ? "처리 중…" : "기존 디렉토리 연결"}
-                  </button>
-                  <button
-                    type="button"
-                    className="pw-secondary"
-                    disabled={busy || checkingAccess || !repository}
-                    onClick={() => void change(false, true)}
-                  >
-                    새 디렉토리 연결
-                  </button>
                   {folder && (
                     <button
                       type="button"
@@ -530,14 +528,8 @@ export default function ProjectSettings({
                       연결 해제
                     </button>
                   )}
-                </div>
-              </div>
-              <p className="project-local-help">
-                기존 디렉토리는 Git 저장소를 확인해 연결합니다. 새 디렉토리에
-                내려받기는 접근 확인 후 빈 폴더에 저장소를 다운로드합니다.
-                접근이 거부되면 등록자에게 확인 요청을 남깁니다. 이 PC의 GitHub
-                인증을 사용합니다. 연결을 해제해도 파일은 남습니다.
-              </p>
+                <p className="project-local-help">이 PC의 Git 인증을 사용합니다. 연결을 해제해도 파일은 삭제되지 않습니다.</p>
+              </details>
             </>
           ) : (
             <>
@@ -551,6 +543,14 @@ export default function ProjectSettings({
             </>
           )}
         </section>
+        <div ref={accessRequestSection} tabIndex={-1}>
+          <RepositoryAccess
+            key={project.id}
+            projectId={project.id}
+            repositoryUrls={project.repositoryUrls || []}
+            refreshVersion={accessRefreshVersion}
+          />
+        </div>
       </div>
       <div
         role="tabpanel"
