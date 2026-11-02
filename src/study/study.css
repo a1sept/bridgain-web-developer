@@ -32,7 +32,7 @@
   color: #7865b4 !important;
 }
 .study-workspace
-  button:not(.bg-filter-bar button, .rt-editor button, .bn-container button) {
+  button:where(:not(.bg-filter-bar button, .rt-editor button, .bn-container button)) {
   min-height: 34px;
   padding: 7px 12px;
   border: 1px solid #d6dbe4;
@@ -117,10 +117,24 @@
   align-items: center;
   flex-wrap: wrap;
 }
+.study-segment > button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
+.study-choice-marker {
+  display: inline-flex;
+  visibility: hidden;
+}
+.study-segment button[aria-pressed="true"] .study-choice-marker {
+  visibility: visible;
+}
 .study-segment button[aria-pressed="true"] {
   background: #eeebf7;
   color: #59469c;
   border-color: #7865b4;
+  font-weight: 600;
 }
 .study-form footer {
   display: flex;

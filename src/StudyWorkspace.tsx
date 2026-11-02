@@ -1,3 +1,4 @@
+import ControlIcon from "./components/ControlIcon";
 import { studyTimeInput, parseStudyTimeInput } from "./study/time";
 import StudyStorage from "./study/StudyStorage";
 import ProjectChannel from "./ProjectChannel";
@@ -518,6 +519,7 @@ export default function StudyWorkspace({
                             key={v}
                             onClick={() => setMode(v)}
                           >
+                            <span className="study-choice-marker" aria-hidden="true"><ControlIcon name="check" /></span>
                             {t}
                           </button>
                         ))}
