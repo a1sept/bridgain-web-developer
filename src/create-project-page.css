@@ -317,3 +317,36 @@
 
 .cp-search-results > button:disabled { opacity:.5; cursor:not-allowed; }
 .cp-search-results > button[aria-pressed="true"] { background:#edf4ff; }
+
+.cp-kind {
+  display: flex;
+  gap: 12px;
+  margin-bottom: 20px;
+}
+.cp-kind button {
+  flex: 1;
+  text-align: left;
+  padding: 14px 16px;
+  border: 1px solid #d4d7df;
+  border-radius: 8px;
+  background: transparent;
+  color: inherit;
+}
+.cp-kind button[aria-pressed="true"] {
+  border-color: #6754b8;
+  background: color-mix(in srgb, #6754b8 8%, transparent);
+}
+.cp-kind strong,
+.cp-kind span {
+  display: block;
+}
+.cp-kind span {
+  font-size: 12px;
+  margin-top: 6px;
+  opacity: 0.7;
+}
+@media (max-width: 480px) {
+  .cp-kind {
+    flex-direction: column;
+  }
+}

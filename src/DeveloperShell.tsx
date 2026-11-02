@@ -5,6 +5,10 @@ import "./project-controls.css";
 export type DeveloperView =
   "dashboard" | "projects" | "activity" | "invitations" | "teams" | "approvals";
 export type ProjectSection =
+  | "programs"
+  | "schedule"
+  | "studyActivities"
+  | "materials"
   | "overview"
   | "requests"
   | "tasks"
@@ -20,7 +24,12 @@ type Props = {
   children: ReactNode;
   active: DeveloperView;
   userName: string;
-  projects: { id: string; name: string; permissions?: string[] }[];
+  projects: {
+    id: string;
+    name: string;
+    kind?: string;
+    permissions?: string[];
+  }[];
   selectedId?: string;
   projectPermissions?: string[];
   section?: ProjectSection;
@@ -63,7 +72,10 @@ function Icon({ name }: { name: DeveloperView }) {
       ) : name === "projects" ? (
         <path d="M3 7V5a2 2 0 0 1 2-2h5l3 4h6a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7Z" />
       ) : name === "activity" ? (
-        <><path d="M3 12a9 9 0 1 0 3-6.7L3 8" /><path d="M3 3v5h5M12 7v5l3 2" /></>
+        <>
+          <path d="M3 12a9 9 0 1 0 3-6.7L3 8" />
+          <path d="M3 3v5h5M12 7v5l3 2" />
+        </>
       ) : name === "invitations" ? (
         <>
           <rect x="3" y="5" width="18" height="14" rx="3" />
@@ -137,7 +149,11 @@ export default function DeveloperShell(p: Props) {
         >
           ☰
         </button>
-        <strong>{p.active === "projects" ? selected?.name || labels.projects : labels[p.active]}</strong>
+        <strong>
+          {p.active === "projects"
+            ? selected?.name || labels.projects
+            : labels[p.active]}
+        </strong>
         <span>bridgain.</span>
       </header>
       {open && (
@@ -268,18 +284,29 @@ export default function DeveloperShell(p: Props) {
         {p.active === "projects" && selected && (
           <nav className="ds-project-tabs" aria-label="프로젝트 메뉴">
             {(
-              [
-                ["overview", "개요"],
-                ["requests", "요청"],
-                ["meetings", "회의실"],
-                ["tasks", "업무"],
-                ["deployments", "배포"],
-                ["channel", "채널"],
-                ["documents", "문서"],
-                ["activity", "활동 기록"],
-                ["members", "참여자 관리"],
-                ["settings", "설정"],
-              ] as const
+              (selected.kind === "study"
+                ? [
+                    ["overview", "개요"],
+                    ["programs", "프로그램"],
+                    ["schedule", "일정"],
+                    ["studyActivities", "참여 활동"],
+                    ["materials", "자료"],
+                    ["channel", "채널"],
+                    ["members", "회원"],
+                    ["settings", "설정"],
+                  ]
+                : [
+                    ["overview", "개요"],
+                    ["requests", "요청"],
+                    ["meetings", "회의실"],
+                    ["tasks", "업무"],
+                    ["deployments", "배포"],
+                    ["channel", "채널"],
+                    ["documents", "문서"],
+                    ["activity", "활동 기록"],
+                    ["members", "참여자 관리"],
+                    ["settings", "설정"],
+                  ]) as [ProjectSection, string][]
             )
               .filter(([key]) => {
                 if (!p.projectPermissions) return true;

@@ -1,3 +1,4 @@
+import StudyWorkspace from "./StudyWorkspace";
 import ProjectChannel from "./ProjectChannel";
 import ProjectMembers from "./ProjectMembers";
 import Approvals, { workflowApi } from "./Approvals";
@@ -45,6 +46,7 @@ type Team = {
   members: Member[];
 };
 type Project = {
+  kind?: "development" | "study";
   repositoryUrls?: string[];
   repositoryRelations?: RepositoryRelation[];
   canManage: boolean;
@@ -268,6 +270,7 @@ export default function LiveWorkspace({
       );
       setProjectSection(
         [
+          "programs", "schedule", "studyActivities", "materials",
           "overview",
           "tasks",
           "deployments",
@@ -313,6 +316,7 @@ export default function LiveWorkspace({
   );
   const [projectSection, setProjectSection] = useState<ProjectSection>(() =>
     [
+      "programs", "schedule", "studyActivities", "materials",
       "overview",
       "tasks",
       "deployments",
@@ -665,6 +669,7 @@ export default function LiveWorkspace({
   }
   if (requestProjectId && data) {
     const requestProject = data.projects.find((p) => p.id === requestProjectId);
+    if (requestProject?.kind === "study") return shell(<p role="alert">스터디에서는 개발 요청을 사용하지 않습니다. <button onClick={()=>openProject(requestProject.id)}>스터디 열기</button></p>);
     return shell(
       <RequestBoard
         onMeetings={(rid, meetingId) => {
@@ -711,7 +716,7 @@ export default function LiveWorkspace({
           leaveCreate();
           setView("projects");
           setProjectId(created.id);
-          setProjectSection("members");
+          setProjectSection(created.kind === "study" ? "overview" : "members");
           void run(
             reload,
             values.inviteeIds.length
@@ -721,6 +726,9 @@ export default function LiveWorkspace({
         }}
       />,
     );
+  if (view === "projects" && project?.kind === "study") return shell(
+    <StudyWorkspace key={project.id} project={project} userId={user.id} section={projectSection} onSection={section=>openProject(project.id,section)} onChanged={reload}/>
+  );
   return shell(
     <div className={`pw-shell lw-shell${view === "activity" || (view === "projects" && project && projectSection === "activity") ? " lw-activity-shell" : ""}`}>
       <div className="pw-body">

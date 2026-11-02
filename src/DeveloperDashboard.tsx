@@ -90,7 +90,9 @@ export default function DeveloperDashboard({
   const [query, setQuery] = useState("");
   const [showAll, setShowAll] = useState(false);
   const projectSource = JSON.stringify(
-    projects.map(({ id, name }) => ({ id, name })),
+    projects
+      .filter((p) => !("kind" in p) || p.kind !== "study")
+      .map(({ id, name }) => ({ id, name })),
   );
   useEffect(() => {
     const joinedProjects = JSON.parse(projectSource) as {

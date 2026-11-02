@@ -7,6 +7,7 @@ export type CreatePerson = {
   accountType: "team" | "client";
 };
 export type CreateValues = {
+  kind?: "development" | "study";
   name: string;
   description: string;
   teamId?: string;
@@ -38,6 +39,7 @@ export default function CreateProjectPage({
   const available = teams.filter((t) =>
     ["owner", "admin"].includes(t.permissionRole),
   );
+  const [kind, setKind] = useState<"development" | "study">("development");
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
   const [repositoryRelations, setRepositoryRelations] = useState<
@@ -99,7 +101,7 @@ export default function CreateProjectPage({
   function selectPerson(person: CreatePerson) {
     if (busy || locked.current || members.some((m) => m.id === person.id))
       return;
-    if (members.length >= 20) {
+    if (members.filter(m=>kind!=="study"||m.accountType==="team").length >= 20) {
       setLookupError((v) => ({
         ...v,
         [person.accountType]: "한 번에 최대 20명까지 초대할 수 있어요.",
@@ -117,12 +119,18 @@ export default function CreateProjectPage({
     setError("");
     try {
       await onCreate({
+        kind,
         name: name.trim(),
         description: description.trim(),
-        repositoryRelations,
-        repositoryUrls: repositoryUrls.map((url) => url.trim()).filter(Boolean),
-        ...(teamId ? { teamId } : {}),
-        inviteeIds: members.map((m) => m.id),
+        repositoryRelations: kind === "study" ? [] : repositoryRelations,
+        repositoryUrls:
+          kind === "study"
+            ? []
+            : repositoryUrls.map((url) => url.trim()).filter(Boolean),
+        ...(kind === "development" && teamId ? { teamId } : {}),
+        inviteeIds: members
+          .filter((m) => kind !== "study" || m.accountType === "team")
+          .map((m) => m.id),
       });
     } catch (e) {
       setError(
@@ -159,6 +167,25 @@ export default function CreateProjectPage({
           <h1>새로운 프로젝트 생성하기</h1>
           <p>프로젝트 정보를 입력하고 함께할 사람을 초대하세요.</p>
         </div>
+        <div className="cp-kind" aria-label="프로젝트 종류">
+          {(
+            [
+              ["development", "개발 프로젝트", "요청부터 개발·승인·배포까지"],
+              ["study", "스터디·모임", "프로그램과 회차를 함께 운영"],
+            ] as const
+          ).map(([value, label, description]) => (
+            <button
+              type="button"
+              key={value}
+              aria-pressed={kind === value}
+              disabled={busy}
+              onClick={() => setKind(value)}
+            >
+              <strong>{label}</strong>
+              <span>{description}</span>
+            </button>
+          ))}
+        </div>
         <form onSubmit={submit}>
           <div className="cp-layout">
             <section className="cp-panel" aria-labelledby="cp-info">
@@ -190,32 +217,43 @@ export default function CreateProjectPage({
                 placeholder="어떤 프로젝트인지 간단히 소개해주세요"
                 onChange={(e) => setDescription(e.target.value)}
               />
-              <label className="cp-label" htmlFor="cp-owner-team">
-                소유 개발팀
-              </label>
-              <select
-                id="cp-owner-team"
-                value={teamId}
-                disabled={busy}
-                onChange={(e) => setTeamId(e.target.value)}
-              >
-                <option value="">내 소유 팀 사용 / 없으면 1인 팀 생성</option>
-                {available.map((t) => (
-                  <option key={t.id} value={t.id}>
-                    {t.name}
-                  </option>
-                ))}
-              </select>
-              <p className="cp-help">선택한 팀의 프로젝트로 생성돼요.</p>
+              {kind === "development" && (
+                <>
+                  <label className="cp-label" htmlFor="cp-owner-team">
+                    소유 개발팀
+                  </label>
+                  <select
+                    id="cp-owner-team"
+                    value={teamId}
+                    disabled={busy}
+                    onChange={(e) => setTeamId(e.target.value)}
+                  >
+                    <option value="">
+                      내 소유 팀 사용 / 없으면 1인 팀 생성
+                    </option>
+                    {available.map((t) => (
+                      <option key={t.id} value={t.id}>
+                        {t.name}
+                      </option>
+                    ))}
+                  </select>
+                  <p className="cp-help">선택한 팀의 프로젝트로 생성돼요.</p>
+                </>
+              )}
             </section>
             <section className="cp-panel" aria-labelledby="cp-people">
               <h2 id="cp-people">함께할 사람</h2>
-              {(["client", "team"] as const).map((type) => (
+              {(kind === "study"
+                ? ["team" as const]
+                : (["client", "team"] as const)
+              ).map((type) => (
                 <div className="cp-invite-group" key={type}>
                   <label className="cp-label" htmlFor={`cp-${type}`}>
-                    {type === "client"
-                      ? "의뢰자 멤버 초대하기"
-                      : "개발팀 멤버 초대하기"}
+                    {kind === "study"
+                      ? "회원 초대하기"
+                      : type === "client"
+                        ? "의뢰자 멤버 초대하기"
+                        : "개발팀 멤버 초대하기"}
                     <small>선택</small>
                   </label>
                   <div className="cp-lookup">
@@ -224,7 +262,7 @@ export default function CreateProjectPage({
                       value={ids[type]}
                       disabled={busy || searching !== null}
                       placeholder={
-                        type === "client"
+                        kind==="study"?"회원 이름·닉네임 또는 ID":type === "client"
                           ? "의뢰자 이름·닉네임 또는 ID"
                           : "개발팀 이름·닉네임 또는 ID"
                       }
@@ -245,7 +283,7 @@ export default function CreateProjectPage({
                     <button
                       type="button"
                       aria-label={
-                        type === "client" ? "의뢰자 검색" : "개발팀 멤버 검색"
+                        kind==="study"?"회원 검색":type === "client" ? "의뢰자 검색" : "개발팀 멤버 검색"
                       }
                       disabled={busy || searching !== null || !ids[type].trim()}
                       onClick={() => void add(type)}
@@ -336,15 +374,20 @@ export default function CreateProjectPage({
                 프로젝트 생성 시 초대가 전달되며, 상대방이 수락하면 참여합니다.
               </p>
             </section>
-            <section className="cp-panel cp-repository-panel" aria-label="프로젝트 저장소 등록">
-              <RepositoryFields
-                relations={repositoryRelations}
-                onRelationsChange={setRepositoryRelations}
-                value={repositoryUrls}
-                onChange={setRepositoryUrls}
-                disabled={busy}
-              />
-            </section>
+            {kind === "development" && (
+              <section
+                className="cp-panel cp-repository-panel"
+                aria-label="프로젝트 저장소 등록"
+              >
+                <RepositoryFields
+                  relations={repositoryRelations}
+                  onRelationsChange={setRepositoryRelations}
+                  value={repositoryUrls}
+                  onChange={setRepositoryUrls}
+                  disabled={busy}
+                />
+              </section>
+            )}
           </div>
           {error && (
             <p className="cp-error cp-submit-error" role="alert">
