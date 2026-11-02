@@ -1,3 +1,4 @@
+import { createLocalId } from "../browser-id";
 import StudySlideCanvas, {
   SlideDisplay,
   slideFromDoc,
@@ -323,7 +324,7 @@ export function DeckEditor({
     pages = d.getArray<string>("pages").toArray();
   function add() {
     if (!editable.current) return;
-    const id = crypto.randomUUID();
+    const id = createLocalId();
     const title = d.getText(`title:${id}`),
       body = d.getText(`body:${id}`);
     undo.current?.addToScope([title, body, d.getArray("pages")]);

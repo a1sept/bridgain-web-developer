@@ -1,3 +1,4 @@
+import { createLocalId } from "./browser-id";
 import ControlIcon from "./components/ControlIcon";
 import { studyTimeInput, parseStudyTimeInput } from "./study/time";
 import StudyStorage from "./study/StudyStorage";
@@ -209,9 +210,9 @@ export default function StudyWorkspace({
       operatingMode,
       repeat,
     });
-    if (mutationKey.current.payload !== payload)
-      mutationKey.current = { payload, id: crypto.randomUUID() };
     await run(async () => {
+      if (mutationKey.current.payload !== payload)
+        mutationKey.current = { payload, id: createLocalId() };
       if (form === "program") {
         const p = await workflowApi<Program>(
           `${base}/programs${editingProgram && program ? `/${program.id}` : ""}`,

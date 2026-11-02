@@ -1,3 +1,4 @@
+import { createLocalId } from "../browser-id";
 import RichTextContent from "../editor/RichTextContent";
 import type { RichDocument } from "../editor/document";
 import { SlideDisplay, slideFromDoc, type SlideView } from "./StudySlideCanvas";
@@ -85,7 +86,7 @@ export default function StudyLive({
     [materialSession, setMaterialSession] = useState(session.id),
     [youtube, setYoutube] = useState(""),
     [progress, setProgress] = useState(0);
-  const connection = useRef(crypto.randomUUID()),
+  const connection = useRef(createLocalId()),
     lock = useRef(false),
     latest = useRef<Room | null>(null);
   const url = `${base}/sessions/${session.id}`;
@@ -350,7 +351,7 @@ export default function StudyLive({
             <button
               disabled={busy}
               onClick={() => {
-                connection.current = crypto.randomUUID();
+                connection.current = createLocalId();
                 void run("join");
               }}
             >
@@ -370,7 +371,7 @@ export default function StudyLive({
             className="pw-primary"
             disabled={busy || (session.status === "scheduled" && !canHost)}
             onClick={() => {
-              connection.current = crypto.randomUUID();
+              connection.current = createLocalId();
               void run(
                 session.status === "scheduled" && canHost ? "start" : "join",
               );

@@ -1,3 +1,4 @@
+import { createLocalId } from "../browser-id";
 import StudyRemoteCursors, { type RemoteSelection } from "./StudyRemoteCursors";
 import { useRef, useState } from "react";
 import * as Y from "yjs";
@@ -170,7 +171,7 @@ export default function StudySlideCanvas({
   }
   function add(type: string, extra: Record<string, string> = {}) {
     if (!editable || !page) return;
-    const id = crypto.randomUUID(),
+    const id = createLocalId(),
       m = doc.getMap(`element:${id}`),
       list = doc.getArray<string>(`elements:${page}`),
       t = doc.getText(`text:${id}`);

@@ -1,3 +1,4 @@
+import { createLocalId } from "../browser-id";
 import { studyTimeInput, parseStudyTimeInput } from "./time";
 import { DeckEditor } from "./StudyDecks";
 import RichTextEditor from "../editor/RichTextEditor";
@@ -514,7 +515,7 @@ export default function StudyActivities({
                         if (submissionRequest.current.payload !== payload)
                           submissionRequest.current = {
                             payload,
-                            id: crypto.randomUUID(),
+                            id: createLocalId(),
                           };
                         await workflowApi(
                           `${base}/activities/${detail.activity.id}/submissions`,

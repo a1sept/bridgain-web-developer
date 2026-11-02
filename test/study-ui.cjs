@@ -19,6 +19,11 @@ const { chromium } = require(
     args: ["--no-sandbox"],
   });
   const context = await browser.newContext();
+  if (process.env.STUDY_TEST_WITHOUT_RANDOM_UUID === "1") {
+    await context.addInitScript(() => {
+      Object.defineProperty(globalThis.crypto, "randomUUID", { value: undefined, configurable: true });
+    });
+  }
   const page = await context.newPage();
   const errors = [];
   page.on("pageerror", (e) => errors.push(e.message));
@@ -248,6 +253,8 @@ const { chromium } = require(
     .getByRole("textbox", { name: "이름", exact: true })
     .fill("파이썬 책 읽기");
   await page.getByRole("button", { name: "저장하기", exact: true }).click();
+  await page.waitForTimeout(300);
+  if (errors.length) throw Error(`Program save failed: ${errors.join("; ")}`);
   await page
     .getByRole("button", { name: "프로그램 시작", exact: true })
     .waitFor();
