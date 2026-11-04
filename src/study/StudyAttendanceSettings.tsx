@@ -38,16 +38,17 @@ export default function StudyAttendanceSettings({
     setPolicy((v) => (v ? { ...v, ...p } : v));
   };
   return (
-    <section className="study-panel">
-      <h2>출석 규칙</h2>
+    <section id="study-attendance-policy" className="study-settings-card" aria-labelledby="study-attendance-title">
+      <header><h3 id="study-attendance-title">출석 규칙</h3>
       <p>
         이후 시작하는 회차에 적용됩니다. 진행 중·종료된 회차의 기준은
         유지됩니다.
-      </p>
+      </p></header>
+      {!policy && !error && <p role="status">출석 규칙을 불러오는 중…</p>}
       {error && <p role="alert">{error}</p>}
       {policy && (
         <form
-          className="study-form"
+          className="study-form" aria-busy={busy}
           onSubmit={async (e) => {
             e.preventDefault();
             if (busy) return;
@@ -67,22 +68,22 @@ export default function StudyAttendanceSettings({
             }
           }}
         >
-          <fieldset disabled={!canManage || busy}>
+          <fieldset className="study-settings-group" disabled={!canManage || busy}>
             <legend>인정 방식</legend>
-            <div className="study-segment">
+            <div className="study-policy-choices">
               <button
                 type="button"
                 aria-pressed={policy.mode === "duration"}
                 onClick={() => update({ mode: "duration" })}
               >
-                참여 시간만
+                <strong>참여 시간만</strong><span>입장 시각과 관계없이 참여 시간을 확인합니다.</span><small>{policy.mode === "duration" ? "선택됨" : "선택"}</small>
               </button>
               <button
                 type="button"
                 aria-pressed={policy.mode === "deadline"}
                 onClick={() => update({ mode: "deadline" })}
               >
-                입장 시각 + 참여 시간
+                <strong>입장 시각 + 참여 시간</strong><span>정해진 시각 안에 입장하고 참여 시간을 채워야 합니다.</span><small>{policy.mode === "deadline" ? "선택됨" : "선택"}</small>
               </button>
             </div>
             <label>
@@ -99,8 +100,10 @@ export default function StudyAttendanceSettings({
                 }
               />
             </label>
+          </fieldset>
             {policy.mode === "deadline" && (
-              <>
+              <fieldset className="study-settings-group" disabled={!canManage || busy}>
+                <legend>입장 기준</legend><div className="study-settings-fields">
                 <label>
                   입장 기준
                   <select
@@ -139,13 +142,16 @@ export default function StudyAttendanceSettings({
                     }
                   >
                     <option value="allow">
-                      입장 허용 · 지각 표시, 출석 미인정
+                      입장 허용 · 지각 처리
                     </option>
                     <option value="block">입장 차단</option>
                   </select>
                 </label>
-              </>
+                <p className="study-field-help">{policy.lateEntry === "allow" ? "늦게 들어온 회원은 지각으로 표시하며 출석으로 인정하지 않습니다." : "허용 시간이 지나면 발표실에 입장할 수 없습니다."}</p>
+              </div></fieldset>
             )}
+          <fieldset className="study-settings-group" disabled={!canManage || busy}>
+            <legend>추가 확인 조건</legend>
             <label>
               종료 근처에도 접속해야 하나요?
               <select
@@ -188,12 +194,10 @@ export default function StudyAttendanceSettings({
               </select>
             </label>
           </fieldset>
-          {canManage && (
-            <button className="pw-primary" disabled={busy}>
-              출석 규칙 저장
-            </button>
-          )}
-          {saved && <p role="status">저장했습니다.</p>}
+          <footer className="study-settings-footer">
+            {canManage && <button className="pw-primary" disabled={busy}>{busy ? "저장 중…" : "출석 규칙 저장"}</button>}
+            {saved && <p role="status">출석 규칙을 저장했습니다.</p>}
+          </footer>
         </form>
       )}
     </section>

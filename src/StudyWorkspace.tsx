@@ -101,6 +101,7 @@ export default function StudyWorkspace({
   const [organizerForm, setOrganizerForm] = useState(false),
     [deputyIds, setDeputyIds] = useState<string[]>([]);
   const [settingsNotice, setSettingsNotice] = useState("");
+  const [spaceSettingsTab, setSpaceSettingsTab] = useState("basic");
   const moreRef = useRef<HTMLDetailsElement>(null);
   useEffect(() => {
     const close = (e: PointerEvent) => {
@@ -1219,18 +1220,36 @@ export default function StudyWorkspace({
               onChanged={load}
             />
           ) : section === "settings" ? (
-            <>
-              <StudySettings
-                project={project}
-                canManage={can("settings.manage")}
-                onChanged={onChanged}
-              />
-              <StudyAttendanceSettings
-                base={base}
-                canManage={can("settings.manage")}
-              />
-              <StudyStorage base={base} />
-            </>
+            <div className="study-space-settings">
+              <header className="study-heading"><div><h2>스터디 설정</h2><p>공간 정보와 모임의 기본 출석 기준을 관리하세요.</p></div></header>
+              {!can("settings.manage") && <p className="study-settings-readonly">설정을 확인할 수 있습니다. 변경은 설정 관리 권한이 있는 회원에게 요청하세요.</p>}
+              <div className="study-space-settings-tabs" role="tablist" aria-label="스터디 설정 항목">
+                {[["basic", "기본 정보"], ["attendance", "출석 규칙"], ["storage", "저장 공간"]].map(([id, label], index, tabs) => (
+                  <button key={id} type="button" role="tab" id={`space-settings-tab-${id}`}
+                    aria-controls={`space-settings-panel-${id}`} aria-selected={spaceSettingsTab === id}
+                    tabIndex={spaceSettingsTab === id ? 0 : -1}
+                    onClick={() => setSpaceSettingsTab(id)}
+                    onKeyDown={(event) => {
+                      const next = event.key === "ArrowRight" ? (index + 1) % tabs.length
+                        : event.key === "ArrowLeft" ? (index + tabs.length - 1) % tabs.length
+                        : event.key === "Home" ? 0 : event.key === "End" ? tabs.length - 1 : null;
+                      if (next === null) return;
+                      event.preventDefault();
+                      setSpaceSettingsTab(tabs[next][0]);
+                      document.getElementById(`space-settings-tab-${tabs[next][0]}`)?.focus();
+                    }}>{label}</button>
+                ))}
+              </div>
+              <div id="space-settings-panel-basic" role="tabpanel" aria-labelledby="space-settings-tab-basic" hidden={spaceSettingsTab !== "basic"} tabIndex={0}>
+                <StudySettings project={project} canManage={can("settings.manage")} onChanged={onChanged} />
+              </div>
+              <div id="space-settings-panel-attendance" role="tabpanel" aria-labelledby="space-settings-tab-attendance" hidden={spaceSettingsTab !== "attendance"} tabIndex={0}>
+                <StudyAttendanceSettings base={base} canManage={can("settings.manage")} />
+              </div>
+              <div id="space-settings-panel-storage" role="tabpanel" aria-labelledby="space-settings-tab-storage" hidden={spaceSettingsTab !== "storage"} tabIndex={0}>
+                <StudyStorage base={base} />
+              </div>
+            </div>
           ) : section === "schedule" ? (
             <section>
               <h2>일정</h2>
@@ -1421,10 +1440,12 @@ function StudySettings({
     [busy, setBusy] = useState(false),
     [saved, setSaved] = useState(false);
   return (
-    <section className="study-panel study-form-page">
-      <h2>스터디 설정</h2>
+    <section id="study-space-info" className="study-settings-card" aria-labelledby="study-space-info-title">
+      <header><h3 id="study-space-info-title">기본 정보</h3><p>회원에게 표시되는 공간 이름과 소개입니다.</p></header>
       <form
         className="study-form"
+        onChange={() => { setSaved(false); setError(""); }}
+        aria-busy={busy}
         onSubmit={async (e) => {
           e.preventDefault();
           if (busy) return;
@@ -1453,7 +1474,7 @@ function StudySettings({
             defaultValue={project.name}
             required
             maxLength={120}
-            disabled={!canManage}
+            disabled={!canManage || busy}
           />
         </label>
         <label>
@@ -1462,16 +1483,14 @@ function StudySettings({
             name="description"
             defaultValue={project.description}
             maxLength={2000}
-            disabled={!canManage}
+            disabled={!canManage || busy}
           />
         </label>
-        {canManage && (
-          <button className="pw-primary" disabled={busy}>
-            저장하기
-          </button>
-        )}
-        {error && <p role="alert">{error}</p>}
-        {saved && <p role="status">저장했습니다.</p>}
+        <footer className="study-settings-footer">
+          {canManage && <button className="pw-primary" disabled={busy}>{busy ? "저장 중…" : "기본 정보 저장"}</button>}
+          {error && <p className="study-settings-error" role="alert">{error}</p>}
+          {saved && <p role="status">기본 정보를 저장했습니다.</p>}
+        </footer>
       </form>
     </section>
   );
