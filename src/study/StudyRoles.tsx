@@ -1,6 +1,7 @@
-import { useState, type FormEvent } from "react";
+import { useState, useRef, useEffect, type FormEvent } from "react";
 import { workflowApi } from "../Approvals";
-import FilterBar from "../components/FilterBar";
+import StudyRoleMembers from "./StudyRoleMembers";
+import ControlIcon from "../components/ControlIcon";
 type Role = {
   id: string;
   name: string;
@@ -42,24 +43,54 @@ export default function StudyRoles({
     [name, setName] = useState(""),
     [selected, setSelected] = useState<string[]>([]),
     [error, setError] = useState(""),
-    [busy, setBusy] = useState(false),
-    [target, setTarget] = useState(""),
-    [assigned, setAssigned] = useState<string[]>([]);
-  async function run(fn: () => Promise<unknown>) {
+    [busy, setBusy] = useState(false);
+  const [memberRoleId, setMemberRoleId] = useState<string | null>(null);
+  const [notice, setNotice] = useState("");
+  const editorHeading = useRef<HTMLHeadingElement>(null);
+  const editTrigger = useRef<string>("");
+  const restoreFocus = useRef(false);
+  useEffect(() => {
+    if (editing === undefined && !memberRoleId && !busy && restoreFocus.current) {
+      document.getElementById(editTrigger.current)?.focus();
+      restoreFocus.current = false;
+    }
+  }, [editing, busy, memberRoleId]);
+  const dirty = editing !== undefined && (name !== (editing?.name ?? "") ||
+    [...selected].sort().join() !== [...(editing?.permissions ?? [])].sort().join());
+  useEffect(() => { if (editing !== undefined) editorHeading.current?.focus(); }, [editing]);
+  useEffect(() => {
+    if (!dirty) return;
+    const warn = (event: BeforeUnloadEvent) => { event.preventDefault(); event.returnValue = ""; };
+    window.addEventListener("beforeunload", warn);
+    return () => window.removeEventListener("beforeunload", warn);
+  }, [dirty]);
+  function returnToList() {
+    restoreFocus.current = editing !== undefined;
+    setEditing(undefined); setError("");
+  }
+  function cancel() {
+    if (busy) return;
+    if (dirty && !window.confirm("저장하지 않은 변경 사항을 버리고 역할 목록으로 돌아갈까요?")) return;
+    returnToList();
+  }
+  async function run(fn: () => Promise<unknown>, message = "변경 사항을 적용했습니다.") {
     if (busy) return;
     setBusy(true);
-    setError("");
+    setError(""); setNotice("");
     try {
       await fn();
       await onChanged();
-      setEditing(undefined);
+      returnToList();
+      setNotice(message);
     } catch (e) {
       setError(e instanceof Error ? e.message : "저장하지 못했습니다.");
     } finally {
       setBusy(false);
     }
   }
-  function edit(r: Role | null) {
+  function edit(r: Role | null, trigger: HTMLButtonElement) {
+    editTrigger.current = trigger.id;
+    setError(""); setNotice("");
     setEditing(r);
     setName(r?.name ?? "");
     setSelected(r?.permissions ?? []);
@@ -72,47 +103,63 @@ export default function StudyRoles({
         { name, permissions: selected },
         editing ? "PATCH" : "POST",
       ),
+      `${name} 역할을 저장했습니다.`,
     );
   }
   const canManage = permissions.includes("study.roles.manage"),
     canAssign = permissions.includes("study.roles.assign");
+  const canAssignRole = (r: Role) => canAssign && r.name !== "관리자" && (isOwner ||
+    (!["부관리자", "회원"].includes(r.name) && r.permissions.every(p => permissions.includes(p) && !["study.roles.manage", "study.roles.assign"].includes(p))));
+  if (memberRoleId) {
+    const role = roles.find(r => r.id === memberRoleId);
+    const back = () => { restoreFocus.current = true; setMemberRoleId(null); };
+    if (!role) return <section className="study-roles-page"><button onClick={back}>역할 목록으로</button><p role="status">이 역할이 삭제되었거나 더 이상 조회할 수 없습니다.</p></section>;
+    return <StudyRoleMembers base={base} role={role} roles={roles} members={members} permissions={permissions} isOwner={isOwner} onChanged={onChanged} onBack={back} />;
+  }
   return (
-    <section className="study-panel">
-      <h3>역할·권한</h3>
-      <p>
-        회원은 여러 역할을 함께 가질 수 있습니다. 각 역할의 허용 권한이
-        합산됩니다.
-      </p>
+    <section className="study-roles-page" aria-label="역할 설정">
+      {editing === undefined ? <div className="study-heading study-role-heading">
+        <div><h3>역할 설정</h3><p>역할별로 할 수 있는 일을 정합니다. 같은 역할의 모든 회원에게 적용됩니다.</p></div>
+        {canManage && <button id="study-role-add" className="pw-primary" disabled={busy} onClick={e => edit(null, e.currentTarget)}>역할 추가</button>}
+      </div> : <header className="study-role-editor-heading">
+        <button className="study-settings-back" disabled={busy} onClick={cancel}><ControlIcon name="back" /> 역할 목록으로</button>
+        <h3 ref={editorHeading} tabIndex={-1}>{editing ? `${editing.name} 역할 수정` : "새 역할 만들기"}</h3>
+        <p>이 역할을 가진 모든 회원에게 적용됩니다. {dirty ? "저장하지 않은 변경 사항이 있습니다." : "허용할 기능을 선택하세요."}</p>
+      </header>}
+      {notice && <p className="study-role-notice" role="status">{notice}</p>}
+      {!canManage && <p className="study-field-help">역할 목록을 조회할 수 있습니다. 권한 변경에는 역할 설정 관리 권한이 필요합니다.</p>}
       {error && (
         <p role="alert" className="study-error">
           {error}
         </p>
       )}
       {editing !== undefined ? (
-        <form onSubmit={submit} className="study-form">
+        <form onSubmit={submit} className="study-form study-role-editor" aria-busy={busy}>
           <label>
             역할 이름
             <input
               value={name}
               required
               maxLength={60}
-              disabled={
-                !!editing &&
-                ["관리자", "부관리자", "회원"].includes(editing.name)
-              }
+              disabled={busy || (!!editing && ["관리자", "부관리자", "회원"].includes(editing.name))}
               onChange={(e) => setName(e.target.value)}
             />
           </label>
+          {editing && ["부관리자", "회원"].includes(editing.name) && <p className="study-field-help">기본 역할의 이름은 변경할 수 없습니다.</p>}
+          {[{title: "프로그램 운영", entries: catalog.slice(0, 7)}, {title: "회원·공간 관리", entries: catalog.slice(7)}].map(group => <section key={group.title} className="study-permission-group">
+            <h4>{group.title}</h4>
           <ul className="study-list">
-            {catalog.map(([key, label]) => {
+            {group.entries.map(([key, label]) => {
               const id = `study.${key}`,
                 has = selected.includes(id);
               return (
                 <li key={id}>
-                  <span>{label}</span>
+                  <span>{label}{!isOwner && !permissions.includes(id) && <small className="study-field-help">보유하지 않은 권한은 변경할 수 없습니다.</small>}</span>
                   <button
                     type="button"
-                    aria-pressed={has}
+                    role="switch"
+                    aria-checked={has}
+                    aria-label={`${label} 허용`}
                     disabled={busy || (!isOwner && !permissions.includes(id))}
                     onClick={() =>
                       setSelected((v) =>
@@ -125,14 +172,13 @@ export default function StudyRoles({
                 </li>
               );
             })}
-          </ul>
-          <p>이 역할을 가진 모든 회원에게 변경 사항이 적용됩니다.</p>
+          </ul></section>)}
           <footer>
-            <button type="button" onClick={() => setEditing(undefined)}>
+            <button type="button" disabled={busy} onClick={cancel}>
               취소
             </button>
             <button className="pw-primary" disabled={busy}>
-              저장
+              {busy ? "저장 중…" : "역할 저장"}
             </button>
           </footer>
         </form>
@@ -148,9 +194,11 @@ export default function StudyRoles({
                     {members.filter((m) => m.roleIds.includes(r.id)).length}명
                   </p>
                 </div>
-                {canManage && r.name !== "관리자" && (
                   <div className="study-actions">
-                    <button onClick={() => edit(r)}>수정</button>
+                    <button id={`study-role-members-${r.id}`} disabled={busy} aria-label={`${r.name} ${canAssignRole(r) ? "회원 관리" : "회원 보기"}`} onClick={e => { editTrigger.current = e.currentTarget.id; setNotice(""); setError(""); setMemberRoleId(r.id); }}>{canAssignRole(r) ? "회원 관리" : "회원 보기"}</button>
+                {canManage && r.name !== "관리자" && (
+                  <>
+                    <button id={`study-role-edit-${r.id}`} disabled={busy} aria-label={`${r.name} 역할 수정`} onClick={e => edit(r, e.currentTarget)}>권한 수정</button>
                     {["부관리자", "회원"].includes(r.name) ? (
                       isOwner && (
                         <button
@@ -218,72 +266,12 @@ export default function StudyRoles({
                         삭제
                       </button>
                     )}
-                  </div>
+                  </>
                 )}
+                  </div>
               </li>
             ))}
           </ul>
-          {canManage && <button onClick={() => edit(null)}>역할 추가</button>}
-          {canAssign && (
-            <div className="study-form">
-              <h3>회원 역할 지정</h3>
-              <label>
-                회원
-                <select
-                  value={target}
-                  onChange={(e) => {
-                    setTarget(e.target.value);
-                    setAssigned(
-                      members.find((m) => m.userId === e.target.value)
-                        ?.roleIds ?? [],
-                    );
-                  }}
-                >
-                  <option value="">회원 선택</option>
-                  {members.map((m) => (
-                    <option key={m.userId} value={m.userId}>
-                      {m.displayName}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              {target && (
-                <>
-                  <FilterBar
-                    filters={[
-                      {
-                        id: "roles",
-                        label: "역할",
-                        options: roles.map((r) => ({
-                          value: r.id,
-                          label: r.name,
-                        })),
-                        values: assigned,
-                        multiple: true,
-                        onChange: setAssigned,
-                      },
-                    ]}
-                    onClear={() => setAssigned([])}
-                  />
-                  <p>다른 역할의 권한도 함께 적용됩니다.</p>
-                  <button
-                    disabled={busy}
-                    onClick={() =>
-                      void run(() =>
-                        workflowApi(
-                          `${base}/members/${target}/roles`,
-                          { roleIds: assigned },
-                          "PATCH",
-                        ),
-                      )
-                    }
-                  >
-                    역할 적용
-                  </button>
-                </>
-              )}
-            </div>
-          )}
         </>
       )}
     </section>

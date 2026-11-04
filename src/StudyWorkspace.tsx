@@ -103,9 +103,15 @@ export default function StudyWorkspace({
   const [settingsNotice, setSettingsNotice] = useState("");
   const [spaceSettingsTab, setSpaceSettingsTab] = useState("basic");
   const moreRef = useRef<HTMLDetailsElement>(null);
+  const membersRef = useRef<HTMLElement>(null);
+  const [inviteOpen, setInviteOpen] = useState(false);
+  const [inviteSearched, setInviteSearched] = useState(false);
   useEffect(() => {
     const close = (e: PointerEvent) => {
       if (moreRef.current && !moreRef.current.contains(e.target as Node)) moreRef.current.open = false;
+      membersRef.current?.querySelectorAll<HTMLDetailsElement>(".study-member-menu[open]").forEach(menu => {
+        if (!menu.contains(e.target as Node)) menu.open = false;
+      });
     };
     document.addEventListener("pointerdown", close);
     return () => document.removeEventListener("pointerdown", close);
@@ -1030,22 +1036,25 @@ export default function StudyWorkspace({
               </div>
             </section>
           ) : section === "members" ? (
-            <section>
-              <div className="study-segment">
-                <button
-                  onClick={() => setMemberTab("members")}
-                  aria-pressed={memberTab === "members"}
-                >
-                  회원 목록
-                </button>
-                <button
-                  onClick={() => setMemberTab("roles")}
-                  aria-pressed={memberTab === "roles"}
-                >
-                  역할·권한
-                </button>
+            <section className="study-members-page" ref={membersRef}>
+              <div className="study-heading"><div><h2>회원</h2><p>함께하는 회원과 역할을 확인하고 관리하세요.</p></div>
+                {can("members.invite") && memberTab === "members" && <button className="pw-primary" aria-expanded={inviteOpen} aria-controls="study-member-invite" onClick={() => setInviteOpen(v => !v)}>회원 초대</button>}
               </div>
-              {memberTab === "roles" ? (
+              <div className="study-space-settings-tabs" role="tablist" aria-label="회원 화면 선택">
+                {[["members", "회원 목록"], ["roles", "역할 설정"]].map(([id, label], index, tabs) => (
+                  <button type="button" key={id} role="tab" id={`study-member-tab-${id}`}
+                    aria-selected={memberTab === id} aria-controls={`study-member-panel-${id}`}
+                    tabIndex={memberTab === id ? 0 : -1} onClick={() => setMemberTab(id)}
+                    onKeyDown={e => {
+                      const next = e.key === "Home" ? 0 : e.key === "End" ? 1
+                        : ["ArrowLeft", "ArrowRight"].includes(e.key) ? 1 - index : null;
+                      if (next === null) return;
+                      e.preventDefault(); setMemberTab(tabs[next][0]);
+                      document.getElementById(`study-member-tab-${tabs[next][0]}`)?.focus();
+                    }}>{label}</button>
+                ))}
+              </div>
+              <div role="tabpanel" id="study-member-panel-roles" aria-labelledby="study-member-tab-roles" hidden={memberTab !== "roles"}>
                 <StudyRoles
                   base={base}
                   roles={data.roles}
@@ -1054,12 +1063,12 @@ export default function StudyWorkspace({
                   isOwner={data.isOwner}
                   onChanged={load}
                 />
-              ) : (
-                <>
-                  <div className="study-heading">
-                    <h2>회원</h2>
-                  </div>
-                  {can("members.invite") && (
+              </div>
+              <div role="tabpanel" id="study-member-panel-members" aria-labelledby="study-member-tab-members" hidden={memberTab !== "members"}>
+                  <h3 className="study-members-count">전체 회원 <span>{data.members.length}명</span></h3>
+                  {can("members.invite") && inviteOpen && (
+                    <div id="study-member-invite" className="study-member-invite">
+                    <h3>새 회원 초대</h3><p>가입된 회원을 이름 또는 ID로 검색하세요.</p>
                     <form
                       className="study-search"
                       onSubmit={(e) => {
@@ -1071,14 +1080,15 @@ export default function StudyWorkspace({
                             `/users?q=${encodeURIComponent(inviteQuery)}&accountType=team`,
                           );
                           setInviteResults(r.users);
+                          setInviteSearched(true);
                         });
                       }}
                     >
                       <label>
-                        회원 초대
+                        이름 또는 ID
                         <input
                           value={inviteQuery}
-                          onChange={(e) => setInviteQuery(e.target.value)}
+                          onChange={(e) => { setInviteQuery(e.target.value); setInviteSearched(false); setInviteResults([]); }}
                           placeholder="이름 또는 ID"
                           minLength={2}
                         />
@@ -1087,7 +1097,7 @@ export default function StudyWorkspace({
                         검색
                       </button>
                     </form>
-                  )}
+                    {inviteSearched && !inviteResults.filter(u => !data.members.some(m => m.userId === u.id)).length && <p role="status">초대할 수 있는 검색 결과가 없습니다. 이미 참여한 회원은 제외됩니다.</p>}
                   {inviteResults.length > 0 && (
                     <ul className="study-list">
                       {inviteResults
@@ -1118,13 +1128,18 @@ export default function StudyWorkspace({
                         ))}
                     </ul>
                   )}
-                  <ul className="study-list">
+                    </div>
+                  )}
+                  <ul className="study-list study-members-list" aria-label="회원 목록">
                     {data.members.map((m) => {
                       const deputy = data.roles.find(
                         (r) => r.name === "부관리자",
                       );
                       const isDeputy =
                         !!deputy && m.roleIds.includes(deputy.id);
+                      const canDeputy = data.isOwner && m.userId !== userId;
+                      const canRemove = (m.userId === userId && !data.isOwner) ||
+                        (can("members.remove") && !data.roles.some(r => r.name === "관리자" && m.roleIds.includes(r.id)));
                       return (
                         <li key={m.userId}>
                           <div>
@@ -1139,12 +1154,16 @@ export default function StudyWorkspace({
                                 .join(" · ") || "회원"}
                             </p>
                           </div>
-                          <details className="study-member-menu">
-                            <summary aria-label={`${m.displayName} 회원 관리`}>
-                              관리
+                          {(canDeputy || canRemove) && <details className="study-member-menu"
+                            onKeyDown={e => { if (e.key === "Escape") { e.currentTarget.open = false; e.currentTarget.querySelector("summary")?.focus(); } }}
+                            onToggle={e => { if (e.currentTarget.open) membersRef.current?.querySelectorAll<HTMLDetailsElement>(".study-member-menu[open]").forEach(menu => { if (menu !== e.currentTarget) menu.open = false; }); }}>
+                            <summary aria-label={`${m.displayName} 회원 작업`} title={`${m.displayName} 회원 작업`}>
+                              <ControlIcon name="more" size={16} />
                             </summary>
-                            <div>
-                              {data.isOwner && m.userId !== userId && (
+                            <div aria-label={`${m.displayName} 회원 작업 목록`} onClick={e => {
+                              if ((e.target as HTMLElement).closest("button")) { const menu = e.currentTarget.closest("details"); if (menu) { menu.open = false; menu.querySelector("summary")?.focus(); } }
+                            }}>
+                              {canDeputy && (
                                 <button
                                   disabled={busy}
                                   onClick={() =>
@@ -1162,14 +1181,8 @@ export default function StudyWorkspace({
                                     : "부관리자로 지정"}
                                 </button>
                               )}
-                              {((m.userId === userId && !data.isOwner) ||
-                                (can("members.remove") &&
-                                  !data.roles.some(
-                                    (r) =>
-                                      r.name === "관리자" &&
-                                      m.roleIds.includes(r.id),
-                                  ))) && (
-                                <button
+                              {canRemove && (
+                                <button className="study-member-danger"
                                   disabled={busy}
                                   onClick={() => {
                                     if (
@@ -1194,13 +1207,12 @@ export default function StudyWorkspace({
                                 </button>
                               )}
                             </div>
-                          </details>
+                          </details>}
                         </li>
                       );
                     })}
                   </ul>
-                </>
-              )}
+              </div>
             </section>
           ) : section === "studyActivities" ? (
             <StudyActivities
