@@ -263,7 +263,8 @@ const { chromium } = require(
     .getByRole("button", { name: "프로그램 시작", exact: true })
     .click();
   await page.getByText("진행 중 · 1명 참여", { exact: true }).waitFor();
-  await page.getByRole("button", { name: "발표 자료", exact: true }).click();
+  await page.locator(".ds-project-tabs").getByRole("button", { name: "자료", exact: true }).click();
+  await page.getByRole("button", { name: /파이썬 책 읽기/ }).click();
   await page
     .getByRole("button", { name: "함께 읽는 자료", exact: true })
     .click();
@@ -281,7 +282,7 @@ const { chromium } = require(
   if (doc.getText(`title:${pageId}`).toString() !== "수정된 발표 제목")
     throw Error("deck update not saved");
   const elementId = doc.getArray(`elements:${pageId}`).get(0);
-  await page.getByRole("button", { name: "내 수정 취소", exact: true }).click();
+  await page.getByRole("button", { name: "실행 취소", exact: true }).click();
   await page.waitForTimeout(1400);
   if (doc.getText(`text:${elementId}`).toString() !== "텍스트를 입력하세요")
     throw Error("local undo was not persisted");
@@ -289,6 +290,54 @@ const { chromium } = require(
   await page.waitForTimeout(1400);
   if (doc.getText(`text:${elementId}`).toString() !== "함께 생각해 볼 문제")
     throw Error("redo was not persisted");
+  if (await page.locator('.study-editor-tools').getByRole('button', {name:'슬라이드 삭제'}).count()) throw Error('Delete must not appear in top toolbar');
+  await page.getByRole('button', {name:'슬라이드 추가', exact:true}).click();
+  await page.waitForTimeout(1400);
+  const newSlideId = doc.getArray('pages').toArray().find(id => id !== pageId);
+  await page.locator(`[data-slide-id="${pageId}"]`).dragTo(page.locator(`[data-slide-id="${newSlideId}"]`));
+  await page.waitForTimeout(1400);
+  if (doc.getArray('pages').get(1) !== pageId) throw Error('Drag reorder not saved');
+  await page.getByRole('button', {name:'1번 슬라이드 메뉴', exact:true}).click();
+  await page.getByRole('button', {name:'슬라이드 삭제', exact:true}).click();
+  await page.waitForTimeout(1400);
+  if (doc.getArray('pages').length !== 1) throw Error('Menu deletion not saved');
+  await page.getByRole('button', {name:'실행 취소', exact:true}).click();
+  await page.waitForTimeout(1400);
+  if (doc.getArray('pages').length !== 2) throw Error('Deleted slide undo failed');
+  await page.getByLabel('페이지 제목', {exact:true}).press('End');
+  await page.getByLabel('페이지 제목', {exact:true}).press('Delete');
+  if (await page.locator('[data-slide-id]').count() !== 2) throw Error('Text Delete removed slide');
+  await page.locator(`[data-slide-id="${newSlideId}"]`).focus();
+  await page.keyboard.press('Delete');
+  await page.waitForTimeout(1400);
+  if (doc.getArray('pages').length !== 1 || doc.getArray('pages').get(0) !== pageId) throw Error('Keyboard deletion not saved');
+  await page.locator(`[data-slide-id="${pageId}"]`).focus();
+  await page.keyboard.press('Delete');
+  if (await page.locator('[data-slide-id]').count() !== 1) throw Error('Last slide deleted');
+  await page.getByLabel('페이지 제목', {exact:true}).focus();
+  const moveHandle = await page.getByRole('button', {name:'요소 이동',exact:true}).boundingBox();
+  await page.mouse.move(moveHandle.x + moveHandle.width/2, moveHandle.y + moveHandle.height/2);
+  await page.mouse.down(); await page.mouse.move(moveHandle.x + moveHandle.width/2 + 20, moveHandle.y + moveHandle.height/2 + 20); await page.mouse.up();
+  await page.waitForTimeout(1400);
+  if (!(doc.getMap(`element:title:${pageId}`).get('y') > 5)) throw Error('Title drag did not persist');
+  const rotateHandle = await page.getByRole('button', {name:'요소 회전',exact:true}).boundingBox();
+  await page.mouse.move(rotateHandle.x + rotateHandle.width/2, rotateHandle.y + rotateHandle.height/2);
+  await page.mouse.down(); await page.mouse.move(rotateHandle.x + 80, rotateHandle.y + 30); await page.mouse.up();
+  await page.waitForTimeout(1400);
+  if (!doc.getMap(`element:title:${pageId}`).get('rotation')) throw Error('Rotation handle did not persist');
+  await page.getByLabel('회전 각도', {exact:true}).fill('25');
+  await page.getByLabel('폰트', {exact:true}).selectOption('serif');
+  await page.getByLabel('글자 크기', {exact:true}).fill('48');
+  await page.getByLabel('글자색', {exact:true}).fill('#cc3355');
+  await page.getByLabel('가로 위치 %', {exact:true}).fill('10');
+  await page.waitForTimeout(1400);
+  const titleStyle = doc.getMap(`element:title:${pageId}`);
+  if (titleStyle.get('rotation') !== 25 || titleStyle.get('fontFamily') !== 'serif' || titleStyle.get('color') !== '#cc3355' || titleStyle.get('x') !== 10) throw Error('Title box formatting not saved');
+  if (doc.getText(`title:${pageId}`).toString() !== '수정된 발표 제목') throw Error('Legacy title lost');
+  await page.getByRole('button', {name:'발표 미리보기',exact:true}).click();
+  const titleBox = page.locator('.study-slide-sheet .study-canvas-element').first();
+  if (!(await titleBox.getAttribute('style')).includes('rotate(25deg)')) throw Error('Preview rotation lost');
+  await page.getByRole('button', {name:'편집으로 돌아가기',exact:true}).click();
   const second = await page.context().newPage();
   second.on("pageerror", (e) => errors.push(e.message));
   await second.addInitScript(
@@ -306,7 +355,8 @@ const { chromium } = require(
   );
   await second.goto(origin + "/");
   await second.getByRole("button", { name: /파이썬 책 읽기/ }).click();
-  await second.getByRole("button", { name: "발표 자료", exact: true }).click();
+  await second.locator(".ds-project-tabs").getByRole("button", { name: "자료", exact: true }).click();
+  await second.getByRole("button", { name: /파이썬 책 읽기/ }).click();
   await second
     .getByRole("button", { name: "함께 읽는 자료", exact: true })
     .click();
@@ -360,7 +410,7 @@ const { chromium } = require(
     .locator(".study-remote-selection")
     .first()
     .boundingBox();
-  if (!caretMarker || caretMarker.width > 3)
+  if (!caretMarker || await page.locator(".study-remote-selection").first().evaluate(el => el.offsetWidth) > 3)
     throw Error("Remote caret not rendered");
   deck.presence = [];
   await second.close();
@@ -376,7 +426,8 @@ const { chromium } = require(
     fullPage: true,
   });
   await page.getByRole("button", { name: "← 자료", exact: true }).click();
-  await page.getByRole("button", { name: "회차", exact: true }).click();
+  await page.locator(".ds-project-tabs").getByRole("button", { name: "프로그램", exact: true }).click();
+  await page.getByRole("button", { name: /파이썬 책 읽기/ }).click();
   await page.getByRole("button", { name: "회차 추가", exact: true }).click();
   await page
     .getByRole("textbox", { name: "이름", exact: true })
@@ -384,6 +435,7 @@ const { chromium } = require(
   await page.getByLabel("시작", { exact: true }).fill("2026-12-01T14:00");
   await page.getByLabel("종료", { exact: true }).fill("2026-12-01T15:00");
   await page.getByRole("button", { name: "저장하기", exact: true }).click();
+  await page.getByRole("button", { name: "1회차 · 함께 시작하기 상세 보기", exact: true }).click();
   await page.getByRole("button", { name: "일정 변경", exact: true }).click();
   await page.getByLabel("변경 범위").selectOption("following");
   await page.getByLabel("시작", { exact: true }).fill("2026-12-01T14:30");
@@ -398,7 +450,7 @@ const { chromium } = require(
   await page
     .getByRole("button", { name: "확인한 일정으로 변경", exact: true })
     .click();
-  await page.getByRole("button", { name: "발표실 열기", exact: true }).click();
+  await page.getByRole("button", { name: "발표실 입장", exact: true }).click();
   await page.getByRole("button", { name: "라이브 시작", exact: true }).click();
   await page.getByRole("button", { name: "발표권 주기", exact: true }).click();
   await page
@@ -406,7 +458,7 @@ const { chromium } = require(
     .waitFor();
   await page.getByRole("button", { name: "발표권 회수", exact: true }).click();
   await page
-    .getByRole("button", { name: "발표 자료 선택", exact: true })
+    .getByRole("button", { name: "공유할 자료 선택", exact: true })
     .click();
   await page
     .getByRole("button", { name: "함께 읽는 자료", exact: true })
@@ -418,7 +470,7 @@ const { chromium } = require(
     .getByRole("button", { name: "선택한 자료 공유하기", exact: true })
     .click();
   await page
-    .getByRole("button", { name: "발표 자료 선택", exact: true })
+    .getByRole("button", { name: "공유할 자료 선택", exact: true })
     .click();
   for (const width of [1280, 768, 360, 320]) {
     await page.setViewportSize({ width, height: 900 });
@@ -438,15 +490,16 @@ const { chromium } = require(
     .getByRole("button", { name: "회차로 돌아가기", exact: true })
     .click();
   await page.getByRole("button", { name: "회원", exact: true }).click();
-  await page.getByRole("button", { name: "역할·권한", exact: true }).click();
+  await page.getByRole("tab", { name: "역할 설정", exact: true }).click();
   await page.getByRole("button", { name: "역할 추가", exact: true }).click();
   await page.getByRole("textbox", { name: "역할 이름" }).fill("진행 도우미");
   if (await page.locator("input[type=checkbox]").count())
     throw Error("checkbox found in study");
   await page.getByRole("button", { name: "설정", exact: true }).click();
+  await page.getByRole("tab", { name: "출석 규칙", exact: true }).click();
   await page.getByRole("heading", { name: "출석 규칙", exact: true }).waitFor();
   await page
-    .getByRole("button", { name: "입장 시각 + 참여 시간", exact: true })
+    .getByRole("button", { name: /^입장 시각 \+ 참여 시간/ })
     .click();
   await page.getByLabel("최소 참여 시간 (분)", { exact: true }).fill("45");
   await page

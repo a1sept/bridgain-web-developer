@@ -1,6 +1,5 @@
 import { createLocalId } from "../browser-id";
 import { studyTimeInput, parseStudyTimeInput } from "./time";
-import { DeckEditor } from "./StudyDecks";
 import RichTextEditor from "../editor/RichTextEditor";
 import RichTextContent from "../editor/RichTextContent";
 import type { RichDocument } from "../editor/document";
@@ -65,7 +64,6 @@ export default function StudyActivities({
   onChanged: () => Promise<unknown>;
 }) {
   const [editing, setEditing] = useState<Activity | null>(null);
-  const [copyId, setCopyId] = useState<string | null>(null);
   const [detail, setDetail] = useState<Detail | null>(null),
     [selected, setSelected] = useState<string | null>(null),
     [creating, setCreating] = useState(false),
@@ -166,14 +164,6 @@ export default function StudyActivities({
     (p) => p.canManage && !p.archivedAt && p.status === "active",
   );
   const mine = detail?.versions.filter((v) => v.userId === userId) ?? [];
-  if (copyId && detail)
-    return (
-      <DeckEditor
-        url={`${base}/programs/${detail.activity.programId}/decks/${copyId}`}
-        members={detail.targets}
-        onBack={() => setCopyId(null)}
-      />
-    );
   return (
     <section className={`study-activities-view ${creating ? "is-editing" : detail ? "is-detail" : "is-list"}`}>
       {error && (
@@ -183,8 +173,7 @@ export default function StudyActivities({
       )}
       {creating ? (
         <>
-          <button onClick={() => setCreating(false)}>← 활동 목록</button>
-          <h2>{editing ? "참여 활동 수정" : "참여 활동 만들기"}</h2>
+          <h2>{editing ? "과제 수정" : "과제 만들기"}</h2>
           <form
             className="study-form"
             onSubmit={(e) => {
@@ -193,7 +182,7 @@ export default function StudyActivities({
               void run(async () => {
                 const due = parseStudyTimeInput(String(fd.get("dueAt")));
                 due.setSeconds(59, 999);
-                await workflowApi(
+                const saved = await workflowApi<{ id: string }>(
                   `${base}/programs/${pid}/activities${editing ? `/${editing.id}` : ""}`,
                   {
                     title: fd.get("title"),
@@ -204,13 +193,13 @@ export default function StudyActivities({
                   },
                   editing ? "PATCH" : "POST",
                 );
-                if (editing) await open(editing.id);
+                await open(editing?.id ?? saved.id);
                 setCreating(false);
               });
             }}
           >
             <fieldset className="study-activity-form-group">
-            <legend>활동 내용</legend>
+            <legend>과제 내용</legend>
             <label>
               제목
               <input
@@ -262,27 +251,24 @@ export default function StudyActivities({
               </div>
             </fieldset>
             </fieldset>
-            <button className="pw-primary" disabled={busy || !pid}>
-              {editing ? "변경 저장" : "활동 등록"}
-            </button>
+            <footer className="study-assignment-form-actions">
+              <button type="button" disabled={busy} onClick={() => setCreating(false)}>취소</button>
+              <button className="pw-primary" disabled={busy || !pid}>
+                {editing ? "변경 저장" : "과제 등록"}
+              </button>
+            </footer>
           </form>
         </>
       ) : detail ? (
         <>
-          <button
-            onClick={() => {
-              loadVersion.current++;
-              setDetail(null);
-              setSelected(null);
-            }}
-          >
-            ← 활동 목록
-          </button>
           <div className="study-heading study-activity-heading">
           <h2>
             {detail.activity.title}
             {detail.activity.archivedAt ? " · 보관됨" : ""}
           </h2>
+          <button className="study-assignment-list-link" onClick={() => {
+            loadVersion.current++; setDetail(null); setSelected(null);
+          }}>과제 목록</button>
           {programs.some(
             (p) =>
               p.id === detail.activity.programId &&
@@ -298,7 +284,7 @@ export default function StudyActivities({
                   setCreating(true);
                 }}
               >
-                활동 수정
+                과제 수정
               </button>
               <button
                 disabled={busy}
@@ -306,7 +292,7 @@ export default function StudyActivities({
                   if (
                     window.confirm(
                       detail.activity.archivedAt
-                        ? "활동 제출을 다시 열까요?"
+                        ? "과제 제출을 다시 열까요?"
                         : "보관하면 제출이 중지됩니다. 기록은 유지합니다.",
                     )
                   )
@@ -324,14 +310,14 @@ export default function StudyActivities({
                     });
                 }}
               >
-                {detail.activity.archivedAt ? "활동 복원" : "활동 보관"}
+                {detail.activity.archivedAt ? "과제 복원" : "과제 보관"}
               </button>
               <button
                 disabled={busy}
                 onClick={() => {
                   if (
                     window.confirm(
-                      "제출 기록이 없는 활동만 삭제할 수 있습니다. 삭제할까요?",
+                      "제출 기록이 없는 과제만 삭제할 수 있습니다. 삭제할까요?",
                     )
                   )
                     void run(async () => {
@@ -349,7 +335,7 @@ export default function StudyActivities({
             </div>
           )}
           </div>
-          <section className="study-activity-brief" aria-label="활동 안내">
+          <section className="study-activity-brief" aria-label="과제 안내">
           <p style={{ whiteSpace: "pre-wrap" }}>
             {detail.activity.instructions}
           </p>
@@ -389,22 +375,6 @@ export default function StudyActivities({
                     </p>
                     <RichTextContent value={v.body} document={v.bodyDocument} />
                     {attachments(v.files ?? [])}
-                    {!detail.archived && (
-                      <button
-                        disabled={busy}
-                        onClick={() =>
-                          void run(async () => {
-                            const copy = await workflowApi<{ id: string }>(
-                              `${base}/programs/${detail.activity.programId}/decks`,
-                              { sourceSubmissionId: v.id },
-                            );
-                            setCopyId(copy.id);
-                          })
-                        }
-                      >
-                        발표용 사본 만들기
-                      </button>
-                    )}
                   </article>
                 ))}
             </>
@@ -461,7 +431,7 @@ export default function StudyActivities({
                   <h3>내 제출</h3>
                   {mine.length > 0 && (
                     <button onClick={() => setSelected(userId)}>
-                      내 제출 상세 · 발표용 사본
+                      내 제출 상세
                     </button>
                   )}
                   {mine.map((v, i) => (
@@ -587,7 +557,7 @@ export default function StudyActivities({
       ) : (
         <>
           <div className="study-heading">
-            <h2>참여 활동</h2>
+            <h2>과제</h2>
             {sessionId && eligible.length > 0 && (
               <button
                 className="pw-primary"
@@ -597,47 +567,35 @@ export default function StudyActivities({
                   setCreating(true);
                 }}
               >
-                활동 만들기
+                과제 만들기
               </button>
             )}
           </div>
           {!activities.length ? (
             <p className="study-empty">
-              {hasMore ? "아직 불러오지 않은 활동이 있을 수 있습니다. 아래에서 더 불러와 확인하세요." : sessionId ? "이번 회차에 연결된 참여 활동이 없습니다." : "등록된 참여 활동이 없습니다. 프로그램을 시작한 후 활동을 등록할 수 있습니다."}
+              {hasMore ? "아직 불러오지 않은 과제가 있을 수 있습니다. 아래에서 더 불러와 확인하세요." : sessionId ? "이번 회차에 등록된 과제가 없습니다." : "등록된 과제가 없습니다. 프로그램을 시작한 후 과제를 등록할 수 있습니다."}
             </p>
           ) : (
-            <div className="study-table-scroll">
-              <table className="study-table">
-                <thead>
-                  <tr>
-                    <th>활동</th>
-                    <th>프로그램</th>
-                    <th>기한</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {activities.map((a) => (
-                    <tr key={a.id}>
-                      <td>
-                        <button disabled={busy} onClick={() => void open(a.id)}>
-                          {a.title}
-                        </button>
-                      </td>
-                      <td>
-                        {programs.find((p) => p.id === a.programId)?.title}
-                      </td>
-                      <td>{when(a.dueAt)}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+            <div className={`study-assignment-list ${sessionId ? "is-session" : ""}`}>
+              <div className="study-assignment-columns" aria-hidden="true">
+                <span>과제명</span>{!sessionId && <span>프로그램</span>}<span>제출 기한</span>
+              </div>
+              <ul aria-label="과제 목록">
+                {activities.map(a => <li key={a.id}>
+                  <button className="study-assignment-open" aria-label={a.title} disabled={busy} onClick={() => void open(a.id)}>
+                    <strong>{a.title}</strong>
+                    {!sessionId && <span>{programs.find(p => p.id === a.programId)?.title}</span>}
+                    <span><span className="study-assignment-date-label">제출 기한 </span>{when(a.dueAt)}</span>
+                  </button>
+                </li>)}
+              </ul>
             </div>
           )}
         </>
       )}
       {!creating && !detail && hasMore && (
         <button disabled={loadingMore} onClick={onLoadMore}>
-          {loadingMore ? "불러오는 중…" : "다음 활동 더 보기"}
+          {loadingMore ? "불러오는 중…" : "다음 과제 더 보기"}
         </button>
       )}
     </section>

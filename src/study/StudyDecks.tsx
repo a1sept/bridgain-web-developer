@@ -6,6 +6,7 @@ import StudySlideCanvas, {
 import { useEffect, useRef, useState } from "react";
 import * as Y from "yjs";
 import { workflowApi } from "../Approvals";
+import ControlIcon from "../components/ControlIcon";
 import FilterBar from "../components/FilterBar";
 type Deck = {
   currentUserId?: string;
@@ -38,7 +39,7 @@ export default function StudyDecks({
   members: { userId: string; displayName: string }[];
 }) {
   const [list, setList] = useState<{
-      decks: { id: string; title: string; sessionId?: string | null }[];
+      decks: { id: string; title: string; sessionId?: string | null; isSessionDefault?: boolean }[];
       canManage: boolean;
     }>({ decks: [], canManage: false }),
     [id, setId] = useState<string | null>(null),
@@ -72,32 +73,30 @@ export default function StudyDecks({
         }}
       />
     );
+  if (sessionId) {
+    const screen = list.decks.find(d => d.sessionId === sessionId && d.isSessionDefault);
+    return <section className="study-decks-view">
+      <div className="study-heading"><h3>기본 발표 화면</h3>
+        {(screen || list.canManage) && <button disabled={busy} onClick={async () => {
+          if (screen) { setId(screen.id); return; }
+          setBusy(true); setError("");
+          try {
+            const d = await workflowApi<Deck>(`${base}/decks`, { title: "기본 발표 화면", sessionId });
+            setId(d.id);
+          } catch (e) { setError(e instanceof Error ? e.message : "발표 화면을 열지 못했습니다."); }
+          finally { setBusy(false); }
+        }}>{screen ? "발표 화면 열기" : "발표 화면 준비하기"}</button>}
+      </div>
+      <p>{screen ? "이 회차의 발표 화면입니다. 화면 안에서 슬라이드를 추가하고 편집하세요." : "진행자가 발표 화면을 준비하면 여기서 열 수 있습니다."}</p>
+      <p className="study-field-help">제출 자료와 참고 자료는 발표실에서 미리 보고 선택해 공유할 수 있습니다.</p>
+      {error && <p role="alert">{error}</p>}
+    </section>;
+  }
   return (
     <section className="study-decks-view">
       <div className="study-heading">
         <h3>발표 자료</h3>
-        {list.canManage && (
-          <button
-            disabled={busy}
-            onClick={async () => {
-              setBusy(true);
-              setError("");
-              try {
-                const d = await workflowApi<Deck>(`${base}/decks`, {
-                  title: "발표 자료",
-                  ...(sessionId ? { sessionId } : {}),
-                });
-                setId(d.id);
-              } catch (e) {
-                setError(e instanceof Error ? e.message : "만들기 실패");
-              } finally {
-                setBusy(false);
-              }
-            }}
-          >
-            발표 자료 만들기
-          </button>
-        )}
+
       </div>
       {error && <p role="alert">{error}</p>}
       <ul className="study-list">
@@ -117,7 +116,11 @@ export function DeckEditor({
   url,
   members,
   onBack,
+  workspaceTitle,
+  backLabel = "← 자료",
 }: {
+  workspaceTitle?: string;
+  backLabel?: string;
   url: string;
   members: { userId: string; displayName: string }[];
   onBack: () => void;
@@ -139,6 +142,22 @@ export function DeckEditor({
     >(null);
   const [historyCursor, setHistoryCursor] = useState<string | null>(null);
   const [loadingHistory, setLoadingHistory] = useState(false);
+  const [slideMenu, setSlideMenu] = useState<string | null>(null);
+  const draggingSlide = useRef<string | null>(null);
+  const [dropTarget, setDropTarget] = useState<string | null>(null);
+  const [toolbar, setToolbar] = useState<HTMLDivElement | null>(null);
+  const [zoom, setZoom] = useState<number | null>(null);
+  const [fitWidth, setFitWidth] = useState(800);
+  const stage = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const node = stage.current;
+    if (!node) return;
+    const resize = () => setFitWidth(Math.max(120, Math.min(node.clientWidth - 48, (node.clientHeight - 48) * 16 / 9)));
+    const observer = new ResizeObserver(resize);
+    observer.observe(node);
+    resize();
+    return () => observer.disconnect();
+  }, []);
   const focus = useRef({ field: "", start: 0, end: 0 });
   const currentPage = useRef(page);
   currentPage.current = page;
@@ -337,6 +356,27 @@ export function DeckEditor({
     }, origin.current);
     setPage(id);
   }
+  function deleteSlide(id: string) {
+    const list = d.getArray<string>("pages"), ids = list.toArray(), index = ids.indexOf(id);
+    if (!editable.current || preview || index < 0 || ids.length <= 1) return;
+    if (!window.confirm("이 슬라이드를 삭제할까요?")) return;
+    undo.current?.addToScope(list);
+    d.transact(() => list.delete(index, 1), origin.current);
+    const next = ids[index + 1] ?? ids[index - 1];
+    if (page === id) setPage(next);
+    setSlideMenu(null);
+    requestAnimationFrame(() => document.querySelector<HTMLButtonElement>(`[data-slide-id="${next}"]`)?.focus());
+  }
+  function moveSlide(id: string, target: string, after = false) {
+    const list = d.getArray<string>("pages"), ids = list.toArray();
+    const from = ids.indexOf(id), to = ids.indexOf(target);
+    if (!editable.current || preview || from < 0 || to < 0 || id === target) return;
+    const destination = to + (after ? 1 : 0) - (from < to ? 1 : 0);
+    if (destination === from) return;
+    undo.current?.addToScope(list);
+    d.transact(() => { list.delete(from, 1); list.insert(destination, [id]); }, origin.current);
+    setSlideMenu(null);
+  }
   async function configure(values: object) {
     try {
       await workflowApi(`${url}/configure`, values);
@@ -359,18 +399,17 @@ export function DeckEditor({
               onBack();
           }}
         >
-          ← 자료
+          {backLabel}
         </button>
+        {workspaceTitle && <h1 className="study-editor-title">{workspaceTitle}</h1>}
         <span role="status">{status}</span>
         <div className="study-actions">
-          <button onClick={() => setPreview((v) => !v)}>
-            {preview ? "편집으로 돌아가기" : "발표 미리보기"}
-          </button>
           {deck?.canManage && (
             <button
               onClick={() => {
                 setEditorIds(deck.editorIds);
                 setShowEditors((v) => !v);
+                setHistory(null);
               }}
             >
               공동 편집자
@@ -384,6 +423,7 @@ export function DeckEditor({
                   nextCursor?: string | null;
                 }>(`${url}/history`);
                 setHistory(history ? null : r.versions);
+                setShowEditors(false);
                 setHistoryCursor(r.nextCursor ?? null);
               } catch (e) {
                 setError(String(e));
@@ -392,6 +432,10 @@ export function DeckEditor({
           >
             버전 기록
           </button>
+          <button onClick={() => setPreview((v) => !v)}>
+            {preview ? "편집으로 돌아가기" : "발표 미리보기"}
+          </button>
+
         </div>
       </div>
       {error && (
@@ -419,6 +463,95 @@ export function DeckEditor({
           </button>
         </div>
       )}
+          {!preview && deck?.canEdit && (
+            <div className="study-actions study-editor-tools" aria-label="슬라이드 도구">
+              <button onClick={() => undo.current?.undo()}>실행 취소</button>
+              <button onClick={() => undo.current?.redo()}>다시 실행</button>
+              <div ref={setToolbar} className="study-insert-tools" />
+            </div>
+          )}
+      <div className={`study-editor-layout${showEditors || history ? " has-inspector" : ""}`}>
+        <aside aria-label="발표 페이지">
+          {pages.map((id, i) => (
+            <div key={id} className={`study-slide-item${dropTarget === id ? " is-drop-target" : ""}`}
+              onDragOver={e => { if (draggingSlide.current && editable.current && !preview) { e.preventDefault(); e.dataTransfer.dropEffect = "move"; setDropTarget(id); } }}
+              onDragLeave={e => { if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setDropTarget(null); }}
+              onDrop={e => {
+                e.preventDefault();
+                const source = draggingSlide.current;
+                if (source) moveSlide(source, id, pages.indexOf(source) < i);
+                draggingSlide.current = null; setDropTarget(null);
+              }}
+              onBlur={e => { if (!e.currentTarget.contains(e.relatedTarget)) setSlideMenu(current => current === id ? null : current); }}
+              onKeyDown={e => { if (e.key === "Escape") { setSlideMenu(null); e.currentTarget.querySelector<HTMLButtonElement>("[data-slide-id]")?.focus(); } }}>
+            <button
+              className="study-slide-select"
+              data-slide-id={id}
+              draggable={!preview && !!deck?.canEdit}
+              onDragStart={e => { if (!editable.current || preview) { e.preventDefault(); return; } draggingSlide.current = id; e.dataTransfer.effectAllowed = "move"; e.dataTransfer.setData("text/plain", id); setSlideMenu(null); }}
+              onDragEnd={() => { draggingSlide.current = null; setDropTarget(null); }}
+              onKeyDown={e => { if (e.key === "Delete" && e.target === e.currentTarget) { e.preventDefault(); deleteSlide(id); } }}
+              aria-label={`${i + 1}. ${d.getText(`title:${id}`).toString() || "제목 없음"}`}
+              aria-pressed={page === id}
+              onClick={() => { setPage(id); setSlideMenu(null); }}
+            >
+              {workspaceTitle && <span className="study-slide-thumbnail" aria-hidden="true" inert>
+                <SlideDisplay slide={slideFromDoc(d, id)} base={url.split("/programs/")[0]} />
+              </span>}
+              <span>{i + 1}. {d.getText(`title:${id}`).toString() || "제목 없음"}</span>
+            </button>
+            {!preview && deck?.canEdit && <>
+              <button className="study-slide-more" aria-label={`${i + 1}번 슬라이드 메뉴`} aria-expanded={slideMenu === id}
+                onClick={() => setSlideMenu(slideMenu === id ? null : id)}><ControlIcon name="more" /></button>
+              {slideMenu === id && <div className="study-slide-menu" role="group" aria-label="슬라이드 작업">
+                <button disabled={i === 0} onClick={() => moveSlide(id, pages[i - 1])}>위로 이동</button>
+                <button disabled={i === pages.length - 1} onClick={() => moveSlide(id, pages[i + 1], true)}>아래로 이동</button>
+                <button disabled={pages.length <= 1} onClick={() => deleteSlide(id)}>슬라이드 삭제</button>
+              </div>}
+            </>}
+            </div>
+          ))}
+          {!preview && deck?.canEdit && (
+            <button onClick={add}>슬라이드 추가</button>
+          )}
+        </aside>
+        <div className="study-slide-workarea">
+          <div className="study-slide-stage" ref={stage}>
+          <div className="study-slide-sheet" style={{ width: zoom === null ? fitWidth : 960 * zoom / 100 }}>
+          {preview ? (
+            <SlideDisplay
+              slide={slideFromDoc(d, page)}
+              base={url.split("/programs/")[0]}
+            />
+          ) : (
+            <StudySlideCanvas
+              toolbarTarget={toolbar}
+              doc={d}
+              page={page}
+              base={url.split("/programs/")[0]}
+              editable={editable.current && !!page}
+              origin={origin.current}
+              track={(types) => undo.current?.addToScope(types)}
+              onError={setError}
+              onFocusField={(value) => {
+                focus.current = value;
+              }}
+              presence={deck?.presence ?? []}
+            />
+          )}
+
+          </div>
+          </div>
+          <div className="study-zoom-bar">
+            <button aria-pressed={zoom === null} onClick={() => setZoom(null)}>화면 맞춤</button>
+            <select aria-label="슬라이드 배율" value={zoom ?? "fit"} onChange={(e) => setZoom(e.target.value === "fit" ? null : Number(e.target.value))}>
+              <option value="fit">맞춤 · {Math.round(fitWidth / 960 * 100)}%</option>
+              {[50, 75, 100, 125, 150].map(n => <option key={n} value={n}>{n}%</option>)}
+            </select>
+          </div>
+        </div>
+        {(showEditors || history) && <section className="study-editor-inspector" aria-label={showEditors ? "공동 편집자 패널" : "버전 기록 패널"}>
+          <div className="study-inspector-heading"><h2>{showEditors ? "공동 편집자" : "버전 기록"}</h2><button onClick={() => { setShowEditors(false); setHistory(null); }}>닫기</button></div>
       {showEditors && deck && (
         <div className="study-panel">
           <FilterBar
@@ -508,66 +641,8 @@ export function DeckEditor({
           )
           .join(" / ")}
       </p>
-      <div className="study-editor-layout">
-        <aside aria-label="발표 페이지">
-          {pages.map((id, i) => (
-            <button
-              key={id}
-              aria-pressed={page === id}
-              onClick={() => setPage(id)}
-            >
-              {i + 1}. {d.getText(`title:${id}`).toString() || "제목 없음"}
-            </button>
-          ))}
-          {!preview && deck?.canEdit && (
-            <button onClick={add}>페이지 추가</button>
-          )}
-        </aside>
-        <div>
-          {preview ? (
-            <SlideDisplay
-              slide={slideFromDoc(d, page)}
-              base={url.split("/programs/")[0]}
-            />
-          ) : (
-            <StudySlideCanvas
-              doc={d}
-              page={page}
-              base={url.split("/programs/")[0]}
-              editable={editable.current && !!page}
-              origin={origin.current}
-              track={(types) => undo.current?.addToScope(types)}
-              onError={setError}
-              onFocusField={(value) => {
-                focus.current = value;
-              }}
-              presence={deck?.presence ?? []}
-            />
-          )}
-          {!preview && deck?.canEdit && (
-            <div className="study-actions">
-              <button onClick={() => undo.current?.undo()}>내 수정 취소</button>
-              <button onClick={() => undo.current?.redo()}>다시 실행</button>
-              <button
-                onClick={() => {
-                  if (
-                    editable.current &&
-                    pages.length > 1 &&
-                    window.confirm("이 페이지를 삭제할까요?")
-                  ) {
-                    d.transact(
-                      () => d.getArray("pages").delete(pages.indexOf(page), 1),
-                      origin.current,
-                    );
-                    setPage(pages.find((p) => p !== page) ?? "");
-                  }
-                }}
-              >
-                페이지 삭제
-              </button>
-            </div>
-          )}
-        </div>
+
+        </section>}
       </div>
     </section>
   );

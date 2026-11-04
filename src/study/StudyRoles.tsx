@@ -12,7 +12,7 @@ type Member = { userId: string; displayName: string; roleIds: string[] };
 const catalog = [
   ["programs.manage", "프로그램 관리"],
   ["sessions.manage", "회차 관리"],
-  ["activities.manage", "참여 활동 관리"],
+  ["activities.manage", "과제 관리"],
   ["materials.manage", "운영 자료 편집"],
   ["submissions.read", "제출물 조회"],
   ["attendance.read", "출석 조회"],

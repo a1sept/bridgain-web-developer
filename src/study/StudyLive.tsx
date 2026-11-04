@@ -1,3 +1,4 @@
+import { AttendanceTable, type Attendance } from "./StudyAttendanceRecord";
 import { createLocalId } from "../browser-id";
 import RichTextContent from "../editor/RichTextContent";
 import type { RichDocument } from "../editor/document";
@@ -29,26 +30,6 @@ type Room = {
   participants: { userId: string; name: string; canHost: boolean }[];
 };
 type Session = { id: string; programId: string; title: string; status: string };
-type Attendance = {
-  canAdjust?: boolean;
-  ended: boolean;
-  rows: {
-    userId: string;
-    name: string;
-    seconds: number;
-    late: boolean;
-    eligible: boolean;
-    firstJoinedAt: string | null;
-    corrections?: {
-      id: string;
-      verdict: string;
-      reason: string;
-      actorName: string;
-      createdAt: string;
-    }[];
-    entries: { joinedAt: string; leftAt: string }[];
-  }[];
-};
 export default function StudyLive({
   base,
   session,
@@ -67,7 +48,7 @@ export default function StudyLive({
     [busy, setBusy] = useState(false),
     [joined, setJoined] = useState(false),
     [report, setReport] = useState<Attendance | null>(null);
-  const [decks, setDecks] = useState<{ id: string; title: string }[]>([]),
+  const [decks, setDecks] = useState<{ id: string; title: string; sessionId?: string | null; isSessionDefault?: boolean }[]>([]),
     [pages, setPages] = useState<Slide[]>([]),
     [preview, setPreview] = useState<Slide | null>(null),
     [tray, setTray] = useState(false),
@@ -81,7 +62,7 @@ export default function StudyLive({
         name: string;
         files: { id: string; name: string; mime: string }[];
       }[];
-      sessions: { id: string; title: string }[];
+      sessions: { id: string; title: string; sessionId?: string | null; isSessionDefault?: boolean }[];
     }>({ submissions: [], sessions: [] }),
     [materialSession, setMaterialSession] = useState(session.id),
     [youtube, setYoutube] = useState(""),
@@ -453,7 +434,7 @@ export default function StudyLive({
                   if (!tray)
                     try {
                       const d = await workflowApi<{
-                        decks: { id: string; title: string }[];
+                        decks: { id: string; title: string; sessionId?: string | null; isSessionDefault?: boolean }[];
                       }>(`${base}/programs/${session.programId}/decks`);
                       setDecks(d.decks);
                       await loadMaterials(session.id);
@@ -464,7 +445,7 @@ export default function StudyLive({
                     }
                 }}
               >
-                발표 자료 선택
+                공유할 자료 선택
               </button>
               {tray && (
                 <>
@@ -532,16 +513,22 @@ export default function StudyLive({
                       </li>
                     ))}
                   </ul>
-                  <h3>프로그램 발표 자료</h3>
+                  <h3>기본 발표 화면</h3>
                   <div className="study-actions">
-                    {decks.map((d) => (
+                    {decks.filter(d => d.sessionId === session.id && d.isSessionDefault).map(d =>
+                      <button key={d.id} onClick={() => void openDeck(d.id)}>기본 발표 슬라이드 보기</button>)}
+                  </div>
+                  {!decks.some(d => d.sessionId === session.id && d.isSessionDefault) && <p>회차 상세에서 기본 발표 화면을 준비해주세요.</p>}
+                  <h3>다른 발표 자료</h3>
+                  <div className="study-actions">
+                    {decks.filter(d => !(d.sessionId === session.id && d.isSessionDefault)).map((d) => (
                       <button key={d.id} onClick={() => void openDeck(d.id)}>
                         {d.title}
                       </button>
                     ))}
                   </div>
                   {!decks.length && (
-                    <p>프로그램에서 발표 자료를 먼저 만들어주세요.</p>
+                    <p>아직 준비된 발표 자료가 없습니다.</p>
                   )}
                   <div className="study-slide-picker">
                     {pages.map((p, i) => (
@@ -655,130 +642,8 @@ export default function StudyLive({
           </button>
         </>
       )}
-      {report && (
-        <section>
-          <h3>{report.ended ? "출석 결과" : "참여 기록 · 진행 중"}</h3>
-          <div className="study-table-scroll">
-            <table className="study-table">
-              <thead>
-                <tr>
-                  <th>회원</th>
-                  <th>참여 시간</th>
-                  <th>판정</th>
-                  <th>입퇴장 기록</th>
-                </tr>
-              </thead>
-              <tbody>
-                {report.rows.map((r) => (
-                  <tr key={r.userId}>
-                    <td>{r.name}</td>
-                    <td>
-                      {Math.floor(r.seconds / 60)}분 {r.seconds % 60}초
-                    </td>
-                    <td>
-                      {r.corrections?.at(-1)?.verdict === "present"
-                        ? "출석 인정 · 운영진 보정"
-                        : r.corrections?.at(-1)?.verdict === "absent"
-                          ? "미인정 · 운영진 보정"
-                          : r.late
-                            ? "지각 · 미인정"
-                            : r.eligible
-                              ? "기준 충족"
-                              : r.firstJoinedAt
-                                ? "시간·종료 조건 미충족"
-                                : "미참여"}
-                    </td>
-                    <td>
-                      <details>
-                        <summary>접속 {r.entries.length}회</summary>
-                        {r.entries.map((v, i) => (
-                          <p key={i}>
-                            {new Date(v.joinedAt).toLocaleTimeString("ko-KR")} –{" "}
-                            {new Date(v.leftAt).toLocaleTimeString("ko-KR")}
-                          </p>
-                        ))}
-                      </details>
-                      {!!r.corrections?.length && (
-                        <details>
-                          <summary>보정 기록 {r.corrections.length}건</summary>
-                          {r.corrections.map((c) => (
-                            <p key={c.id}>
-                              {c.actorName} ·{" "}
-                              {new Date(c.createdAt).toLocaleString("ko-KR")} ·{" "}
-                              {c.verdict === "present"
-                                ? "인정"
-                                : c.verdict === "absent"
-                                  ? "미인정"
-                                  : "자동 판정으로 복원"}
-                              <br />
-                              {c.reason}
-                            </p>
-                          ))}
-                        </details>
-                      )}
-                      {report.canAdjust && report.ended && (
-                        <details>
-                          <summary>판정 보정</summary>
-                          <p>
-                            입퇴장 원본은 유지됩니다. 자동 판정:{" "}
-                            {r.eligible ? "기준 충족" : "미충족"}
-                          </p>
-                          <form
-                            className="study-form"
-                            onSubmit={async (e) => {
-                              e.preventDefault();
-                              if (busy) return;
-                              const f = new FormData(e.currentTarget);
-                              setBusy(true);
-                              setError("");
-                              try {
-                                await workflowApi(
-                                  `${url}/attendance/${r.userId}`,
-                                  {
-                                    verdict: f.get("verdict"),
-                                    reason: f.get("reason"),
-                                  },
-                                );
-                                await getReport();
-                              } catch (e) {
-                                setError(
-                                  e instanceof Error ? e.message : "보정 실패",
-                                );
-                              } finally {
-                                setBusy(false);
-                              }
-                            }}
-                          >
-                            <label>
-                              판정
-                              <select name="verdict">
-                                <option value="present">출석 인정</option>
-                                <option value="absent">미인정</option>
-                                <option value="automatic">
-                                  자동 판정으로 복원
-                                </option>
-                              </select>
-                            </label>
-                            <label>
-                              보정 사유
-                              <textarea
-                                name="reason"
-                                required
-                                maxLength={1000}
-                              />
-                            </label>
-                            <button disabled={busy}>기록하고 적용</button>
-                          </form>
-                        </details>
-                      )}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </section>
-      )}
+      {report && <AttendanceTable report={report} url={url} busy={busy} setBusy={setBusy} setError={setError} getReport={getReport} />}
+
     </section>
   );
 }

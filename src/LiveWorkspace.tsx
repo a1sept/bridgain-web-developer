@@ -967,7 +967,7 @@ export default function LiveWorkspace({
                     <div className="pw-heading">
                       <div>
                         <p className="pw-eyebrow">PROJECT</p>
-                        <h1>{project.name}</h1>
+                        <h1>참여자 관리</h1>
                         <button
                           className="pw-text-button"
                           onClick={() => openRequests(project.id)}

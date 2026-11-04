@@ -978,7 +978,7 @@ export default function RequestBoard({
             <div className="rb-heading rb-heading-row">
               <div>
                 <span className="rb-eyebrow">PROJECT REQUESTS</span>
-                <h1>{project.name}</h1>
+                <h1>{user.accountType === "team" ? "요청" : project.name}</h1>
                 <p>요청을 모으고 진행 상황을 함께 확인하세요.</p>
               </div>
               <div className="rb-heading-actions">

@@ -17,6 +17,7 @@ type Marker = {
   width: number;
   height: number;
   caret: boolean;
+  rotation: number;
 };
 const colors = ["#6d28d9", "#0369a1", "#b45309", "#be185d", "#047857"];
 
@@ -54,6 +55,10 @@ export default function StudyRemoteCursors({
         if (!input) continue;
         const rect = input.getBoundingClientRect(),
           css = getComputedStyle(input);
+        const transform = input.parentElement ? getComputedStyle(input.parentElement).transform : "none";
+        const matrix = new DOMMatrix(transform === "none" ? undefined : transform);
+        const angle = Math.atan2(matrix.b, matrix.a), rotation = angle * 180 / Math.PI;
+        const localWidth = input.offsetWidth, localHeight = input.offsetHeight;
         const mirror = document.createElement("div");
         for (const property of [
           "font-family",
@@ -81,8 +86,8 @@ export default function StudyRemoteCursors({
           position: "fixed",
           left: "0",
           top: "0",
-          width: `${rect.width}px`,
-          height: `${rect.height}px`,
+          width: `${localWidth}px`,
+          height: `${localHeight}px`,
           visibility: "hidden",
           pointerEvents: "none",
           overflow: "hidden",
@@ -128,16 +133,17 @@ export default function StudyRemoteCursors({
           const left = Math.max(0, x),
             top = Math.max(0, y);
           const width =
-            Math.min(rect.width, x + Math.max(from === to ? 2 : 0, box.width)) -
+            Math.min(localWidth, x + Math.max(from === to ? 2 : 0, box.width)) -
             left;
-          const height = Math.min(rect.height, y + box.height) - top;
+          const height = Math.min(localHeight, y + box.height) - top;
           if (width > 0 && height > 0)
             output.push({
               key: `${identity}:${index}`,
               name: person.name,
               color,
-              left: rect.left - bounds.left + left,
-              top: rect.top - bounds.top + top,
+              left: rect.left + rect.width / 2 - bounds.left + (left - localWidth / 2) * Math.cos(angle) - (top - localHeight / 2) * Math.sin(angle),
+              top: rect.top + rect.height / 2 - bounds.top + (left - localWidth / 2) * Math.sin(angle) + (top - localHeight / 2) * Math.cos(angle),
+              rotation,
               width,
               height,
               caret: from === to,
@@ -165,6 +171,8 @@ export default function StudyRemoteCursors({
           key={m.key}
           className="study-remote-selection"
           style={{
+            transform: `rotate(${m.rotation}deg)`,
+            transformOrigin: "0 0",
             left: m.left,
             top: m.top,
             width: m.width,

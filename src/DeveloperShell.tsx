@@ -282,6 +282,9 @@ export default function DeveloperShell(p: Props) {
       )}
       <div className="ds-content">
         {p.active === "projects" && selected && (
+          <header className="ds-project-heading"><h1>{selected.name}</h1></header>
+        )}
+        {p.active === "projects" && selected && (
           <nav className="ds-project-tabs" aria-label="프로젝트 메뉴">
             {(
               (selected.kind === "study"
@@ -289,7 +292,7 @@ export default function DeveloperShell(p: Props) {
                     ["overview", "개요"],
                     ["programs", "프로그램"],
                     ["schedule", "일정"],
-                    ["studyActivities", "참여 활동"],
+                    ["studyActivities", "과제"],
                     ["materials", "자료"],
                     ["channel", "대화"],
                     ["members", "회원"],

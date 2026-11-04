@@ -1,6 +1,7 @@
 import { createLocalId } from "../browser-id";
 import StudyRemoteCursors, { type RemoteSelection } from "./StudyRemoteCursors";
-import { useRef, useState } from "react";
+import { useRef, useState, type PointerEvent } from "react";
+import { createPortal } from "react-dom";
 import * as Y from "yjs";
 import { uploadStudyFile } from "./upload";
 export type SlideElement = {
@@ -12,12 +13,20 @@ export type SlideElement = {
   h: number;
   fontSize: number;
   color: string;
+  rotation?: number;
+  fontFamily?: string;
+  bold?: boolean;
+  italic?: boolean;
+  align?: "left" | "center" | "right";
+  textKey?: string;
   text: string;
   assetId?: string;
   mime?: string;
   videoId?: string;
 };
 export type SlideView = {
+  titleStyle?: Partial<SlideElement>;
+  bodyStyle?: Partial<SlideElement>;
   title?: string;
   body?: string;
   background?: string;
@@ -25,6 +34,8 @@ export type SlideView = {
 };
 export function slideFromDoc(doc: Y.Doc, page: string): SlideView {
   return {
+    titleStyle: doc.getMap(`element:title:${page}`).toJSON(),
+    bodyStyle: doc.getMap(`element:body:${page}`).toJSON(),
     title: doc.getText(`title:${page}`).toString(),
     body: doc.getText(`body:${page}`).toString(),
     background: String(
@@ -36,6 +47,7 @@ export function slideFromDoc(doc: Y.Doc, page: string): SlideView {
       .map((id) => {
         const m = doc.getMap(`element:${id}`);
         return {
+          ...m.toJSON(),
           id,
           type: String(m.get("type")),
           x: Number(m.get("x")),
@@ -51,6 +63,20 @@ export function slideFromDoc(doc: Y.Doc, page: string): SlideView {
         };
       }),
   };
+}
+function textBoxes(slide: SlideView, page = ""): SlideElement[] {
+  return [
+    { id: `title:${page}`, type: "text", x: 6, y: 5, w: 88, h: 13, fontSize: 38.4, color: "#202431", bold: true, ...slide.titleStyle, text: slide.title ?? "", textKey: `title:${page}` },
+    { id: `body:${page}`, type: "text", x: 6, y: 20, w: 88, h: 15, fontSize: 22.08, color: "#202431", ...slide.bodyStyle, text: slide.body ?? "", textKey: `body:${page}` },
+    ...(slide.elements ?? []),
+  ];
+}
+function boxStyle(e: SlideElement) {
+  return { left: e.x + "%", top: e.y + "%", width: e.w + "%", height: e.h + "%",
+    fontSize: `${e.fontSize / 9.6}cqw`, color: e.color, transform: `rotate(${e.rotation ?? 0}deg)`,
+    fontFamily: e.fontFamily || "inherit", fontWeight: e.bold ? 650 : 400,
+    fontStyle: e.italic ? "italic" : "normal", textAlign: e.align ?? "left" as const,
+    lineHeight: e.textKey?.startsWith("title:") ? 1.2 : 1.4 };
 }
 function Media({ element: e, base }: { element: SlideElement; base: string }) {
   if (e.type === "youtube")
@@ -83,20 +109,11 @@ export function SlideDisplay({
       style={{ background: slide.background || "#fff" }}
       aria-label="발표 페이지"
     >
-      {slide.title && <h2 className="study-canvas-title">{slide.title}</h2>}
-      {slide.body && <p className="study-canvas-body">{slide.body}</p>}
-      {slide.elements?.map((e) => (
+      {textBoxes(slide).map((e) => (
         <div
           key={e.id}
           className="study-canvas-element"
-          style={{
-            left: e.x + "%",
-            top: e.y + "%",
-            width: e.w + "%",
-            height: e.h + "%",
-            fontSize: `${e.fontSize / 9.6}cqw`,
-            color: e.color,
-          }}
+          style={boxStyle(e)}
         >
           {e.type === "text" ? (
             <p>{e.text}</p>
@@ -118,7 +135,9 @@ export default function StudySlideCanvas({
   onError,
   onFocusField,
   presence,
+  toolbarTarget,
 }: {
+  toolbarTarget?: HTMLElement | null;
   doc: Y.Doc;
   page: string;
   base: string;
@@ -129,13 +148,19 @@ export default function StudySlideCanvas({
   onFocusField: (value: { field: string; start: number; end: number }) => void;
   presence: RemoteSelection[];
 }) {
+  const [editingText, setEditingText] = useState("");
+  const [videoOpen, setVideoOpen] = useState(false);
+  const fileInput = useRef<HTMLInputElement>(null);
   const [selected, setSelected] = useState(""),
     [uploading, setUploading] = useState(false),
     [youtube, setYoutube] = useState("");
   const canvas = useRef<HTMLDivElement>(null),
     drag = useRef<{
       id: string;
-      mode: "move" | "resize";
+      mode: "move" | "resize" | "rotate";
+      rotation: number;
+      centerX: number;
+      centerY: number;
       x: number;
       y: number;
       startX: number;
@@ -146,7 +171,19 @@ export default function StudySlideCanvas({
       height: number;
     } | null>(null);
   const view = slideFromDoc(doc, page),
-    element = view.elements?.find((e) => e.id === selected);
+    element = textBoxes(view, page).find((e) => e.id === selected);
+  function startDrag(e: PointerEvent<HTMLElement>, el: SlideElement, mode: "move" | "resize" | "rotate") {
+    if (!editable) return;
+    e.preventDefault();
+    const r = canvas.current?.getBoundingClientRect();
+    if (!r) return;
+    setSelected(el.id);
+    e.currentTarget.setPointerCapture(e.pointerId);
+    drag.current = { id: el.id, mode, rotation: el.rotation ?? 0,
+      centerX: r.left + (el.x + el.w / 2) / 100 * r.width,
+      centerY: r.top + (el.y + el.h / 2) / 100 * r.height,
+      x: el.x, y: el.y, w: el.w, h: el.h, startX: e.clientX, startY: e.clientY, width: r.width, height: r.height };
+  }
   function mutate(fn: () => void, types: Y.AbstractType<any>[] = []) {
     if (!editable) return;
     track(types);
@@ -196,34 +233,21 @@ export default function StudySlideCanvas({
     }, [m, list, t]);
     setSelected(id);
   }
-  function property(k: string, value: string | number) {
+  function property(k: string, value: string | number | boolean) {
     if (!element) return;
     const m = doc.getMap(`element:${element.id}`);
     mutate(() => m.set(k, value), [m]);
   }
-  return (
-    <div
-      onSelect={(e) => {
-        const input = e.target;
-        if (
-          (input instanceof HTMLInputElement ||
-            input instanceof HTMLTextAreaElement) &&
-          input.dataset.studyText
-        )
-          onFocusField({
-            field: input.dataset.studyText,
-            start: input.selectionStart ?? 0,
-            end: input.selectionEnd ?? 0,
-          });
-      }}
-    >
+  const controls = (
       <div className="study-canvas-toolbar">
         <button disabled={!editable || !page} onClick={() => add("text")}>
           텍스트 추가
         </button>
-        <label className="study-upload-label">
+        <button disabled={!editable || uploading || !page} onClick={() => fileInput.current?.click()}>이미지·파일</button>
+        <label className="study-upload-label" hidden>
           이미지·영상·PDF
           <input
+            ref={fileInput}
             type="file"
             accept="image/png,image/jpeg,image/webp,video/mp4,video/webm,application/pdf"
             disabled={!editable || uploading || !page}
@@ -243,6 +267,7 @@ export default function StudySlideCanvas({
             }}
           />
         </label>
+        <button disabled={!editable || !page} aria-expanded={videoOpen} onClick={() => setVideoOpen(v => !v)}>영상</button>
         <label>
           배경
           <input
@@ -256,8 +281,7 @@ export default function StudySlideCanvas({
           />
         </label>
         {uploading && <span role="status">업로드 중…</span>}
-      </div>
-      <div className="study-search">
+      {videoOpen && <div className="study-video-popover" role="group" aria-label="영상 삽입">
         <input
           aria-label="페이지에 넣을 YouTube 링크"
           placeholder="YouTube 영상 링크"
@@ -283,6 +307,7 @@ export default function StudySlideCanvas({
                 throw Error();
               add("youtube", { videoId: id });
               setYoutube("");
+              setVideoOpen(false);
             } catch {
               onError("YouTube 링크를 확인해주세요.");
             }
@@ -290,125 +315,11 @@ export default function StudySlideCanvas({
         >
           영상 배치
         </button>
+      <button onClick={() => setVideoOpen(false)}>닫기</button>
+      </div>}
       </div>
-      <div
-        ref={canvas}
-        className="study-canvas study-canvas-edit"
-        style={{ background: view.background }}
-        onPointerMove={(e) => {
-          const a = drag.current;
-          if (!a || !editable) return;
-          const dx = ((e.clientX - a.startX) / a.width) * 100,
-            dy = ((e.clientY - a.startY) / a.height) * 100,
-            m = doc.getMap(`element:${a.id}`);
-          mutate(() => {
-            if (a.mode === "move") {
-              m.set("x", Math.max(0, Math.min(100 - a.w, a.x + dx)));
-              m.set("y", Math.max(0, Math.min(100 - a.h, a.y + dy)));
-            } else {
-              m.set("w", Math.max(2, Math.min(100 - a.x, a.w + dx)));
-              m.set("h", Math.max(2, Math.min(100 - a.y, a.h + dy)));
-            }
-          }, [m]);
-        }}
-        onPointerUp={() => {
-          drag.current = null;
-        }}
-        onPointerCancel={() => {
-          drag.current = null;
-        }}
-      >
-        <input
-          className="study-canvas-title"
-          aria-label="페이지 제목"
-          data-study-text={`title:${page}`}
-          value={view.title}
-          maxLength={120}
-          disabled={!editable}
-          onChange={(e) => text(`title:${page}`, e.target.value)}
-        />
-        <textarea
-          className="study-canvas-body"
-          aria-label="페이지 소개"
-          data-study-text={`body:${page}`}
-          value={view.body}
-          maxLength={10000}
-          disabled={!editable}
-          onChange={(e) => text(`body:${page}`, e.target.value)}
-        />
-        {view.elements?.map((el) => (
-          <div
-            key={el.id}
-            className={`study-canvas-element ${selected === el.id ? "is-selected" : ""}`}
-            style={{
-              left: el.x + "%",
-              top: el.y + "%",
-              width: el.w + "%",
-              height: el.h + "%",
-              fontSize: `${el.fontSize / 9.6}cqw`,
-              color: el.color,
-            }}
-            onClick={() => setSelected(el.id)}
-          >
-            {el.type === "text" ? (
-              <textarea
-                aria-label="발표 텍스트"
-                data-study-text={`text:${el.id}`}
-                disabled={!editable}
-                maxLength={10000}
-                value={el.text}
-                onFocus={() => setSelected(el.id)}
-                onChange={(e) => text(`text:${el.id}`, e.target.value)}
-              />
-            ) : (
-              <div className="study-canvas-media-edit">
-                <Media element={el} base={base} />
-                <button
-                  className="study-media-select"
-                  aria-label="미디어 선택"
-                  onClick={() => setSelected(el.id)}
-                />
-              </div>
-            )}
-            {editable &&
-              selected === el.id &&
-              (["move", "resize"] as const).map((mode) => (
-                <button
-                  key={mode}
-                  className={`study-element-${mode}`}
-                  aria-label={mode === "move" ? "요소 이동" : "요소 크기 조절"}
-                  onPointerDown={(e) => {
-                    e.preventDefault();
-                    const r = canvas.current?.getBoundingClientRect();
-                    if (!r) return;
-                    e.currentTarget.setPointerCapture(e.pointerId);
-                    drag.current = {
-                      id: el.id,
-                      mode,
-                      x: el.x,
-                      y: el.y,
-                      w: el.w,
-                      h: el.h,
-                      startX: e.clientX,
-                      startY: e.clientY,
-                      width: r.width,
-                      height: r.height,
-                    };
-                  }}
-                >
-                  {mode === "move" ? "이동" : "크기"}
-                </button>
-              ))}
-          </div>
-        ))}
-        <StudyRemoteCursors
-          canvas={canvas}
-          page={page}
-          presence={presence}
-          revision={JSON.stringify(view)}
-        />
-      </div>
-      {element && (
+  );
+  const properties = element && (
         <div className="study-element-properties">
           <strong>선택한 요소</strong>
           {(["x", "y", "w", "h"] as const).map((k) => (
@@ -447,8 +358,15 @@ export default function StudySlideCanvas({
               />
             </label>
           ))}
+          <label>회전 각도<input type="number" min="-180" max="180" step="1" disabled={!editable} value={Math.round(element.rotation ?? 0)} onChange={e => property("rotation", Math.max(-180, Math.min(180, Number(e.target.value))))} /></label>
           {element.type === "text" && (
             <>
+              <label>폰트<select aria-label="폰트" disabled={!editable} value={element.fontFamily ?? ""} onChange={e => property("fontFamily", e.target.value)}>
+                <option value="">기본 글꼴</option><option value="sans-serif">고딕</option><option value="serif">명조</option><option value="monospace">고정폭</option><option value="Arial">Arial</option><option value="Georgia">Georgia</option>
+              </select></label>
+              <button disabled={!editable} aria-pressed={!!element.bold} onClick={() => property("bold", !element.bold)}>굵게</button>
+              <button disabled={!editable} aria-pressed={!!element.italic} onClick={() => property("italic", !element.italic)}>기울임</button>
+              <label>정렬<select aria-label="정렬" disabled={!editable} value={element.align ?? "left"} onChange={e => property("align", e.target.value)}><option value="left">왼쪽</option><option value="center">가운데</option><option value="right">오른쪽</option></select></label>
               <label>
                 글자 크기
                 <input
@@ -481,14 +399,117 @@ export default function StudySlideCanvas({
             onClick={() => {
               const a = doc.getArray<string>(`elements:${page}`),
                 i = a.toArray().indexOf(element.id);
-              if (i >= 0) mutate(() => a.delete(i, 1), [a]);
+              if (element.textKey) text(element.textKey, "");
+              else if (i >= 0) mutate(() => a.delete(i, 1), [a]);
               setSelected("");
             }}
           >
             요소 삭제
           </button>
         </div>
-      )}
+      );
+  return (
+    <div
+      onSelect={(e) => {
+        const input = e.target;
+        if (
+          (input instanceof HTMLInputElement ||
+            input instanceof HTMLTextAreaElement) &&
+          input.dataset.studyText
+        )
+          onFocusField({
+            field: input.dataset.studyText,
+            start: input.selectionStart ?? 0,
+            end: input.selectionEnd ?? 0,
+          });
+      }}
+    >
+      {toolbarTarget ? createPortal(controls, toolbarTarget) : controls}
+      <div
+        ref={canvas}
+        className="study-canvas study-canvas-edit"
+        style={{ background: view.background }}
+        onPointerMove={(e) => {
+          const a = drag.current;
+          if (!a || !editable) return;
+          const dx = ((e.clientX - a.startX) / a.width) * 100,
+            dy = ((e.clientY - a.startY) / a.height) * 100,
+            m = doc.getMap(`element:${a.id}`);
+          mutate(() => {
+            if (a.mode === "move") {
+              m.set("x", Math.max(0, Math.min(100 - a.w, a.x + dx)));
+              m.set("y", Math.max(0, Math.min(100 - a.h, a.y + dy)));
+            } else if (a.mode === "rotate") {
+              const angle = Math.atan2(e.clientY - a.centerY, e.clientX - a.centerX) - Math.atan2(a.startY - a.centerY, a.startX - a.centerX);
+              m.set("rotation", ((a.rotation + angle * 180 / Math.PI + 540) % 360) - 180);
+            } else {
+              const r = a.rotation * Math.PI / 180;
+              const px = e.clientX - a.startX, py = e.clientY - a.startY;
+              m.set("w", Math.max(2, Math.min(100 - a.x, a.w + (px * Math.cos(r) + py * Math.sin(r)) / a.width * 100)));
+              m.set("h", Math.max(2, Math.min(100 - a.y, a.h + (-px * Math.sin(r) + py * Math.cos(r)) / a.height * 100)));
+            }
+          }, [m]);
+        }}
+        onPointerUp={() => {
+          drag.current = null;
+        }}
+        onPointerCancel={() => {
+          drag.current = null;
+        }}
+      >
+        {textBoxes(view, page).map((el) => (
+          <div
+            key={el.id}
+            className={`study-canvas-element ${selected === el.id ? "is-selected" : ""}`}
+            style={boxStyle(el)}
+            onClick={() => setSelected(el.id)}
+          >
+            {el.type === "text" ? (
+              <textarea
+                aria-label={el.textKey?.startsWith("title:") ? "페이지 제목" : el.textKey ? "페이지 소개" : "발표 텍스트"}
+                data-study-text={el.textKey ?? `text:${el.id}`}
+                disabled={!editable}
+                maxLength={el.textKey?.startsWith("title:") ? 120 : 10000}
+                value={el.text}
+                onPointerDown={e => { if (editingText !== el.id) startDrag(e, el, "move"); }}
+                onDoubleClick={e => { setEditingText(el.id); e.currentTarget.focus(); }}
+                onBlur={() => setEditingText("")}
+                onKeyDown={e => { if (e.key === "Escape") { setEditingText(""); e.currentTarget.blur(); } }}
+                onFocus={() => setSelected(el.id)}
+                onChange={(e) => text(el.textKey ?? `text:${el.id}`, e.target.value)}
+              />
+            ) : (
+              <div className="study-canvas-media-edit">
+                <Media element={el} base={base} />
+                <button
+                  className="study-media-select"
+                  aria-label="미디어 선택"
+                  onClick={() => setSelected(el.id)}
+                />
+              </div>
+            )}
+            {editable &&
+              selected === el.id &&
+              (["move", "resize", "rotate"] as const).map((mode) => (
+                <button
+                  key={mode}
+                  className={`study-element-${mode}`}
+                  aria-label={mode === "move" ? "요소 이동" : mode === "rotate" ? "요소 회전" : "요소 크기 조절"}
+                  onPointerDown={(e) => startDrag(e, el, mode)}
+                >
+                  {mode === "move" ? "이동" : mode === "rotate" ? "회전" : "크기"}
+                </button>
+              ))}
+          </div>
+        ))}
+        <StudyRemoteCursors
+          canvas={canvas}
+          page={page}
+          presence={presence}
+          revision={JSON.stringify(view)}
+        />
+      </div>
+      {toolbarTarget ? createPortal(properties, toolbarTarget.parentElement ?? toolbarTarget) : properties}
     </div>
   );
 }
