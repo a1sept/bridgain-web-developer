@@ -36,7 +36,7 @@ type Session = {
 };
 type Snapshot = {
   pagination?: { sessions: string | null; activities: string | null };
-  sessionOptions?: { id: string; title: string; programId: string }[];
+  sessionOptions?: (Pick<Session, "id" | "title" | "programId"> & Partial<Pick<Session, "status" | "startsAt" | "endsAt">>)[];
   activities: Activity[];
   permissions: string[];
   isOwner: boolean;
@@ -69,6 +69,14 @@ const date = (s: string) =>
     hour: "2-digit",
     minute: "2-digit",
   });
+const sessionDate = (s: Session) => {
+  const day = (value: string) => new Date(value).toLocaleDateString("en-CA", { timeZone: "Asia/Seoul" });
+  const end = day(s.startsAt) === day(s.endsAt)
+    ? new Date(s.endsAt).toLocaleTimeString("ko-KR", { timeZone: "Asia/Seoul", hour: "2-digit", minute: "2-digit", hour12: false })
+    : date(s.endsAt);
+  const start = new Date(s.startsAt).toLocaleString("ko-KR", { timeZone: "Asia/Seoul", month: "long", day: "numeric", hour: "2-digit", minute: "2-digit", hour12: false });
+  return `${start} – ${end}`;
+};
 const localDate = studyTimeInput;
 export default function StudyWorkspace({
   project,
@@ -83,6 +91,8 @@ export default function StudyWorkspace({
   const [programId, setProgramId] = useState<string | null>(null),
     [form, setForm] = useState<"program" | "session" | null>(null),
     [editSession, setEditSession] = useState<Session | null>(null);
+  const pendingProgram = useRef<{ id: string; tab: string } | null>(null);
+  const [selectedSession, setSelectedSession] = useState<Session | null>(null);
   const [liveSession, setLiveSession] = useState<Session | null>(null);
   const [operatingMode, setOperatingMode] = useState("ongoing"),
     [repeat, setRepeat] = useState(false);
@@ -90,6 +100,15 @@ export default function StudyWorkspace({
     [editingProgram, setEditingProgram] = useState(false);
   const [organizerForm, setOrganizerForm] = useState(false),
     [deputyIds, setDeputyIds] = useState<string[]>([]);
+  const [settingsNotice, setSettingsNotice] = useState("");
+  const moreRef = useRef<HTMLDetailsElement>(null);
+  useEffect(() => {
+    const close = (e: PointerEvent) => {
+      if (moreRef.current && !moreRef.current.contains(e.target as Node)) moreRef.current.open = false;
+    };
+    document.addEventListener("pointerdown", close);
+    return () => document.removeEventListener("pointerdown", close);
+  }, []);
   const [memberTab, setMemberTab] = useState("members");
   const [query, setQuery] = useState(""),
     [status, setStatus] = useState<string[]>([]);
@@ -171,12 +190,16 @@ export default function StudyWorkspace({
       mounted.current = false;
     };
   }, [project.id, programId]);
+  useEffect(() => { setSelectedSession(null); }, [project.id, programId, section]);
   useEffect(() => {
     setForm(null);
     setSchedulePreview(null);
     setOrganizerForm(false);
+    setSettingsNotice("");
     setLiveSession(null);
-    setProgramId(null);
+    setProgramId(pendingProgram.current?.id ?? null);
+    if (pendingProgram.current) setProgramTab(pendingProgram.current.tab);
+    pendingProgram.current = null;
     setError("");
   }, [section]);
   async function run(fn: () => Promise<unknown>) {
@@ -196,6 +219,62 @@ export default function StudyWorkspace({
   }
   const can = (p: string) => !!data?.permissions.includes(`study.${p}`);
   const program = data?.programs.find((p) => p.id === programId);
+  const canManageProgram = can("programs.manage");
+  const canManageOrganizers = !!program && !program.archivedAt &&
+    (canManageProgram || program.organizers.some(o => o.userId === userId && o.role === "host"));
+  const filteredPrograms = (data?.programs ?? []).filter(p =>
+    p.title.toLocaleLowerCase().includes(query.trim().toLocaleLowerCase()) &&
+    (status.length ? status.includes(p.archivedAt ? "archived" : p.status) : !p.archivedAt));
+  function openProgram(id: string, tab = "sessions") {
+    if (section === "overview") {
+      pendingProgram.current = { id, tab };
+      onSection("programs");
+    } else {
+      setProgramId(id);
+      setProgramTab(tab);
+    }
+  }
+  const activePrograms = (data?.programs ?? []).filter(p => !p.archivedAt && p.status === "active");
+  const upcomingSessions = (data?.sessions ?? []).filter(s =>
+    activePrograms.some(p => p.id === s.programId) &&
+    (s.status === "live" || (s.status === "scheduled" && new Date(s.endsAt).getTime() >= Date.now())))
+    .sort((a, b) => Number(b.status === "live") - Number(a.status === "live") || Date.parse(a.startsAt) - Date.parse(b.startsAt));
+  const upcomingActivities = (data?.activities ?? []).filter(a =>
+    !a.archivedAt && activePrograms.some(p => p.id === a.programId) && Date.parse(a.dueAt) >= Date.now())
+    .sort((a, b) => Date.parse(a.dueAt) - Date.parse(b.dueAt));
+  function createProgram() {
+    setOperatingMode("ongoing");
+    setRepeat(false);
+    setEditingProgram(false);
+    setOrganizerForm(false);
+    setProgramTab("sessions");
+    setHostIds([userId]);
+    setMemberIds([]);
+    setMode("all");
+    setForm("program");
+  }
+  function openProgramSettings(tab: "basic" | "organizers") {
+    if (!program || program.archivedAt) return;
+    if (tab === "basic" ? !canManageProgram : !canManageOrganizers) return;
+    setSettingsNotice("");
+    setError("");
+    setHostIds(program.organizers.filter(o => o.role === "host").map(o => o.userId));
+    setDeputyIds(program.organizers.filter(o => o.role === "deputy").map(o => o.userId));
+    setEditingProgram(true);
+    setOperatingMode(program.plannedSessionCount ? "fixed" : "ongoing");
+    setMode(program.membershipMode);
+    setMemberIds(program.memberIds);
+    setOrganizerForm(tab === "organizers");
+    setForm(tab === "basic" ? "program" : null);
+  }
+  function settingsTabs(active: "basic" | "organizers") {
+    return <div className="study-segment study-settings-tabs" aria-label="프로그램 설정 항목">
+      {canManageProgram && <button type="button" aria-pressed={active === "basic"} disabled={busy}
+        onClick={() => active !== "basic" && openProgramSettings("basic")}>기본 정보</button>}
+      {canManageOrganizers && <button type="button" aria-pressed={active === "organizers"} disabled={busy}
+        onClick={() => active !== "organizers" && openProgramSettings("organizers")}>운영진</button>}
+    </div>;
+  }
   async function save(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
     const fd = new FormData(e.currentTarget);
@@ -223,7 +302,7 @@ export default function StudyWorkspace({
             ...(editingProgram && program?.status !== "preparing"
               ? {}
               : { membershipMode: mode, memberIds }),
-            hostIds,
+            ...(!editingProgram ? { hostIds } : {}),
             plannedSessionCount:
               operatingMode === "ongoing"
                 ? null
@@ -330,11 +409,12 @@ export default function StudyWorkspace({
     return rows.length ? (
       <ul className="study-list">
         {rows.map((s) => (
-          <li key={s.id}>
-            <div>
-              <strong>{s.title}</strong>
+          <li key={s.id} className={`study-session-row is-${s.status}`}>
+            <span className={`study-session-status is-${s.status}`}>{states[s.status]}</span>
+            <div className="study-session-info">
+              {program ? <button className="study-session-title" onClick={() => setSelectedSession(s)}>{s.title}</button> : <strong>{s.title}</strong>}
               <p>
-                {date(s.startsAt)} – {date(s.endsAt)} · {states[s.status]}
+                {sessionDate(s)}
               </p>
               {s.location && <p>{s.location}</p>}
             </div>
@@ -397,8 +477,8 @@ export default function StudyWorkspace({
       </main>
     );
   return (
-    <main className="study-workspace">
-      <header className="study-heading">
+    <main className={`study-workspace ${section === "programs" ? "study-program-workspace" : ""}`}>
+      <header className="study-heading study-project-context">
         <div>
           <p className="study-eyebrow">스터디·모임</p>
           <h1>{project.name}</h1>
@@ -420,9 +500,9 @@ export default function StudyWorkspace({
       {data && (
         <>
           {form ? (
-            <section className="study-panel">
-              <button onClick={() => setForm(null)} disabled={busy}>
-                ← 돌아가기
+            <section className="study-panel study-form-page">
+              <button className={form === "program" ? "study-settings-back" : undefined} onClick={() => setForm(null)} disabled={busy}>
+                {form === "program" ? <><ControlIcon name="back" /> {editingProgram ? `${program?.title}로` : "프로그램 목록"}</> : "← 돌아가기"}
               </button>
               <h2>
                 {form === "program"
@@ -433,12 +513,15 @@ export default function StudyWorkspace({
                     ? "회차 일정 변경"
                     : "회차 추가"}
               </h2>
+              {form === "program" && editingProgram && settingsTabs("basic")}
               <form
                 onSubmit={save}
                 onChange={() => setSchedulePreview(null)}
                 className="study-form"
                 key={editSession?.id ?? form}
               >
+                <fieldset className="study-form-group">
+                  <legend>기본 정보</legend>
                 <label>
                   이름
                   <input
@@ -457,8 +540,7 @@ export default function StudyWorkspace({
                     }
                   />
                 </label>
-                {form === "program" ? (
-                  <>
+                {form === "program" && <>
                     <label>
                       소개
                       <textarea
@@ -470,6 +552,12 @@ export default function StudyWorkspace({
                         }
                       />
                     </label>
+                </>}
+                </fieldset>
+                {form === "program" ? (
+                  <>
+                    <fieldset className="study-form-group">
+                    <legend>운영 방식</legend>
                     <label>
                       운영 방식
                       <select
@@ -503,7 +591,8 @@ export default function StudyWorkspace({
                         </small>
                       </label>
                     )}
-                    <fieldset
+                    </fieldset>
+                    <fieldset className="study-form-group"
                       disabled={
                         editingProgram && program?.status !== "preparing"
                       }
@@ -533,13 +622,15 @@ export default function StudyWorkspace({
                           : "프로그램을 시작하면 참여 명단이 확정됩니다."}
                       </p>
                     </fieldset>
-                    <fieldset>
+                    {!editingProgram && <fieldset className="study-form-group">
                       <legend>프로그램 주최자</legend>
                       {picker("주최자 선택", hostIds, setHostIds)}
-                    </fieldset>
+                    </fieldset>}
                   </>
                 ) : (
                   <>
+                    <fieldset className="study-form-group">
+                    <legend>일정과 장소</legend>
                     <p>일정 입력과 표시는 한국 시간(UTC+9) 기준입니다.</p>
                     <div className="study-time">
                       <label>
@@ -641,6 +732,7 @@ export default function StudyWorkspace({
                         defaultValue={editSession?.location}
                       />
                     </label>
+                    </fieldset>
                   </>
                 )}
                 {form === "session" && schedulePreview && (
@@ -681,14 +773,14 @@ export default function StudyWorkspace({
                     onClick={() => setForm(null)}
                     disabled={busy}
                   >
-                    돌아가기
+                    {form === "program" ? "취소" : "돌아가기"}
                   </button>
                   <button className="pw-primary" disabled={busy}>
                     {busy
                       ? "저장 중…"
                       : schedulePreview && form === "session"
                         ? "확인한 일정으로 변경"
-                        : "저장하기"}
+                        : form === "program" ? editingProgram ? "변경사항 저장" : "프로그램 만들기" : "저장하기"}
                   </button>
                 </footer>
               </form>
@@ -738,12 +830,58 @@ export default function StudyWorkspace({
                   </button>
                 )}
             </section>
+          ) : organizerForm && program && canManageOrganizers ? (
+            <section className="study-panel study-form-page">
+              <button className="study-settings-back" disabled={busy} onClick={() => { setOrganizerForm(false); setSettingsNotice(""); }}><ControlIcon name="back" /> {program.title}로</button>
+              <h2>프로그램 설정</h2>
+              {settingsTabs("organizers")}
+              {settingsNotice && <p className="study-settings-notice" role="status">{settingsNotice}</p>}
+              <div className="study-organizer-settings">
+                <section aria-labelledby="study-hosts-heading">
+                  <h3 id="study-hosts-heading">주최자</h3>
+                  <p>프로그램을 진행하는 주최자입니다. 한 명 이상 지정해야 합니다.</p>
+                  {canManageProgram ? <form className="study-form" onSubmit={e => {
+                    e.preventDefault();
+                    if (!hostIds.length || busy) return;
+                    void run(async () => {
+                      setSettingsNotice("");
+                      await workflowApi(`${base}/programs/${program.id}`, { hostIds }, "PATCH");
+                      setDeputyIds(ids => ids.filter(id => !hostIds.includes(id)));
+                      setSettingsNotice("주최자를 저장했어요.");
+                    });
+                  }}>
+                    <fieldset disabled={busy}>{picker("주최자 선택", hostIds, setHostIds)}</fieldset>
+                    {!hostIds.length && <p className="study-field-help">주최자를 한 명 이상 선택해주세요.</p>}
+                    <footer><button type="submit" disabled={busy || !hostIds.length}>주최자 저장</button></footer>
+                  </form> : <>
+                    <p>{program.organizers.filter(o => o.role === "host").map(o => data.members.find(m => m.userId === o.userId)?.displayName ?? "탈퇴한 회원").join(", ")}</p>
+                    <p>주최자 변경은 프로그램 관리 권한이 있는 회원만 할 수 있어요.</p>
+                  </>}
+                </section>
+                <section aria-labelledby="study-deputies-heading">
+                  <h3 id="study-deputies-heading">프로그램 부관리자</h3>
+                  <p>주최자가 자리를 비우면 발표를 이어서 진행할 수 있습니다. 공간 전체의 역할은 바뀌지 않습니다.</p>
+                  <form className="study-form" onSubmit={e => {
+                    e.preventDefault();
+                    void run(async () => {
+                      setSettingsNotice("");
+                      await workflowApi(`${base}/programs/${program.id}/organizers`, { deputyIds }, "PATCH");
+                      setDeputyIds(ids => ids.filter(id => !program.organizers.some(o => o.userId === id && o.role === "host")));
+                      setSettingsNotice("프로그램 부관리자를 저장했어요.");
+                    });
+                  }}>
+                    <fieldset disabled={busy}>{picker("부관리자 선택", deputyIds, setDeputyIds)}</fieldset>
+                    <footer><button type="submit" disabled={busy}>부관리자 저장</button></footer>
+                  </form>
+                </section>
+              </div>
+            </section>
           ) : program ? (
-            <section>
-              <button onClick={() => setProgramId(null)}>
+            <section className="study-program-detail">
+              <button className="study-settings-back" onClick={() => setProgramId(null)}>
                 ← 프로그램 목록
               </button>
-              <div className="study-heading">
+              <div className="study-heading study-program-hero">
                 <div>
                   <h2>{program.title}</h2>
                   <p>{program.description}</p>
@@ -755,96 +893,33 @@ export default function StudyWorkspace({
                       : `${program.memberIds.length}명 참여`}
                   </span>
                 </div>
-                <div className="study-actions">
-                  {can("programs.manage") && (
-                    <>
-                      {program.archivedAt ? (
-                        <button
-                          disabled={busy}
-                          onClick={() => programAction("restore")}
-                        >
-                          복원
-                        </button>
-                      ) : (
-                        <>
-                          {program.status === "preparing" && (
-                            <button
-                              className="pw-primary"
-                              disabled={busy}
-                              onClick={() => programAction("start")}
-                            >
-                              프로그램 시작
-                            </button>
-                          )}
-                          {program.status === "active" && (
-                            <button
-                              disabled={busy}
-                              onClick={() => programAction("complete")}
-                            >
-                              완료
-                            </button>
-                          )}
-                          <button
-                            disabled={busy}
-                            onClick={() => programAction("archive")}
-                          >
-                            보관
-                          </button>
-                        </>
-                      )}
-                    </>
+                <div className="study-actions study-program-actions">
+                  {canManageProgram && !program.archivedAt && program.status === "preparing" && (
+                    <button className="pw-primary" disabled={busy} onClick={() => programAction("start")}>프로그램 시작</button>
                   )}
+                  {canManageOrganizers && <button className="study-settings-trigger" aria-label="프로그램 설정" disabled={busy}
+                    onClick={() => openProgramSettings(canManageProgram ? "basic" : "organizers")}>
+                    <ControlIcon name="settings" size={16} /> 설정
+                  </button>}
+                  {canManageProgram && <details className="study-program-more" ref={moreRef}
+                    onKeyDown={e => { if (e.key === "Escape") { e.currentTarget.open = false; e.currentTarget.querySelector("summary")?.focus(); } }}
+                    onBlur={e => { if (!e.currentTarget.contains(e.relatedTarget as Node)) e.currentTarget.open = false; }}>
+                    <summary aria-label="프로그램 더보기" title="프로그램 더보기" onClick={e => { if (busy) e.preventDefault(); }}>
+                      <ControlIcon name="more" size={16} />
+                    </summary>
+                    <div className="study-program-more-panel" aria-label="프로그램 관리 동작">
+                      {(program.archivedAt ? [["restore", "프로그램 복원"]] : [
+                        ...(program.status === "active" ? [["complete", "프로그램 완료"]] : []),
+                        ["archive", "프로그램 보관"],
+                      ]).map(([action, label]) => <button key={action} disabled={busy} onClick={() => {
+                        if (moreRef.current) moreRef.current.open = false;
+                        programAction(action);
+                      }}>{label}</button>)}
+                    </div>
+                  </details>}
                 </div>
               </div>
-              {!program.archivedAt &&
-                (can("programs.manage") ||
-                  program.organizers.some(
-                    (o) => o.userId === userId && o.role === "host",
-                  )) && (
-                  <button
-                    onClick={() => {
-                      setDeputyIds(
-                        program.organizers
-                          .filter((o) => o.role === "deputy")
-                          .map((o) => o.userId),
-                      );
-                      setOrganizerForm((v) => !v);
-                    }}
-                  >
-                    프로그램 운영진
-                  </button>
-                )}
-              {organizerForm && (
-                <section className="study-panel">
-                  <h3>프로그램 부관리자</h3>
-                  <p>
-                    주최자가 자리를 비우면 발표를 이어서 진행할 수 있습니다.
-                    공간 전체의 역할은 바뀌지 않습니다.
-                  </p>
-                  {picker("부관리자 선택", deputyIds, setDeputyIds)}
-                  <div className="study-actions">
-                    <button
-                      disabled={busy}
-                      onClick={() =>
-                        void run(async () => {
-                          await workflowApi(
-                            `${base}/programs/${program.id}/organizers`,
-                            { deputyIds },
-                            "PATCH",
-                          );
-                          setOrganizerForm(false);
-                        })
-                      }
-                    >
-                      운영진 저장
-                    </button>
-                    <button onClick={() => setOrganizerForm(false)}>
-                      닫기
-                    </button>
-                  </div>
-                </section>
-              )}
-              <div className="study-segment" aria-label="프로그램 메뉴">
+              <div className="study-segment study-program-tabs" aria-label="프로그램 메뉴">
                 {[
                   ["sessions", "회차"],
                   ["materials", "발표 자료"],
@@ -853,33 +928,42 @@ export default function StudyWorkspace({
                   <button
                     key={value}
                     aria-pressed={programTab === value}
-                    onClick={() => setProgramTab(value)}
+                    onClick={() => { setProgramTab(value); setSelectedSession(null); }}
                   >
                     {label}
                   </button>
                 ))}
-                {can("programs.manage") && !program.archivedAt && (
-                  <button
-                    onClick={() => {
-                      setEditingProgram(true);
-                      setOperatingMode(
-                        program.plannedSessionCount ? "fixed" : "ongoing",
-                      );
-                      setMode(program.membershipMode);
-                      setMemberIds(program.memberIds);
-                      setHostIds(
-                        program.organizers
-                          .filter((o) => o.role === "host")
-                          .map((o) => o.userId),
-                      );
-                      setForm("program");
-                    }}
-                  >
-                    프로그램 설정
-                  </button>
-                )}
               </div>
-              {programTab === "sessions" && (
+              <div className="study-program-body">
+              {programTab === "sessions" && selectedSession && (() => {
+                const session = data.sessions.find(s => s.id === selectedSession.id) ?? selectedSession;
+                const canEdit = !program.archivedAt && program.status !== "completed" && (can("sessions.manage") || program.organizers.some(o => o.userId === userId));
+                return <section className="study-session-detail">
+                  <button className="study-settings-back" onClick={() => setSelectedSession(null)}><ControlIcon name="back" /> 회차 목록</button>
+                  <header className="study-heading study-session-detail-heading">
+                    <div>
+                      <span className={`study-session-status is-${session.status}`}>{states[session.status]}</span>
+                      <h2>{session.title}</h2>
+                      <p>{sessionDate(session)}</p>
+                      {session.location && <p>{session.location}</p>}
+                    </div>
+                    <div className="study-actions">
+                      {canEdit && session.status === "scheduled" && <button onClick={() => { setEditSession(session); setForm("session"); }}>일정 변경</button>}
+                      {!program.archivedAt && session.status !== "canceled" && (program.status === "active" || session.status === "ended") && <button className="pw-primary" onClick={() => setLiveSession(session)}>{session.status === "ended" ? "참여 기록" : "발표실 입장"}</button>}
+                    </div>
+                  </header>
+                  <section className="study-session-section" aria-label="이번 회차 발표 자료">
+                    <StudyDecks key={`decks-${session.id}`} base={`${base}/programs/${program.id}`} members={data.members} sessionId={session.id} />
+                  </section>
+                  <section className="study-session-section" aria-label="이번 회차 참여 활동">
+                    <StudyActivities key={`activities-${session.id}`} base={base} userId={userId} sessionId={session.id}
+                      activities={data.activities.filter(a => a.programId === program.id && a.sessionId === session.id)}
+                      programs={[{...program, canManage: can("activities.manage") || program.organizers.some(o => o.userId === userId)}]}
+                      sessions={[session]} onChanged={load} hasMore={!!data.pagination?.activities} loadingMore={busy} onLoadMore={() => void loadMore("activities")} />
+                  </section>
+                </section>;
+              })()}
+              {programTab === "sessions" && !selectedSession && (
                 <>
                   <div className="study-heading">
                     <h3>
@@ -942,6 +1026,7 @@ export default function StudyWorkspace({
                   onChanged={load}
                 />
               )}
+              </div>
             </section>
           ) : section === "members" ? (
             <section>
@@ -1158,37 +1243,71 @@ export default function StudyWorkspace({
               )}
               {moreSessions()}
             </section>
+          ) : section === "overview" ? (
+            <section aria-label="스터디 개요">
+              <div className="study-heading">
+                <div><h2>모임 개요</h2><p>예정된 모임과 활동 마감일을 확인하세요.</p></div>
+                {canManageProgram && <button className="pw-primary" onClick={createProgram}>프로그램 만들기</button>}
+              </div>
+              <div className="study-overview-grid">
+                <section className="study-overview-panel" aria-labelledby="study-upcoming-sessions">
+                  <div className="study-heading"><h3 id="study-upcoming-sessions">다가오는 모임</h3>
+                    <button onClick={() => onSection("schedule")}>전체 일정 보기</button></div>
+                  {upcomingSessions.length ? <ul className="study-list">
+                    {upcomingSessions.slice(0, 3).map(s => <li key={s.id}>
+                      <button className="study-row-link" onClick={() => openProgram(s.programId)}>
+                        <strong>{s.title}</strong><span>{data.programs.find(p => p.id === s.programId)?.title}</span>
+                        <span>{date(s.startsAt)} · {states[s.status]}</span>
+                      </button>
+                      <button onClick={() => setLiveSession(s)}>발표실 열기</button>
+                    </li>)}
+                  </ul> : <p className="study-overview-empty">{data.pagination?.sessions ? "이전 회차 이후의 일정을 더 불러와 확인하세요." : "예정된 모임이 없습니다."}</p>}
+                  {moreSessions()}
+                </section>
+                <section className="study-overview-panel" aria-labelledby="study-upcoming-activities">
+                  <div className="study-heading"><h3 id="study-upcoming-activities">마감 예정 활동</h3>
+                    <button onClick={() => onSection("studyActivities")}>전체 활동 보기</button></div>
+                  {upcomingActivities.length ? <ul className="study-list">
+                    {upcomingActivities.slice(0, 3).map(a => <li key={a.id}>
+                      <button className="study-row-link" onClick={() => openProgram(a.programId, "activities")}>
+                        <strong>{a.title}</strong><span>{data.programs.find(p => p.id === a.programId)?.title}</span>
+                        <span>{date(a.dueAt)} 마감</span>
+                      </button>
+                    </li>)}
+                  </ul> : <p className="study-overview-empty">{data.pagination?.activities ? "이전 활동 이후의 마감일을 더 불러와 확인하세요." : "마감 예정인 활동이 없습니다."}</p>}
+                  {data.pagination?.activities && <button disabled={busy} onClick={() => void loadMore("activities")}>{busy ? "불러오는 중…" : "다음 활동 더 보기"}</button>}
+                </section>
+              </div>
+              <section aria-labelledby="study-active-programs">
+                <div className="study-heading"><h3 id="study-active-programs">진행 중 프로그램</h3>
+                  <button onClick={() => onSection("programs")}>전체 프로그램 보기</button></div>
+                {activePrograms.length ? <ul className="study-list">
+                  {activePrograms.slice(0, 3).map(p => <li key={p.id}>
+                    <button className="study-row-link" onClick={() => openProgram(p.id)}><strong>{p.title}</strong><span>{p.description || "회차와 활동을 확인하세요."}</span></button>
+                    <span className="study-badge">{p.memberIds.length}명 참여</span>
+                  </li>)}
+                </ul> : <p className="study-overview-empty">{data.programs.length ? "진행 중인 프로그램이 없습니다. 전체 목록에서 준비 중·완료된 프로그램을 확인하세요." : "아직 프로그램이 없습니다. 운영진이 프로그램을 만들면 여기에 표시됩니다."}</p>}
+              </section>
+            </section>
           ) : (
-            <section>
+            <section className={`study-program-catalog ${section === "programs" ? "study-card-catalog" : ""}`}>
               <div className="study-heading">
                 <div>
                   <h2>
-                    {section === "overview"
-                      ? "함께하는 프로그램"
-                      : section === "materials"
-                        ? "프로그램별 자료"
-                        : "프로그램"}
+                    {section === "materials" ? "프로그램별 자료" : "프로그램"}
                   </h2>
-                  <p>주제별 프로그램을 만들고 회차를 구성하세요.</p>
+                  <p>하나의 주제로 여러 회차와 자료, 참여 활동을 함께 관리합니다.</p>
                 </div>
                 {can("programs.manage") && (
                   <button
                     className="pw-primary"
-                    onClick={() => {
-                      setOperatingMode("ongoing");
-                      setRepeat(false);
-                      setEditingProgram(false);
-                      setProgramTab("sessions");
-                      setHostIds([userId]);
-                      setMemberIds([]);
-                      setMode("all");
-                      setForm("program");
-                    }}
+                    onClick={createProgram}
                   >
                     프로그램 만들기
                   </button>
                 )}
               </div>
+              <div className="study-catalog-results">
               <div className="study-search">
                 <input
                   aria-label="프로그램 검색"
@@ -1214,18 +1333,41 @@ export default function StudyWorkspace({
                   onClear={() => setStatus([])}
                 />
               </div>
+              <p className="study-result-count">프로그램 {filteredPrograms.length}개</p>
+              {section === "programs" ? <ul className="study-program-grid">
+                {filteredPrograms.map(p => {
+                  // Paged session rows alone cannot provide accurate program totals.
+                  const all = data.sessionOptions ?? (!data.pagination?.sessions ? data.sessions : null);
+                  const rows = all?.filter(s => s.programId === p.id);
+                  const complete = rows?.every(s => s.status && s.startsAt && s.endsAt);
+                  const ended = rows?.filter(s => s.status === "ended").length ?? 0;
+                  const next = complete && !p.archivedAt && p.status === "active"
+                    ? rows?.filter(s => s.status === "live" || (s.status === "scheduled" && new Date(s.endsAt!).getTime() >= Date.now()))
+                      .sort((a, b) => Number(b.status === "live") - Number(a.status === "live") || Date.parse(a.startsAt!) - Date.parse(b.startsAt!))[0]
+                    : undefined;
+                  return <li key={p.id}>
+                    <button className="study-program-card" onClick={() => { setProgramTab("sessions"); setProgramId(p.id); }}>
+                      <span className="study-program-card-heading">
+                        <strong>{p.title}</strong>
+                        <span className="study-badge">{p.archivedAt ? "보관됨" : states[p.status]}</span>
+                      </span>
+                      <span className="study-program-card-description">{p.description || "회차와 자료, 참여 활동을 함께 관리하는 프로그램입니다."}</span>
+                      <span className="study-program-card-summary">
+                        <span>{p.plannedSessionCount ? `계획 ${p.plannedSessionCount}회` : "계속 운영"}</span>
+                        <span>{rows ? `등록 ${rows.length}회` : "회차 수 확인 필요"}{complete ? ` · 종료 ${ended}회` : ""}</span>
+                      </span>
+                      <span className="study-program-card-next">
+                        <span className="study-program-card-caption">{next?.status === "live" ? "진행 중인 모임" : "다음 모임"}</span>
+                        {next ? <><strong>{next.title}</strong><span>{date(next.startsAt!)}</span></>
+                          : <span>{p.archivedAt ? "보관된 프로그램입니다." : p.status === "completed" ? "프로그램이 완료되었습니다." : p.status === "preparing" ? "프로그램 시작을 준비하고 있어요." : !complete ? "회차 목록에서 일정을 확인하세요." : "예정된 모임이 없습니다."}</span>}
+                      </span>
+                      <span className="study-program-card-open">프로그램 열기 <ControlIcon name="arrow" /></span>
+                    </button>
+                  </li>;
+                })}
+              </ul> : <>
               <ul className="study-list">
-                {data.programs
-                  .filter(
-                    (p) =>
-                      p.title
-                        .toLocaleLowerCase()
-                        .includes(query.toLocaleLowerCase()) &&
-                      (status.length
-                        ? status.includes(p.archivedAt ? "archived" : p.status)
-                        : !p.archivedAt),
-                  )
-                  .map((p) => (
+                {filteredPrograms                  .map((p) => (
                     <li key={p.id}>
                       <button
                         className="study-row-link"
@@ -1247,19 +1389,18 @@ export default function StudyWorkspace({
                     </li>
                   ))}
               </ul>
-              {!data.programs.length && (
-                <p className="study-empty">
-                  아직 프로그램이 없습니다.
-                  {can("programs.manage")
-                    ? " 첫 프로그램을 만들어보세요."
-                    : " 운영진이 프로그램을 준비하면 여기에 표시됩니다."}
-                </p>
+              </>}
+              {!filteredPrograms.length && (
+                <div className="study-empty" role="status">
+                  {query.trim() || status.length ? <>
+                    <p>조건에 맞는 프로그램이 없어요.</p>
+                    <button onClick={() => { setQuery(""); setStatus([]); }}>검색·필터 초기화</button>
+                  </> : <p>아직 표시할 프로그램이 없습니다.
+                    {canManageProgram ? " 새 프로그램을 만들어보세요." : " 운영진이 프로그램을 준비하면 여기에 표시됩니다."}
+                  </p>}
+                </div>
               )}
-              {section === "overview" && (
-                <button onClick={() => onSection("schedule")}>
-                  전체 일정 보기 →
-                </button>
-              )}
+              </div>
             </section>
           )}
         </>
@@ -1280,7 +1421,7 @@ function StudySettings({
     [busy, setBusy] = useState(false),
     [saved, setSaved] = useState(false);
   return (
-    <section className="study-panel">
+    <section className="study-panel study-form-page">
       <h2>스터디 설정</h2>
       <form
         className="study-form"

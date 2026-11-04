@@ -46,7 +46,9 @@ export default function StudyActivities({
   hasMore = false,
   loadingMore = false,
   onLoadMore,
+  sessionId,
 }: {
+  sessionId?: string;
   hasMore?: boolean;
   loadingMore?: boolean;
   onLoadMore?: () => void;
@@ -174,7 +176,7 @@ export default function StudyActivities({
       />
     );
   return (
-    <section>
+    <section className={`study-activities-view ${creating ? "is-editing" : detail ? "is-detail" : "is-list"}`}>
       {error && (
         <p className="study-error" role="alert">
           {error}
@@ -208,6 +210,8 @@ export default function StudyActivities({
               });
             }}
           >
+            <fieldset className="study-activity-form-group">
+            <legend>활동 내용</legend>
             <label>
               프로그램
               <select
@@ -241,16 +245,19 @@ export default function StudyActivities({
                 defaultValue={editing?.instructions}
               />
             </label>
+            </fieldset>
+            <fieldset className="study-activity-form-group">
+            <legend>일정과 제출 규칙</legend>
             <label>
               연결 회차
               <select
                 name="sessionId"
                 key={pid}
-                defaultValue={editing?.sessionId ?? ""}
+                defaultValue={editing?.sessionId ?? sessionId ?? ""}
               >
-                <option value="">회차와 무관한 활동</option>
+                {!sessionId && <option value="">회차와 무관한 활동</option>}
                 {sessions
-                  .filter((s) => s.programId === pid)
+                  .filter((s) => s.programId === pid && (!sessionId || s.id === sessionId))
                   .map((s) => (
                     <option key={s.id} value={s.id}>
                       {s.title}
@@ -287,6 +294,7 @@ export default function StudyActivities({
                 ))}
               </div>
             </fieldset>
+            </fieldset>
             <button className="pw-primary" disabled={busy || !pid}>
               {editing ? "변경 저장" : "활동 등록"}
             </button>
@@ -303,6 +311,7 @@ export default function StudyActivities({
           >
             ← 활동 목록
           </button>
+          <div className="study-heading study-activity-heading">
           <h2>
             {detail.activity.title}
             {detail.activity.archivedAt ? " · 보관됨" : ""}
@@ -372,6 +381,8 @@ export default function StudyActivities({
               </button>
             </div>
           )}
+          </div>
+          <section className="study-activity-brief" aria-label="활동 안내">
           <p style={{ whiteSpace: "pre-wrap" }}>
             {detail.activity.instructions}
           </p>
@@ -379,6 +390,8 @@ export default function StudyActivities({
             제출 기한 {when(detail.activity.dueAt)} · 마감 후{" "}
             {detail.activity.latePolicy === "allow" ? "제출 허용" : "제출 차단"}
           </p>
+          </section>
+          <section className="study-activity-work" aria-label="제출과 참여 현황">
           {selected ? (
             <>
               <button onClick={() => setSelected(null)}>← 제출 현황</button>
@@ -602,6 +615,7 @@ export default function StudyActivities({
               )}
             </>
           )}
+          </section>
         </>
       ) : (
         <>
@@ -622,8 +636,7 @@ export default function StudyActivities({
           </div>
           {!activities.length ? (
             <p className="study-empty">
-              등록된 참여 활동이 없습니다. 프로그램을 시작한 후 활동을 등록할 수
-              있습니다.
+              {hasMore ? "아직 불러오지 않은 활동이 있을 수 있습니다. 아래에서 더 불러와 확인하세요." : sessionId ? "이번 회차에 연결된 참여 활동이 없습니다." : "등록된 참여 활동이 없습니다. 프로그램을 시작한 후 활동을 등록할 수 있습니다."}
             </p>
           ) : (
             <div className="study-table-scroll">

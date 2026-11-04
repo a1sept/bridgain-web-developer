@@ -31,12 +31,14 @@ const decode = (s: string) => Uint8Array.from(atob(s), (c) => c.charCodeAt(0));
 export default function StudyDecks({
   base,
   members,
+  sessionId,
 }: {
+  sessionId?: string;
   base: string;
   members: { userId: string; displayName: string }[];
 }) {
   const [list, setList] = useState<{
-      decks: { id: string; title: string }[];
+      decks: { id: string; title: string; sessionId?: string | null }[];
       canManage: boolean;
     }>({ decks: [], canManage: false }),
     [id, setId] = useState<string | null>(null),
@@ -71,7 +73,7 @@ export default function StudyDecks({
       />
     );
   return (
-    <section>
+    <section className="study-decks-view">
       <div className="study-heading">
         <h3>발표 자료</h3>
         {list.canManage && (
@@ -83,6 +85,7 @@ export default function StudyDecks({
               try {
                 const d = await workflowApi<Deck>(`${base}/decks`, {
                   title: "발표 자료",
+                  ...(sessionId ? { sessionId } : {}),
                 });
                 setId(d.id);
               } catch (e) {
@@ -98,7 +101,7 @@ export default function StudyDecks({
       </div>
       {error && <p role="alert">{error}</p>}
       <ul className="study-list">
-        {list.decks.map((d) => (
+        {list.decks.filter(d => !sessionId || d.sessionId === sessionId).map((d) => (
           <li key={d.id}>
             <button className="study-row-link" onClick={() => setId(d.id)}>
               {d.title}
@@ -106,7 +109,7 @@ export default function StudyDecks({
           </li>
         ))}
       </ul>
-      {!list.decks.length && <p>발표 자료를 만들어 함께 편집할 수 있습니다.</p>}
+      {!list.decks.some(d => !sessionId || d.sessionId === sessionId) && <p>{sessionId ? "이번 회차에 연결된 발표 자료가 없습니다." : "발표 자료를 만들어 함께 편집할 수 있습니다."}</p>}
     </section>
   );
 }
