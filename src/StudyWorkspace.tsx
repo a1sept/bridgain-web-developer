@@ -91,13 +91,12 @@ export default function StudyWorkspace({
   const [programId, setProgramId] = useState<string | null>(null),
     [form, setForm] = useState<"program" | "session" | null>(null),
     [editSession, setEditSession] = useState<Session | null>(null);
-  const pendingProgram = useRef<{ id: string; tab: string } | null>(null);
+  const pendingProgram = useRef<{ id: string } | null>(null);
   const [selectedSession, setSelectedSession] = useState<Session | null>(null);
   const [liveSession, setLiveSession] = useState<Session | null>(null);
   const [operatingMode, setOperatingMode] = useState("ongoing"),
     [repeat, setRepeat] = useState(false);
-  const [programTab, setProgramTab] = useState("sessions"),
-    [editingProgram, setEditingProgram] = useState(false);
+  const [editingProgram, setEditingProgram] = useState(false);
   const [organizerForm, setOrganizerForm] = useState(false),
     [deputyIds, setDeputyIds] = useState<string[]>([]);
   const [settingsNotice, setSettingsNotice] = useState("");
@@ -205,7 +204,6 @@ export default function StudyWorkspace({
     setSettingsNotice("");
     setLiveSession(null);
     setProgramId(pendingProgram.current?.id ?? null);
-    if (pendingProgram.current) setProgramTab(pendingProgram.current.tab);
     pendingProgram.current = null;
     setError("");
   }, [section]);
@@ -232,13 +230,12 @@ export default function StudyWorkspace({
   const filteredPrograms = (data?.programs ?? []).filter(p =>
     p.title.toLocaleLowerCase().includes(query.trim().toLocaleLowerCase()) &&
     (status.length ? status.includes(p.archivedAt ? "archived" : p.status) : !p.archivedAt));
-  function openProgram(id: string, tab = "sessions") {
+  function openProgram(id: string) {
     if (section === "overview") {
-      pendingProgram.current = { id, tab };
+      pendingProgram.current = { id };
       onSection("programs");
     } else {
       setProgramId(id);
-      setProgramTab(tab);
     }
   }
   const activePrograms = (data?.programs ?? []).filter(p => !p.archivedAt && p.status === "active");
@@ -254,7 +251,6 @@ export default function StudyWorkspace({
     setRepeat(false);
     setEditingProgram(false);
     setOrganizerForm(false);
-    setProgramTab("sessions");
     setHostIds([userId]);
     setMemberIds([]);
     setMode("all");
@@ -926,23 +922,8 @@ export default function StudyWorkspace({
                   </details>}
                 </div>
               </div>
-              <div className="study-segment study-program-tabs" aria-label="프로그램 메뉴">
-                {[
-                  ["sessions", "회차"],
-                  ["materials", "발표 자료"],
-                  ["activities", "참여 활동"],
-                ].map(([value, label]) => (
-                  <button
-                    key={value}
-                    aria-pressed={programTab === value}
-                    onClick={() => { setProgramTab(value); setSelectedSession(null); }}
-                  >
-                    {label}
-                  </button>
-                ))}
-              </div>
               <div className="study-program-body">
-              {programTab === "sessions" && selectedSession && (() => {
+              {section !== "materials" && selectedSession && (() => {
                 const session = data.sessions.find(s => s.id === selectedSession.id) ?? selectedSession;
                 const canEdit = !program.archivedAt && program.status !== "completed" && (can("sessions.manage") || program.organizers.some(o => o.userId === userId));
                 return <section className="study-session-detail">
@@ -970,7 +951,7 @@ export default function StudyWorkspace({
                   </section>
                 </section>;
               })()}
-              {programTab === "sessions" && !selectedSession && (
+              {section !== "materials" && !selectedSession && (
                 <>
                   <div className="study-heading">
                     <h3>
@@ -1002,35 +983,11 @@ export default function StudyWorkspace({
                   {moreSessions()}
                 </>
               )}
-              {programTab === "materials" && (
+              {section === "materials" && (
                 <StudyDecks
                   key={program.id}
                   base={`${base}/programs/${program.id}`}
                   members={data.members}
-                />
-              )}
-              {programTab === "activities" && (
-                <StudyActivities
-                  base={base}
-                  userId={userId}
-                  activities={data.activities.filter(
-                    (a) => a.programId === program.id,
-                  )}
-                  programs={[
-                    {
-                      ...program,
-                      canManage:
-                        can("activities.manage") ||
-                        program.organizers.some((o) => o.userId === userId),
-                    },
-                  ]}
-                  hasMore={!!data.pagination?.activities}
-                  loadingMore={busy}
-                  onLoadMore={() => void loadMore("activities")}
-                  sessions={(data.sessionOptions ?? data.sessions).filter(
-                    (s) => s.programId === program.id,
-                  )}
-                  onChanged={load}
                 />
               )}
               </div>
@@ -1300,7 +1257,7 @@ export default function StudyWorkspace({
                     <button onClick={() => onSection("studyActivities")}>전체 활동 보기</button></div>
                   {upcomingActivities.length ? <ul className="study-list">
                     {upcomingActivities.slice(0, 3).map(a => <li key={a.id}>
-                      <button className="study-row-link" onClick={() => openProgram(a.programId, "activities")}>
+                      <button className="study-row-link" onClick={() => onSection("studyActivities")}>
                         <strong>{a.title}</strong><span>{data.programs.find(p => p.id === a.programId)?.title}</span>
                         <span>{date(a.dueAt)} 마감</span>
                       </button>
@@ -1377,7 +1334,7 @@ export default function StudyWorkspace({
                       .sort((a, b) => Number(b.status === "live") - Number(a.status === "live") || Date.parse(a.startsAt!) - Date.parse(b.startsAt!))[0]
                     : undefined;
                   return <li key={p.id}>
-                    <button className="study-program-card" onClick={() => { setProgramTab("sessions"); setProgramId(p.id); }}>
+                    <button className="study-program-card" onClick={() => { setProgramId(p.id); }}>
                       <span className="study-program-card-heading">
                         <strong>{p.title}</strong>
                         <span className="study-badge">{p.archivedAt ? "보관됨" : states[p.status]}</span>
@@ -1403,9 +1360,6 @@ export default function StudyWorkspace({
                       <button
                         className="study-row-link"
                         onClick={() => {
-                          setProgramTab(
-                            section === "materials" ? "materials" : "sessions",
-                          );
                           setProgramId(p.id);
                         }}
                       >

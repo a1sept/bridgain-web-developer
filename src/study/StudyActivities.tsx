@@ -41,7 +41,6 @@ export default function StudyActivities({
   userId,
   activities,
   programs,
-  sessions,
   onChanged,
   hasMore = false,
   loadingMore = false,
@@ -200,7 +199,7 @@ export default function StudyActivities({
                     title: fd.get("title"),
                     instructions: fd.get("instructions"),
                     dueAt: due.toISOString(),
-                    sessionId: fd.get("sessionId") || null,
+                    sessionId: editing ? editing.sessionId : sessionId,
                     latePolicy,
                   },
                   editing ? "PATCH" : "POST",
@@ -212,21 +211,6 @@ export default function StudyActivities({
           >
             <fieldset className="study-activity-form-group">
             <legend>활동 내용</legend>
-            <label>
-              프로그램
-              <select
-                value={pid}
-                disabled={!!editing}
-                onChange={(e) => setPid(e.target.value)}
-                required
-              >
-                {eligible.map((p) => (
-                  <option key={p.id} value={p.id}>
-                    {p.title}
-                  </option>
-                ))}
-              </select>
-            </label>
             <label>
               제목
               <input
@@ -248,23 +232,6 @@ export default function StudyActivities({
             </fieldset>
             <fieldset className="study-activity-form-group">
             <legend>일정과 제출 규칙</legend>
-            <label>
-              연결 회차
-              <select
-                name="sessionId"
-                key={pid}
-                defaultValue={editing?.sessionId ?? sessionId ?? ""}
-              >
-                {!sessionId && <option value="">회차와 무관한 활동</option>}
-                {sessions
-                  .filter((s) => s.programId === pid && (!sessionId || s.id === sessionId))
-                  .map((s) => (
-                    <option key={s.id} value={s.id}>
-                      {s.title}
-                    </option>
-                  ))}
-              </select>
-            </label>
             <label>
               제출 기한 (한국 시간)
               <input
@@ -621,7 +588,7 @@ export default function StudyActivities({
         <>
           <div className="study-heading">
             <h2>참여 활동</h2>
-            {eligible.length > 0 && (
+            {sessionId && eligible.length > 0 && (
               <button
                 className="pw-primary"
                 onClick={() => {
