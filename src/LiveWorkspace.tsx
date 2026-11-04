@@ -640,7 +640,7 @@ export default function LiveWorkspace({
     /^\/projects\/([^/]+)\/requests(?:\/|$)/,
   )?.[1];
   function shell(children: ReactNode) {
-    const selectedId = requestProjectId || projectId || undefined;
+    const selectedId = creating ? undefined : requestProjectId || projectId || undefined;
     return (
       <DeveloperShell
         active={requestProjectId || creating ? "projects" : view}

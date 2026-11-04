@@ -59,6 +59,7 @@ export default function CreateProjectPage({
     team: CreatePerson[];
   }>({ client: [], team: [] });
   const [searched, setSearched] = useState({ client: false, team: false });
+  const invitedMembers = members.filter((m) => kind !== "study" || m.accountType === "team");
   async function add(type: "client" | "team") {
     if (locked.current) return;
     const query = ids[type].trim();
@@ -153,7 +154,7 @@ export default function CreateProjectPage({
           >
             ←
           </button>
-          <strong>프로젝트 생성</strong>
+          <strong className="cp-breadcrumb">프로젝트 목록 <span aria-hidden="true">/</span> 프로젝트 생성</strong>
           <a href={preview ? "/preview" : "/"}>
             bridgain<span>.</span>
           </a>
@@ -181,12 +182,15 @@ export default function CreateProjectPage({
               disabled={busy}
               onClick={() => setKind(value)}
             >
-              <strong>{label}</strong>
-              <span>{description}</span>
+              <span className="cp-kind-title">
+                <strong>{label}</strong>
+                {kind === value && <span className="cp-kind-selected">선택됨</span>}
+              </span>
+              <span className="cp-kind-description">{description}</span>
             </button>
           ))}
         </div>
-        <form onSubmit={submit}>
+        <form onSubmit={submit} aria-busy={busy}>
           <div className="cp-layout">
             <section className="cp-panel" aria-labelledby="cp-info">
               <h2 id="cp-info">프로젝트 정보</h2>
@@ -300,7 +304,9 @@ export default function CreateProjectPage({
                     <div
                       className="cp-search-results"
                       aria-label={
-                        type === "client"
+                        kind === "study"
+                          ? "회원 검색 결과"
+                          : type === "client"
                           ? "의뢰자 검색 결과"
                           : "개발팀 검색 결과"
                       }
@@ -319,6 +325,7 @@ export default function CreateProjectPage({
                             key={person.id}
                             type="button"
                             disabled={busy || selected}
+                            aria-pressed={selected}
                             onClick={() => selectPerson(person)}
                           >
                             <span
@@ -396,16 +403,16 @@ export default function CreateProjectPage({
           )}
           <footer className="cp-footer">
             <p>
-              {members.length
-                ? `${members.length}명에게 참여 초대를 보냅니다.`
+              {invitedMembers.length
+                ? `${invitedMembers.length}명에게 참여 초대를 보냅니다.`
                 : "멤버는 프로젝트 생성 후에도 초대할 수 있어요."}
             </p>
             <button
               type="submit"
-              className="pw-primary cp-create-button"
+              className="cp-create-button"
               disabled={busy || searching !== null || !name.trim()}
             >
-              {busy ? "생성 중…" : "생성하기"}
+              {busy ? "생성 중…" : kind === "study" ? "스터디·모임 만들기" : "개발 프로젝트 만들기"}
             </button>
           </footer>
         </form>

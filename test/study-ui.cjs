@@ -252,7 +252,7 @@ const { chromium } = require(
   await page
     .getByRole("textbox", { name: "이름", exact: true })
     .fill("파이썬 책 읽기");
-  await page.getByRole("button", { name: "저장하기", exact: true }).click();
+  await page.getByRole("button", { name: "프로그램 만들기", exact: true }).click();
   await page.waitForTimeout(300);
   if (errors.length) throw Error(`Program save failed: ${errors.join("; ")}`);
   await page
