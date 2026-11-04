@@ -322,3 +322,40 @@
   max-height: calc(100dvh - 90px);
   overflow: auto;
 }
+
+/* Study's single shared conversation; developer channels keep their own UI. */
+.pc-study { max-width: 1120px; margin: 0 auto; padding: 28px 32px; box-sizing: border-box; width: 100%; color: #202431; }
+.pc-study .pc-heading { padding-bottom: 24px; align-items: flex-start; }
+.pc-study .pc-heading > div { min-width: 0; }
+.pc-study .pc-heading > button { flex-shrink: 0; white-space: nowrap; }
+.pc-study .pc-heading p { color: #626d7c; line-height: 1.6; }
+.pc-channel.pc-study button { min-height: 34px; padding: 7px 12px; font-size: 12px; line-height: 18px; border-radius: 6px; }
+.pc-study button:hover:not(:disabled) { background: #f0edf8; }
+.pc-study button:focus-visible, .pc-study input:focus-visible, .pc-study textarea:focus-visible { outline: 2px solid #6754b8; outline-offset: 2px; }
+.pc-study .pc-toolbar { margin-bottom: 0; padding: 16px 20px; background: #fff; border: 1px solid #e0e7f1; border-bottom: 0; border-radius: 8px 8px 0 0; }
+.pc-study .pc-room-label { font-size: 13px; font-weight: 600; }
+.pc-study .pc-toolbar input { box-sizing: border-box; font-size: 12px; line-height: 18px; padding: 7px 12px; border-radius: 6px; max-width: 100%; }
+.pc-study .pc-layout { border-radius: 0 0 8px 8px; }
+.pc-study .pc-feed { height: 48vh; min-height: 240px; padding: 20px; }
+.pc-study .pc-message { padding-bottom: 16px; margin-bottom: 16px; border-bottom: 1px solid #eef0f4; }
+.pc-study .pc-meta { justify-content: flex-start; flex-wrap: wrap; gap: 6px 12px; }
+.pc-study .pc-meta strong { overflow-wrap: anywhere; min-width: 0; }
+.pc-study .pc-meta time, .pc-study .pc-composer small { color: #626d7c; }
+.pc-study .pc-actions { margin-top: 4px; }
+.pc-study .pc-actions button { padding: 4px 0; min-height: 28px; color: #6754b8; }
+.pc-study .pc-primary { background: #6754b8; border-color: #6754b8; color: #fff; }
+.pc-study .pc-primary:hover:not(:disabled) { background: #55429e; }
+.pc-study .pc-composer { background: #fafbfe; }
+.pc-study .pc-composer textarea { font-size: 14px; line-height: 1.6; border-radius: 6px; background: #fff; }
+.pc-study .pc-empty { color: #626d7c; line-height: 1.7; font-size: 14px; }
+.pc-study .pc-empty button { display: block; margin: 12px auto 0; }
+.pc-study .pc-thread > header { align-items: flex-start; }
+.pc-study .pc-thread > header > div { min-width: 0; }
+.pc-study .pc-thread > header p { color: #626d7c; overflow-wrap: anywhere; line-height: 1.6; }
+.pc-study .pc-original { background: #f0edf8; border-radius: 6px; }
+@media (max-width: 700px) {
+  .pc-study { padding: 20px 16px; }
+  .pc-study .pc-toolbar { padding: 12px 16px; }
+  .pc-study .pc-feed { padding: 16px; }
+  .pc-study .pc-composer textarea { font-size: 16px; }
+}

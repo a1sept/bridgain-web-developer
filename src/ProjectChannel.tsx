@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { aiApi as api } from "./ai/api";
 import "./project-channel.css";
+import ControlIcon from "./components/ControlIcon";
 type Item = {
   key: string;
   kind: string;
@@ -33,9 +34,11 @@ const labels: Record<string, string> = {
 function Composer({
   onSend,
   placeholder,
+  conversational = false,
 }: {
   onSend: (body: string) => Promise<void>;
   placeholder: string;
+  conversational?: boolean;
 }) {
   const [body, setBody] = useState("");
   const [busy, setBusy] = useState(false);
@@ -75,7 +78,7 @@ function Composer({
           disabled={busy || !body.trim()}
           onClick={() => void send()}
         >
-          {busy ? "등록 중…" : "등록"}
+          {busy ? (conversational ? "보내는 중…" : "등록 중…") : conversational ? "보내기" : "등록"}
         </button>
       </div>
       {error && <p role="alert">{error}</p>}
@@ -86,9 +89,11 @@ export default function ProjectChannel({
   projectId,
   taskId,
   onOpen,
+  study = false,
 }: {
   projectId: string;
   taskId?: string;
+  study?: boolean;
   onOpen?: (kind: string, id: string) => void;
 }) {
   const [items, setItems] = useState<Item[]>([]),
@@ -114,6 +119,10 @@ export default function ProjectChannel({
       const version = ++epoch.current;
       setLoading(true);
       setError("");
+      const feed = feedRef.current;
+      const previousHeight = feed?.scrollHeight ?? 0;
+      const previousTop = feed?.scrollTop ?? 0;
+      const nearBottom = !feed || previousHeight - previousTop - feed.clientHeight < 80;
       try {
         const params = new URLSearchParams();
         if (taskId) params.set("task", taskId);
@@ -122,11 +131,11 @@ export default function ProjectChannel({
         if (version !== epoch.current) return;
         setItems((old) => (before ? [...page.items, ...old] : page.items));
         setHasMore(page.hasMore);
-        if (!before)
-          requestAnimationFrame(() => {
-            if (feedRef.current)
-              feedRef.current.scrollTop = feedRef.current.scrollHeight;
-          });
+        requestAnimationFrame(() => {
+          if (!feedRef.current) return;
+          if (study && before) feedRef.current.scrollTop = previousTop + feedRef.current.scrollHeight - previousHeight;
+          else if (!before && (!study || nearBottom)) feedRef.current.scrollTop = feedRef.current.scrollHeight;
+        });
       } catch (e) {
         if (version === epoch.current)
           setError(
@@ -136,7 +145,7 @@ export default function ProjectChannel({
         if (version === epoch.current) setLoading(false);
       }
     },
-    [path, taskId],
+    [path, taskId, study],
   );
   useEffect(() => {
     setItems([]);
@@ -196,6 +205,7 @@ export default function ProjectChannel({
   );
   const visible = items.filter(
     (i) =>
+      (!study || i.kind === "message") &&
       (filter === "all" ||
         (filter === "messages"
           ? i.kind === "message"
@@ -216,13 +226,13 @@ export default function ProjectChannel({
   const cursor = (i: Item) => JSON.stringify({ at: i.cursorAt, key: i.key });
   return (
     <section
-      className={`pc-channel ${taskId ? "pc-compact" : ""}`}
-      aria-label={taskId ? "업무 내부 대화" : "프로젝트 채널"}
+      className={`pc-channel ${taskId ? "pc-compact" : ""} ${study ? "pc-study" : ""}`}
+      aria-label={study ? "스터디 대화" : taskId ? "업무 내부 대화" : "프로젝트 채널"}
     >
       <header className="pc-heading">
         <div>
-          <h2>{taskId ? "내부 대화" : "프로젝트 채널"}</h2>
-          <p>프로젝트 개발팀과 진행 상황을 공유하세요.</p>
+          <h2>{study ? "대화" : taskId ? "내부 대화" : "프로젝트 채널"}</h2>
+          <p>{study ? "모든 회원이 질문과 소식을 나누는 공간입니다." : "프로젝트 개발팀과 진행 상황을 공유하세요."}</p>
         </div>
         <button
           type="button"
@@ -237,6 +247,7 @@ export default function ProjectChannel({
       </header>
       {!taskId && (
         <div className="pc-toolbar">
+          {study ? <span className="pc-room-label">전체 회원 대화</span> : <>
           <div className="pc-tabs">
             {[
               ["all", "전체"],
@@ -265,6 +276,7 @@ export default function ProjectChannel({
               </option>
             ))}
           </select>
+          </>}
           <input
             aria-label="불러온 대화 검색"
             placeholder="불러온 대화 검색…"
@@ -291,7 +303,8 @@ export default function ProjectChannel({
               <div className="pc-empty">
                 {query || filter !== "all" || target
                   ? "조건에 맞는 대화가 없습니다."
-                  : "아직 대화가 없습니다. 첫 메시지를 남겨보세요."}
+                  : study ? "아직 나눈 이야기가 없어요. 인사나 궁금한 점을 남겨보세요." : "아직 대화가 없습니다. 첫 메시지를 남겨보세요."}
+                {study && query && <button type="button" onClick={() => setQuery("")}>검색 초기화</button>}
               </div>
             )}
             {visible.map((item) => (
@@ -335,12 +348,13 @@ export default function ProjectChannel({
             ))}
           </div>
           <Composer
+            conversational={study}
             onSend={async (body) => {
               await api(path, { body, ...(taskId ? { taskId } : {}) });
               await load();
             }}
             placeholder={
-              taskId
+              study ? "회원들과 나눌 이야기를 입력하세요…" : taskId
                 ? "업무에 대한 의견을 남기세요…"
                 : "프로젝트 참여자에게 메시지를 남기세요…"
             }
@@ -360,8 +374,8 @@ export default function ProjectChannel({
           >
             <header>
               <div>
-                <strong>{selected.title}</strong>
-                <p>답글</p>
+                <strong>{study ? "답글" : selected.title}</strong>
+                <p>{study ? `${selected.actorName}님의 메시지에 이어 이야기하세요.` : "답글"}</p>
               </div>
               <button
                 type="button"
@@ -369,7 +383,7 @@ export default function ProjectChannel({
                 aria-label="답글 닫기"
                 onClick={close}
               >
-                ×
+                {study ? <ControlIcon name="close" /> : "×"}
               </button>
             </header>
             <div className="pc-replies">
@@ -403,6 +417,7 @@ export default function ProjectChannel({
               ))}
             </div>
             <Composer
+              conversational={study}
               key={selected.key}
               placeholder="답글을 남기세요…"
               onSend={async (body) => {

@@ -375,7 +375,7 @@ export default function StudyWorkspace({
     );
   }
   if (section === "channel")
-    return <ProjectChannel projectId={project.id} onOpen={() => {}} />;
+    return <ProjectChannel projectId={project.id} study />;
   if (liveSession && data)
     return (
       <main className="study-workspace">

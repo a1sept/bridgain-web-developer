@@ -291,7 +291,7 @@ export default function DeveloperShell(p: Props) {
                     ["schedule", "일정"],
                     ["studyActivities", "참여 활동"],
                     ["materials", "자료"],
-                    ["channel", "채널"],
+                    ["channel", "대화"],
                     ["members", "회원"],
                     ["settings", "설정"],
                   ]
