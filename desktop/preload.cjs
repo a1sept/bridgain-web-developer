@@ -11,6 +11,8 @@ contextBridge.exposeInMainWorld(
     cancelGithub: () => call("cancel-github"),
     connectServer: (url) => call("connect-server", url),
     taskWorkspace: (pid, id, action, options) => call("task-workspace", pid, id, action, options),
+    terminal: (pid, action, options) => call("terminal", pid, action, options),
+    developmentSpace: (pid, action, options) => call("development-space", pid, action, options),
     taskGit: (pid, id, action, options) => call("task-git", pid, id, action, options),
     checkRepositoryAccess: (pid, url) => call("check-repository-access", pid, url),
     cloneProject: (pid, url) => call("clone-project", pid, url),

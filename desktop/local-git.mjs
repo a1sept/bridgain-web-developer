@@ -68,10 +68,10 @@ export async function cloneRepository(folder, url, allowedRepositories, run = ex
   } catch (error) { return { ok: false, ...repositoryAccessFailure(error), repositoryUrl: url }; }
   return inspectRepository(path, allowedRepositories);
 }
-export async function verifyBinding(binding, allowedRepositories) {
+export async function verifyBinding(binding, allowedRepositories, recoveryBranch = "") {
   if (!binding?.path) throw Error("업무 브랜치와 로컬 작업 디렉토리를 먼저 연결해주세요.");
   const current = await inspectRepository(binding.path, allowedRepositories);
-  if (current.branch !== binding.branch || current.repositoryUrl !== binding.repositoryUrl)
+  if ((current.branch !== binding.branch && recoveryBranch !== binding.branch) || current.repositoryUrl !== binding.repositoryUrl)
     throw Error("로컬 브랜치 또는 저장소가 변경되었습니다. 연결된 업무 브랜치로 돌아와주세요.");
   const pushUrl = repositoryIdentity((await git(binding.path, "remote", "get-url", "--push", "origin")).trim());
   if (pushUrl !== binding.repositoryUrl) throw Error("origin의 push 대상 저장소가 업무 저장소와 다릅니다.");
@@ -122,12 +122,15 @@ export async function fileDiff(binding, path) {
   return { diff: (await git(binding.path, "diff", "--no-ext-diff", "--no-textconv", "HEAD", "--", path, ...(file.originalPath ? [file.originalPath] : []))).slice(0, 256 * 1024) };
 }
 // Read committed objects only: never inspect current files or run repository diff helpers.
-export async function commitDetail(binding, sha) {
+export async function commitDetail(binding, sha, allBranches = false) {
   if (typeof sha !== "string" || !/^(?:[a-f0-9]{40}|[a-f0-9]{64})$/i.test(sha))
     throw Error("유효한 커밋을 선택해주세요.");
   sha = (await git(binding.path, "rev-parse", "--verify", `${sha}^{commit}`)).trim();
   try { await git(binding.path, "merge-base", "--is-ancestor", sha, "HEAD"); }
-  catch { throw Error("현재 업무 브랜치의 커밋 이력을 선택해주세요."); }
+  catch {
+    if (!allBranches || !(await git(binding.path, "for-each-ref", "--contains", sha, "--format=%(refname)")).trim())
+      throw Error(allBranches ? "현재 저장소에서 참조하는 커밋 이력을 선택해주세요." : "현재 업무 브랜치의 커밋 이력을 선택해주세요.");
+  }
   const parents = (await git(binding.path, "rev-list", "--parents", "-n", "1", sha)).trim().split(" ");
   // Merge commits are compared with their first parent; root commits with the empty tree.
   const revisions = parents.length > 1 ? [parents[1], sha] : [sha];

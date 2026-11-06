@@ -13,9 +13,10 @@ import { useTaskGit, LocalCode, GitControls, RemoteTaskCode } from "./TaskCode";
 const statuses: Record<string, string> = { todo: "진행 전", in_progress: "진행 중", review_pending: "작업 완료 · 승인 대기", deploy_pending: "배포 대기", deploying: "배포 중", done: "승인 완료", released: "배포 완료" };
 const priorities = { urgent: "긴급", high: "높음", normal: "보통", low: "낮음" };
 type Review = { reviewers: { userId: string; displayName: string; status: string; note?: string }[]; assignees: ProjectTask["assignees"]; events?: { action: string; note: string; actorName?: string }[] };
-export default function TaskDetail({ task, projectId, projectName, userId, onClose, onRequest, onTask, onChanged, onDeployments, onApprovals }: {
+export default function TaskDetail({ task, projectId, projectName, userId, onClose, onRequest, onTask, onChanged, onDeployments, onApprovals, onDevelopment }: {
   task: ProjectTask; projectId: string; projectName: string; userId?: string;
   onClose: () => void; onRequest: (id: string) => void; onTask: (id: string) => void;
+  onDevelopment?: () => void;
   onChanged: () => void; onDeployments?: () => void; onApprovals?: () => void;
 }) {
   const bridge = task.completionMode === "code" ? window.bridgainDesktop : undefined;
@@ -99,6 +100,7 @@ export default function TaskDetail({ task, projectId, projectName, userId, onClo
   return <div className="td-layout">
     <header className="td-header"><div><small>{projectName}</small><h2>{task.title}</h2></div>
       <div className="td-header-actions">
+        {task.completionMode === "code" && onDevelopment && <button type="button" onClick={onDevelopment}>개발 공간 열기 <ControlIcon name="arrow"/></button>}
         <button type="button" aria-label="업무 새로고침" title="업무 새로고침" disabled={busy} onClick={() => { onChanged(); setRefresh(v => v + 1); }}><ControlIcon name="refresh" size={16} /></button>
         <button type="button" aria-label="업무 상세 닫기" onClick={onClose}><ControlIcon name="close" size={16} /></button>
       </div></header>
@@ -123,8 +125,9 @@ export default function TaskDetail({ task, projectId, projectName, userId, onClo
     <aside className="td-work" aria-label="업무 작업 패널" tabIndex={0}>
       {waiting && <p className="td-waiting" role="status">선행 업무의 작업 승인이 완료되면 시작할 수 있습니다.</p>}
       {task.status === "in_progress" && review?.events?.some(e => e.action === "changes_requested") && <div className="td-rework"><strong>재작업 요청</strong><p>{review.events.find(e => e.action === "changes_requested")?.note}</p><small>{task.completionMode === "code" ? "기존 브랜치에서 수정·푸시 후 같은 PR로 재제출해주세요." : "문서와 메모를 보완한 뒤 다시 작업 완료를 요청해주세요."}</small></div>}
+      {task.completionMode === "code" && onDevelopment && <section className="td-actions"><h3>개발 작업</h3><p className="td-muted">{task.workBranch || "브랜치 미연결"}</p><p className="td-muted">파일 편집·커밋·Fetch·Pull·Push는 개발 공간에서 진행합니다.</p><button type="button" onClick={onDevelopment}>개발 공간에서 작업하기</button></section>}
       <TaskMaterials key={task.id} task={task} projectId={projectId} editable={editable} onChanged={onChanged} onDirtyChange={setMaterialsDirty} />
-      {task.completionMode === "code" && <><RepositoryFields value={[]} onChange={() => {}} connectionOnly /><h3>로컬 작업</h3>
+      {task.completionMode === "code" && !onDevelopment && <><RepositoryFields value={[]} onChange={() => {}} connectionOnly /><h3>로컬 작업</h3>
 
       {!bridge?.taskWorkspace ? <p className="td-muted">로컬 폴더와 브랜치 연결은 데스크톱 앱에서 사용할 수 있습니다.</p> : <>
         {localError && <p role="alert">{localError} <button disabled={busy} onClick={() => setRefresh(v => v + 1)}>다시 확인</button></p>}

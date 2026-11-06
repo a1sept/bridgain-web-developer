@@ -141,6 +141,7 @@ async function main() {
       });
       return result.canceled ? null : result.filePaths[0];
     },
+    trashItem: (path) => shell.trashItem(path),
     openPath: (path) => shell.openPath(path),
     openEditor: (path) => shell.openExternal(`vscode://file${pathToFileURL(path).pathname}`),
     openCodex: (url) => shell.openExternal(url),
@@ -175,6 +176,8 @@ async function main() {
   handle("connect-github", () => githubAuth.connect());
   handle("cancel-github", () => githubAuth.cancel());
   handle("task-workspace", (pid, id, action, options) => runtime.taskWorkspace(pid, id, action, options));
+  handle("terminal", (pid, action, options) => runtime.terminal(pid, action, options));
+  handle("development-space", (pid, action, options) => runtime.developmentSpace(pid, action, options));
   handle("task-git", (pid, id, action, options) => runtime.taskGit(pid, id, action, options));
   handle("check-repository-access", (pid, url) => runtime.checkRepositoryAccess(pid, url));
   handle("clone-project", (pid, url) => runtime.cloneProject(pid, url));
@@ -223,6 +226,7 @@ async function main() {
         runtime.release();
     },
   );
+  window.webContents.on("render-process-gone", () => runtime.release());
   app.on("before-quit", () => { void githubAuth.cancel(); runtime.release(); });
   app.on("window-all-closed", () => app.quit());
   const configured = process.env.BRIDGAIN_DEVELOPER_URL;

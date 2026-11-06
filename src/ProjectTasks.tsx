@@ -149,9 +149,11 @@ export default function ProjectTasks({
   onDeployments,
   onApprovals,
   onCreateRequest,
+  onDevelopment,
 }: {
   project: { id: string; name: string; members: Member[]; canManage?: boolean };
   onCreateRequest?: () => void;
+  onDevelopment?: (id: string) => void;
   onApprovals?: () => void;
   onDeployments?: () => void;
   userId?: string;
@@ -389,6 +391,7 @@ export default function ProjectTasks({
         {selectedTask && <TaskDetail key={selectedTask.id} task={selectedTask}
           projectId={project.id} projectName={project.name} userId={userId}
           onClose={close} onRequest={(id) => { close(); onOpenRequest(id); }}
+          onDevelopment={onDevelopment ? () => { close(); onDevelopment(selectedTask.id); } : undefined}
           onTask={(id) => setEditing(id)} onDeployments={onDeployments} onApprovals={onApprovals}
           onChanged={() => { setRevision(v => v + 1); onChanged?.(); }} />}
       </dialog>

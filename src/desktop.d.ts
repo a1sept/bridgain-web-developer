@@ -1,3 +1,6 @@
+export type DevelopmentState = RepositoryState & { folders?:string[]; integration?: {kind:string;branch:string;conflicts:string[]}; files: GitState["files"]; head: string; upstream: string; ahead: number | null; behind: number | null; history: (GitState["history"][number] & {parents: string[]})[]; refs: {sha:string;name:string}[]; hasMore: boolean; fetchedAt: string | null; bindings: {taskId:string;branch:string}[] };
+export type EditorFile = {path:string;content:string;revision:string};
+export type DirectoryEntry = {name:string;path:string;directory:boolean;link:boolean};
 export type RepositoryAccessFailureResult = { ok: false; code: "authentication" | "permission" | "not_found_or_no_access" | "network" | "git_missing" | "unknown"; message: string; repositoryUrl: string };
 export type RepositoryAccessResult = { ok: true; code: "ok"; message: string; repositoryUrl: string } | RepositoryAccessFailureResult;
 export type GitCommitDetail = { sha: string; files: { path: string; status: string; originalPath?: string; diff: string; limited?: boolean }[]; limited: boolean };
@@ -35,6 +38,8 @@ export type DesktopEvent = {
   name?: string;
 };
 export type DesktopBridge = {
+  terminal?: (pid: string, action: string, options: Record<string, unknown>) => Promise<any>;
+  developmentSpace?: (pid: string, action?: string, options?: Record<string, unknown>) => Promise<any>;
   connectGithub?: () => Promise<void>;
   cancelGithub?: () => Promise<void>;
   checkRepositoryAccess?: (pid: string, repositoryUrl: string) => Promise<RepositoryAccessResult>;

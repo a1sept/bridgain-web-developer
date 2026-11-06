@@ -5,6 +5,7 @@ import "./project-controls.css";
 export type DeveloperView =
   "dashboard" | "projects" | "activity" | "invitations" | "teams" | "approvals";
 export type ProjectSection =
+  | "development"
   | "programs"
   | "schedule"
   | "studyActivities"
@@ -104,7 +105,7 @@ export default function DeveloperShell(p: Props) {
       return false;
     }
   });
-  const showContext = p.active === "projects" && !contextHidden;
+  const showContext = p.active === "projects" && p.section !== "development" && !contextHidden;
   const toggleContext = (hidden: boolean) => {
     setContextHidden(hidden);
     try {
@@ -139,7 +140,7 @@ export default function DeveloperShell(p: Props) {
   };
   return (
     <div
-      className={`ds-shell ${open ? "ds-menu-open" : ""} ${showContext ? "ds-with-context" : ""}`}
+      className={`ds-shell ${p.section === "development" ? "ds-development" : ""} ${open ? "ds-menu-open" : ""} ${showContext ? "ds-with-context" : ""}`}
     >
       <header className="ds-mobile-bar">
         <button
@@ -207,6 +208,7 @@ export default function DeveloperShell(p: Props) {
                 )}
               </button>
             ))}
+          {selected && selected.kind !== "study" && (!p.projectPermissions || p.projectPermissions.includes("tasks.read")) && <button aria-label="개발 공간" aria-current={p.section === "development" ? "page" : undefined} onClick={() => act(() => p.onSection("development"))}><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" aria-hidden="true"><path d="m8 6-6 6 6 6M16 6l6 6-6 6M14 3l-4 18"/></svg><span>개발 공간</span></button>}
         </nav>
         <div className="ds-account" ref={accountRef}>
           <button
