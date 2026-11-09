@@ -344,7 +344,7 @@ export default function LiveWorkspace({
       ? window.history.state.projectId
       : null,
   );
-  const [developmentTaskId, setDevelopmentTaskId] = useState<string>();
+  const [developmentTask, setDevelopmentTask] = useState<{projectId:string;taskId:string}>();
   const [taskRequestId, setTaskRequestId] = useState<string | undefined>();
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
@@ -511,8 +511,9 @@ export default function LiveWorkspace({
     setRequestPath("/");
     window.history.pushState({ developerView: next }, "", "/");
   }
-  function openProject(id: string, section: ProjectSection = "overview") {
+  function openProject(id: string, section: ProjectSection = "overview", taskId?: string) {
     if (!window.dispatchEvent(new Event("bridgain-before-navigate", {cancelable:true}))) return;
+    setDevelopmentTask(section === "development" && taskId ? {projectId:id,taskId} : undefined);
     setTaskRequestId(undefined);
     setView("projects");
     setCreating(false);
@@ -737,7 +738,7 @@ export default function LiveWorkspace({
         }}
       />,
     );
-  if (view === "projects" && project && project.kind !== "study" && projectSection === "development") return shell(<DevelopmentSpace key={`${user.id}:${project.id}`} project={project} userId={user.id} initialTaskId={developmentTaskId} onBack={()=>openProject(project.id,"tasks")} onTask={id=>{window.sessionStorage.setItem("bridgain-task",id);openProject(project.id,"tasks");}}/>);
+  if (view === "projects" && project && project.kind !== "study" && projectSection === "development") return shell(<DevelopmentSpace key={`${user.id}:${project.id}`} project={project} userId={user.id} initialTaskId={developmentTask?.projectId===project.id?developmentTask.taskId:undefined} onBack={()=>openProject(project.id,"tasks")} onTask={id=>{window.sessionStorage.setItem("bridgain-task",id);openProject(project.id,"tasks");}}/>);
   if (view === "projects" && project?.kind === "study") return shell(
     <StudyWorkspace key={project.id} project={project} userId={user.id} section={projectSection} onSection={section=>openProject(project.id,section)} onChanged={reload}/>
   );
@@ -915,7 +916,7 @@ export default function LiveWorkspace({
                 )}
               {view === "projects" && project && projectSection === "tasks" && (
                 <ProjectTasks
-                  onDevelopment={id=>{setDevelopmentTaskId(id);openProject(project.id,"development");}}
+                  onDevelopment={id=>openProject(project.id,"development",id)}
                   refreshKey={dashboardRefresh}
                   key={project.id}
                   project={project}

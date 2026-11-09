@@ -11,7 +11,9 @@
     "start": "electron main.mjs",
     "start:remote": "electron remote.mjs",
     "check": "node check.mjs",
-    "test": "node --test test/*.test.mjs"
+    "test": "node --test test/*.test.mjs",
+    "postinstall": "node prepare-pty.mjs",
+    "prestart": "node prepare-pty.mjs"
   },
   "devDependencies": {
     "electron": "^44.7.0"

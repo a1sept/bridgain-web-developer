@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { mkdtemp, writeFile, readFile } from "node:fs/promises";
+import { realpath, mkdtemp, writeFile, readFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { execFile } from "node:child_process";
@@ -10,7 +10,7 @@ import { DesktopRuntime } from "../runtime.mjs";
 const exec = promisify(execFile);
 const pid = "abcdef01-1234-4321-abcd-123456789012", id = "abcdef02-1234-4321-abcd-123456789012";
 async function fixture() {
-  const root = await mkdtemp(join(tmpdir(), "bridgain-worktree-"));
+  const root = await realpath(await mkdtemp(join(tmpdir(), "bridgain-worktree-")));
   const folder = join(root, "repo"), remote = join(root, "remote.git"), path = join(root, "work", "task");
   const git = async (...args) => (await exec("git", args, { cwd: folder })).stdout.trim();
   await exec("git", ["init", "--bare", remote]);

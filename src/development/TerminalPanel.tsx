@@ -7,6 +7,8 @@ type Props = { projectId:string; root:string; workspaceTaskId?:string; visible:b
 export default function TerminalPanel(p:Props) {
   const host=useRef<HTMLDivElement>(null), terminal=useRef<Terminal|null>(null), fit=useRef<FitAddon|null>(null);
   const resizeLatest=useRef(()=>{});
+  const generation=useRef(0);
+  const [connection,setConnection]=useState(0);
   const id=useRef(''), cursor=useRef(0), queue=useRef(Promise.resolve()), alive=useRef(true);
   const [session,setSession]=useState(''),[busy,setBusy]=useState(false),[exited,setExited]=useState(false),[error,setError]=useState('');
   const bridge=window.bridgainDesktop;
@@ -24,13 +26,13 @@ export default function TerminalPanel(p:Props) {
     const observer=new ResizeObserver(()=>resizeLatest.current());observer.observe(host.current!);
     return()=>{alive.current=false;observer.disconnect();input.dispose();t.dispose();terminal.current=null;};
   },[p.root,p.projectId]);
-  useEffect(()=>{if(!session||exited)return;let stopped=false;let timer:ReturnType<typeof setTimeout>;
-    async function poll(){try{const r=await call('read',{cursor:cursor.current});if(stopped)return;consume(r);if(r.exited)return;}catch(e){if(!stopped)fail(e);return;}if(!stopped)timer=setTimeout(poll,400);}
+  useEffect(()=>{if(!session||exited)return;const epoch=generation.current;let stopped=false;let timer:ReturnType<typeof setTimeout>;
+    async function poll(){try{const r=await call('read',{cursor:cursor.current});if(stopped||epoch!==generation.current)return;consume(r);if(r.exited)return;}catch(e){if(!stopped&&epoch===generation.current)fail(e);return;}if(!stopped)timer=setTimeout(poll,400);}
     void poll();return()=>{stopped=true;clearTimeout(timer);};
-  },[session,exited]);
+  },[session,exited,connection]);
   useEffect(()=>{if(p.visible)requestAnimationFrame(resize);},[p.visible,p.height]);
-  async function start(){setBusy(true);setError('');try{if(id.current&&exited)await call('close');terminal.current?.reset();cursor.current=0;const r=await call('open',{cols:terminal.current?.cols,rows:terminal.current?.rows});if(!alive.current)return;id.current=r.id;setExited(false);consume(r);setSession(r.id);resize();terminal.current?.focus();}catch(e){fail(e);}finally{if(alive.current)setBusy(false);}}
-  async function close(){setBusy(true);try{await call('close');id.current='';setSession('');setExited(false);terminal.current?.write('\r\n[터미널 종료]\r\n');}catch(e){fail(e);}finally{setBusy(false);}}
+  async function start(){generation.current++;setBusy(true);setError('');try{if(id.current&&exited)await call('close');terminal.current?.reset();cursor.current=0;const r=await call('open',{cols:terminal.current?.cols,rows:terminal.current?.rows});if(!alive.current)return;id.current=r.id;setExited(false);consume(r);setSession(r.id);setConnection(n=>n+1);resize();terminal.current?.focus();}catch(e){fail(e);}finally{if(alive.current)setBusy(false);}}
+  async function close(){generation.current++;setBusy(true);try{await call('close');id.current='';setSession('');setExited(false);terminal.current?.write('\r\n[터미널 종료]\r\n');}catch(e){fail(e);}finally{setBusy(false);}}
   return <section className="dev-terminal" hidden={!p.visible} style={{height:p.height}} aria-label="로컬 터미널">
     <ResizeHandle axis="y" reverse value={p.height} min={120} max={p.maxHeight} label="편집기와 터미널 높이 조절" onChange={p.onHeight} onReset={()=>p.onHeight(200)}/>
     <div className="dev-terminal-header"><strong>터미널</strong><small title={p.root}>{p.root}</small>

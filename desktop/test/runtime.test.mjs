@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { mkdtemp, mkdir, realpath } from "node:fs/promises";
+import { mkdtemp, mkdir, realpath, rm } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { DesktopRuntime } from "../runtime.mjs";
@@ -13,8 +13,8 @@ async function repository(cwd) {
 }
 const pid = "abcdef01-1234-4321-abcd-123456789012",
   sid = "abcdef02-1234-4321-abcd-123456789012";
-async function fixture() {
-  const directory = await mkdtemp(join(tmpdir(), "bridgain-ai-test-"));
+async function fixture(t) {
+  const directory = await realpath(await mkdtemp(join(tmpdir(), "bridgain-ai-test-")));
   const cwd = join(directory, "project");
   await mkdir(cwd);
   await repository(cwd);
@@ -39,12 +39,14 @@ async function fixture() {
     emit: (e) => events.push(e),
     openAuth: async () => {},
   });
+  runtime.provider = async () => ({status:async()=>({connected:false})});
+  t.after(async()=>{runtime.release();await rm(directory,{recursive:true,force:true});});
   runtime.origin = "https://developer.example.test";
   await runtime.load();
   return { runtime, calls, events, cwd, setUser: (u) => (user = u) };
 }
-test("AI stays optional: an unconnected developer has no provider process", async () => {
-  const { runtime } = await fixture();
+test("AI stays optional: an unconnected developer has no provider process", async (t) => {
+  const { runtime } = await fixture(t);
   runtime.provider = () => {
     throw Error("Unexpected provider startup");
   };
@@ -52,8 +54,8 @@ test("AI stays optional: an unconnected developer has no provider process", asyn
   assert.equal(state.providers.codex.connected, false);
   assert.equal(state.providers.claude.connected, false);
 });
-test("local folders and provider enablement are separated by server and developer identity", async () => {
-  const { runtime, cwd, setUser } = await fixture();
+test("local folders and provider enablement are separated by server and developer identity", async (t) => {
+  const { runtime, cwd, setUser } = await fixture(t);
   await runtime.folder(pid);
   const first = await runtime.owner();
   first.settings.enabled.codex = true;
@@ -66,8 +68,8 @@ test("local folders and provider enablement are separated by server and develope
   const other = await runtime.owner();
   assert.notEqual(second.key, other.key);
 });
-test("each project keeps its own folder, including after reload and disconnect", async () => {
-  const { runtime, cwd } = await fixture();
+test("each project keeps its own folder, including after reload and disconnect", async (t) => {
+  const { runtime, cwd } = await fixture(t);
   const otherPid = "abcdef03-1234-4321-abcd-123456789012";
   const otherFolder = join(cwd, "other-project");
   await mkdir(otherFolder);
@@ -88,8 +90,8 @@ test("each project keeps its own folder, including after reload and disconnect",
   assert.equal(state.folders[pid], undefined);
   assert.equal(state.folders[otherPid], await realpath(otherFolder));
 });
-test("an AI tool remains bound to its original user, project and session", async () => {
-  const { runtime, calls, setUser } = await fixture();
+test("an AI tool remains bound to its original user, project and session", async (t) => {
+  const { runtime, calls, setUser } = await fixture(t);
   const owner = await runtime.owner();
   const run = {
     id: sid,
@@ -106,15 +108,15 @@ test("an AI tool remains bound to its original user, project and session", async
     /계정이 변경/,
   );
 });
-test("investigation requires a connected subscription and an explicitly selected folder", async () => {
-  const { runtime } = await fixture();
+test("investigation requires a connected subscription and an explicitly selected folder", async (t) => {
+  const { runtime } = await fixture(t);
   await assert.rejects(runtime.run(pid, sid, "research"), /먼저 연결/);
   const owner = await runtime.owner();
   owner.settings.enabled.codex = true;
   await assert.rejects(runtime.run(pid, sid, "research"), /로컬 폴더/);
 });
-test("same-session double starts are blocked during async preflight", async () => {
-  const { runtime } = await fixture();
+test("same-session double starts are blocked during async preflight", async (t) => {
+  const { runtime } = await fixture(t);
   let release;
   runtime.prepareRun = () => new Promise((resolve) => (release = resolve));
   const first = runtime.run(pid, sid, "first");
@@ -124,8 +126,8 @@ test("same-session double starts are blocked during async preflight", async () =
   assert.equal(runtime.starting.size, 0);
 });
 
-test("a rename arriving during sync gets a fresh snapshot after the pending sync", async () => {
-  const { runtime } = await fixture();
+test("a rename arriving during sync gets a fresh snapshot after the pending sync", async (t) => {
+  const { runtime } = await fixture(t);
   const owner = await runtime.owner();
   owner.settings.enabled.codex = true;
   const api = runtime.api;
@@ -166,8 +168,8 @@ test("a rename arriving during sync gets a fresh snapshot after the pending sync
   assert.equal(runtime.projectSyncs.size, 0);
 });
 
-test("opening Codex requires an owned Codex session and a valid local thread ID", async () => {
-  const { runtime, setUser } = await fixture();
+test("opening Codex requires an owned Codex session and a valid local thread ID", async (t) => {
+  const { runtime, setUser } = await fixture(t);
   const owner = await runtime.owner();
   const localId = "abcdef04-1234-4321-abcd-123456789012";
   owner.settings.localSessions[sid] = { pid, localId };
@@ -190,8 +192,8 @@ test("opening Codex requires an owned Codex session and a valid local thread ID"
   assert.equal(opened.length, 1);
 });
 
-test("failed sync cannot pass an unverified saved project ID into a run", async () => {
-  const { runtime, cwd } = await fixture();
+test("failed sync cannot pass an unverified saved project ID into a run", async (t) => {
+  const { runtime, cwd } = await fixture(t);
   const owner = await runtime.owner();
   owner.settings.enabled.codex = true;
   owner.settings.folders[pid] = cwd;
@@ -203,15 +205,15 @@ test("failed sync cannot pass an unverified saved project ID into a run", async 
   await runtime.prepareRun(pid, sid, "research");
   assert.equal(prepared.codexProjectId, undefined);
 });
-test("repository access IPC checks server project membership and registered URL before Git", async () => {
-  const { runtime, calls } = await fixture();
+test("repository access IPC checks server project membership and registered URL before Git", async (t) => {
+  const { runtime, calls } = await fixture(t);
   await assert.rejects(runtime.checkRepositoryAccess("abcdef99-1234-4321-abcd-123456789012", "https://github.com/example/project"), /프로젝트 접근/);
   await assert.rejects(runtime.checkRepositoryAccess(pid, "https://github.com/other/project"), /등록된/);
   assert.ok(calls.some(call => call.path === "/api/workspace"));
 });
 
-test("folder permission failure is structured and preserves existing binding; cancel performs no access check", async () => {
-  const { runtime, cwd } = await fixture();
+test("folder permission failure is structured and preserves existing binding; cancel performs no access check", async (t) => {
+  const { runtime, cwd } = await fixture(t);
   await runtime.folder(pid);
   const owner = await runtime.owner();
   const saved = owner.settings.folders[pid];
@@ -227,8 +229,8 @@ test("folder permission failure is structured and preserves existing binding; ca
   assert.equal(owner.settings.folders[pid], await realpath(cwd));
 });
 
-test("folder bindings survive a new runtime instance without leaking between accounts or servers", async () => {
-  const { runtime, cwd, setUser } = await fixture();
+test("folder bindings survive a new runtime instance without leaking between accounts or servers", async (t) => {
+  const { runtime, cwd, setUser } = await fixture(t);
   await runtime.folder(pid);
   const secondFolder = join(runtime.directory, "second-account");
   await mkdir(secondFolder);
@@ -248,8 +250,8 @@ test("folder bindings survive a new runtime instance without leaking between acc
   assert.equal((await restarted.state()).folders[pid], await realpath(cwd));
 });
 
-test("clone saves the selected directory; cancel and authentication failure preserve it", async () => {
-  const { runtime, cwd } = await fixture();
+test("clone saves the selected directory; cancel and authentication failure preserve it", async (t) => {
+  const { runtime, cwd } = await fixture(t);
   await runtime.folder(pid);
   const destination = join(runtime.directory, "clone");
   await mkdir(destination);

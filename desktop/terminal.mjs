@@ -17,6 +17,7 @@ export class TerminalSessions {
     if(generation!==this.generation)throw Error('터미널 시작이 취소되었습니다.');
     const duplicate=[...this.sessions.values()].find(s=>s.owner===owner&&s.project===project&&s.cwd===cwd);
     if(duplicate)return this.snapshot(duplicate,0);
+    if (this.sessions.size >= 4) throw Error('열린 터미널을 종료한 뒤 다시 시작해주세요. 최대 4개입니다.');
     const shell = process.platform === 'win32' ? (process.env.COMSPEC || 'cmd.exe') : (userInfo().shell || '/bin/sh');
     const env = { ...process.env, TERM: 'xterm-256color', COLORTERM: 'truecolor' };
     delete env.ELECTRON_RUN_AS_NODE; delete env.NODE_OPTIONS; delete env.NODE_CHANNEL_FD;
