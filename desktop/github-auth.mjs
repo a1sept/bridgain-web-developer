@@ -19,7 +19,7 @@ export class GithubAuth {
     const flow = { cancelled: false, credentials: null, api: this.apiFactory() };
     this.active = flow;
     try {
-      const result = await flow.api("/api/workspace/github/desktop-connect", {});
+      const result = await flow.api("/api/workspace/github/desktop-connect", { browserConfirmation: true });
       flow.credentials = { state: result.state, claimSecret: result.claimSecret };
       if (flow.cancelled) {
         await flow.api("/api/workspace/github/desktop-cancel", flow.credentials).catch(() => {});
@@ -37,7 +37,21 @@ export class GithubAuth {
         const status = await flow.api("/api/workspace/github/desktop-complete", flow.credentials);
         if (flow.cancelled) return;
         if (!status.ready) continue;
-        const approved = await this.confirmAccount(status.account);
+        if (status.decision === "pending") continue;
+        if (status.decision === "cancel") throw Error("GitHub 계정 연결을 취소했습니다.");
+        const approved = status.decision === "connect" ? true : status.decision === "switch" ? "switch" : await this.confirmAccount(status.account);
+        if (approved === "switch") {
+          await flow.api("/api/workspace/github/desktop-cancel", flow.credentials);
+          flow.credentials = null;
+          if (flow.cancelled) return;
+          const next = await flow.api("/api/workspace/github/desktop-connect", {browserConfirmation:true});
+          flow.credentials = {state:next.state,claimSecret:next.claimSecret};
+          if (flow.cancelled) {await flow.api("/api/workspace/github/desktop-cancel",flow.credentials).catch(()=>{});return;}
+          const nextUrl = githubBrowserUrl(next.url);
+          if (new URL(nextUrl).searchParams.get("state") !== next.state || typeof next.claimSecret !== "string" || !next.claimSecret) throw Error("GitHub 연결 응답을 확인해주세요.");
+          await this.openBrowser(nextUrl);
+          continue;
+        }
         if (flow.cancelled) return;
         if (!approved) throw Error("GitHub 계정 연결을 취소했습니다.");
         const complete = await flow.api("/api/workspace/github/desktop-complete", { ...flow.credentials, confirm: true });

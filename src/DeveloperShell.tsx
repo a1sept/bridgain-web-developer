@@ -3,7 +3,7 @@ import { useAi } from "./ai/AiWorkspace";
 import "./developer-shell.css";
 import "./project-controls.css";
 export type DeveloperView =
-  "dashboard" | "projects" | "activity" | "invitations" | "teams" | "approvals";
+  "dashboard" | "projects" | "development" | "activity" | "invitations" | "teams" | "approvals";
 export type ProjectSection =
   | "development"
   | "programs"
@@ -45,6 +45,7 @@ type Props = {
 const labels = {
   dashboard: "대시보드",
   projects: "프로젝트",
+  development: "개발 공간",
   activity: "활동 기록",
   invitations: "받은 초대",
   teams: "팀 관리",
@@ -63,7 +64,7 @@ function Icon({ name }: { name: DeveloperView }) {
       strokeLinejoin="round"
       aria-hidden="true"
     >
-      {name === "dashboard" ? (
+      {name === "development" ? <path d="m8 6-6 6 6 6M16 6l6 6-6 6M14 3l-4 18"/> : name === "dashboard" ? (
         <>
           <rect x="3" y="3" width="7" height="7" rx="1.5" />
           <rect x="14" y="3" width="7" height="7" rx="1.5" />
@@ -105,7 +106,7 @@ export default function DeveloperShell(p: Props) {
       return false;
     }
   });
-  const showContext = p.active === "projects" && p.section !== "development" && !contextHidden;
+  const showContext = p.active === "projects" && !(p.selectedId && p.section === "development") && !contextHidden;
   const toggleContext = (hidden: boolean) => {
     setContextHidden(hidden);
     try {
@@ -134,13 +135,14 @@ export default function DeveloperShell(p: Props) {
     };
   }, [accountOpen]);
   const selected = p.projects.find((x) => x.id === p.selectedId);
+  const inEditor = p.active === "projects" && !!selected && p.section === "development";
   const act = (fn: () => void) => {
     fn();
     setOpen(false);
   };
   return (
     <div
-      className={`ds-shell ${p.section === "development" ? "ds-development" : ""} ${open ? "ds-menu-open" : ""} ${showContext ? "ds-with-context" : ""}`}
+      className={`ds-shell ${inEditor ? "ds-development" : ""} ${open ? "ds-menu-open" : ""} ${showContext ? "ds-with-context" : ""}`}
     >
       <header className="ds-mobile-bar">
         <button
@@ -180,17 +182,21 @@ export default function DeveloperShell(p: Props) {
               <button
                 key={v}
                 aria-label={labels[v]}
-                aria-current={p.active === v ? "page" : undefined}
+                aria-current={(inEditor ? v === "development" : p.active === v) ? "page" : undefined}
                 aria-expanded={
                   v === "projects" && p.active === "projects"
                     ? showContext
                     : undefined
                 }
                 onClick={() => {
+                  if (v === "development" && selected && selected.kind !== "study" && (!p.projectPermissions || p.projectPermissions.includes("tasks.read"))) {
+                    act(() => p.onSection("development"));
+                    return;
+                  }
                   // 데스크톱에서 현재 프로젝트 아이콘을 다시 누르면 VS Code처럼 사이드바를 접고 펼친다.
                   if (
                     v === "projects" &&
-                    p.active === "projects" &&
+                    p.active === "projects" && !inEditor &&
                     window.matchMedia("(min-width: 761px)").matches
                   ) {
                     toggleContext(!contextHidden);
@@ -208,7 +214,6 @@ export default function DeveloperShell(p: Props) {
                 )}
               </button>
             ))}
-          {selected && selected.kind !== "study" && (!p.projectPermissions || p.projectPermissions.includes("tasks.read")) && <button aria-label="개발 공간" aria-current={p.section === "development" ? "page" : undefined} onClick={() => act(() => p.onSection("development"))}><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" aria-hidden="true"><path d="m8 6-6 6 6 6M16 6l6 6-6 6M14 3l-4 18"/></svg><span>개발 공간</span></button>}
         </nav>
         <div className="ds-account" ref={accountRef}>
           <button

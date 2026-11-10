@@ -167,9 +167,9 @@ async function main() {
       const { response } = await dialog.showMessageBox(window, {
         type: "question", title: "GitHub 계정 연결", message: `${account.login} 계정을 연결할까요?`,
         detail: "현재 Bridgain 계정에서 이 GitHub 계정을 사용합니다.",
-        buttons: ["연결", "취소"], defaultId: 0, cancelId: 1,
+        buttons: ["이 계정으로 연결", "다른 계정으로 인증", "취소"], defaultId: 0, cancelId: 2,
       });
-      return response === 0;
+      return response === 1 ? "switch" : response === 0;
     },
   });
   handle("connect-server", connectServer, true);

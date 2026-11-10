@@ -267,7 +267,7 @@ export default function LiveWorkspace({
       setRequestPath(window.location.pathname);
       const saved = window.history.state;
       setView(
-        ["dashboard", "projects", "activity", "invitations", "teams", "approvals"].includes(
+        ["dashboard", "projects", "development", "activity", "invitations", "teams", "approvals"].includes(
           saved?.developerView,
         )
           ? saved.developerView
@@ -316,7 +316,7 @@ export default function LiveWorkspace({
   }, [inviteDetail]);
 
   const [view, setView] = useState<DeveloperView>(() =>
-    ["dashboard", "projects", "activity", "invitations", "teams", "approvals"].includes(
+    ["dashboard", "projects", "development", "activity", "invitations", "teams", "approvals"].includes(
       window.history.state?.developerView,
     )
       ? window.history.state.developerView
@@ -755,6 +755,8 @@ export default function LiveWorkspace({
                     ? project
                       ? project.name
                       : "프로젝트"
+                    : view === "development"
+                      ? "개발 공간"
                     : view === "teams"
                       ? "팀 관리"
                       : "받은 초대"}
@@ -799,6 +801,11 @@ export default function LiveWorkspace({
             </section>
           ) : (
             <>
+              {view === "development" && <section aria-label="개발 공간 프로젝트 선택">
+                <div className="pw-heading"><div><h1>개발 공간</h1><p>코드를 편집할 프로젝트를 선택하세요. 로컬 폴더 연결은 선택한 프로젝트에서 이어집니다.</p></div></div>
+                <div className="development-projects">{data.projects.filter(p=>p.kind!=="study"&&(!p.permissions||p.permissions.includes("tasks.read"))).map(p=><button className="pw-secondary" key={p.id} onClick={()=>openProject(p.id,"development")}><strong>{p.name}</strong><span>개발 공간 열기 →</span></button>)}</div>
+                {!data.projects.some(p=>p.kind!=="study"&&(!p.permissions||p.permissions.includes("tasks.read")))&&<section className="pw-empty"><h2>열 수 있는 개발 프로젝트가 없어요</h2><p>프로젝트에 참여하고 업무 조회 권한을 받으면 여기에서 열 수 있습니다.</p><button className="pw-secondary" onClick={()=>navigate("projects")}>프로젝트 보기</button></section>}
+              </section>}
               {view === "activity" && <ActivityHistory currentUser={user} refreshKey={dashboardRefresh} />}
               {view === "approvals" && (
                 <Approvals

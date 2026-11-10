@@ -86,3 +86,8 @@
 .ds-project-heading { padding: 20px 32px 8px; background: #fff; }
 .ds-project-heading h1 { margin: 0; font-size: 18px; line-height: 1.5; font-weight: 600; overflow-wrap: anywhere; }
 @media (max-width: 760px) { .ds-project-heading { padding: 16px 16px 4px; } }
+
+.development-projects { display: grid; gap: 8px; max-width: 760px; }
+.development-projects > button { display: flex; align-items: center; justify-content: space-between; gap: 12px; text-align: left; width: 100%; }
+.development-projects > button strong { min-width: 0; overflow-wrap: anywhere; }
+.development-projects > button span { flex-shrink: 0; font-weight: 400; }
