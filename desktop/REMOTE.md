@@ -18,7 +18,7 @@ BRIDGAIN_REMOTE_URL=http://nexusnas.iptime.org:15174 npm run start:remote
 `BRIDGAIN_REMOTE_URL`은 필수 환경변수로, 코드에 기본 주소는 없습니다. 경로·쿼리·인증정보 없는 HTTP(S) 기본 주소를 사용합니다. `.env.dev`를 자동으로 읽지 않습니다. 주소 변경 후 앱을 종료하고 다시 실행하세요. 실행 중인 앱이 있으면 두 번째 실행은 기존 창을 활성화합니다.
 
 - 개발자 웹 화면: `http://nexusnas.iptime.org:15174`
-- API 서버: `http://nexusnas.iptime.org:15175`
+- API 서버: `https://bridgain-dev.nxithub.com`
 - Electron에는 웹 화면 주소를 설정합니다. 웹의 기존 `/api` 프록시가 API 서버에 연결하므로 로컬 프론트/API 실행은 필요 없습니다.
 - 쿠키와 세션은 별도 `Bridgain Remote` 사용자 데이터에 보존합니다. 기본 브라우저 및 기존 AI 데스크톱과 로그인 상태를 공유하지 않습니다.
 
