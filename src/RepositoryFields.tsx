@@ -48,6 +48,7 @@ type Status = {
   configured: boolean;
   connected: boolean;
   installUrl: string | null;
+  account?: { login: string } | null;
 };
 async function github(path: string, mutation = false) {
   const headers: Record<string, string> = {};
@@ -409,7 +410,9 @@ export default function RepositoryFields({
               name={status?.connected ? "check" : "plus"}
               size={14}
             />
-            {status?.connected ? "연결됨" : "연결 필요"}
+            {status?.connected
+              ? `연결됨 · ${status.account ? `@${status.account.login}` : "계정 확인 불가"}`
+              : "연결 필요"}
           </span>
           <button
             type="button"
@@ -490,7 +493,7 @@ export default function RepositoryFields({
               <div className="repo-toolbar">
                 <span className="repo-connection-badge is-connected">
                   <ControlIcon name="check" size={14} />
-                  GitHub 연결됨
+                  GitHub 연결됨 · {status.account ? `@${status.account.login}` : "계정 확인 불가"}
                 </span>
                 {!disabled && (
                   <div className="repo-actions">

@@ -17,7 +17,7 @@ function setup({confirm=true,start,open}={}){
  return {flow,calls,opened};
 }
 test('direct GitHub navigation and explicit account confirmation',async()=>{
- const {flow,calls,opened}=setup();await flow.connect();assert.deepEqual(opened,[url]);assert(!opened[0].includes('main-only-secret'));assert.equal(calls.filter(c=>c.body?.confirm).length,1);assert.equal(flow.active,null);
+ const {flow,calls,opened}=setup();assert.equal((await flow.connect()).connected,true);assert.deepEqual(opened,[url]);assert(!opened[0].includes('main-only-secret'));assert.equal(calls.filter(c=>c.body?.confirm).length,1);assert.equal(flow.active,null);
 });
 test('declining confirmation cancels without binding',async()=>{
  const {flow,calls}=setup({confirm:false});await assert.rejects(flow.connect(),/취소/);assert(!calls.some(c=>c.body?.confirm));assert(calls.some(c=>c.path.endsWith('desktop-cancel')));
@@ -50,4 +50,15 @@ test('browser cancellation does not confirm or change the stored connection',asy
  const calls=[];const api=async(path,body)=>{calls.push({path,body});if(path.endsWith('desktop-connect'))return{url,state,claimSecret:'secret'};return{ready:true,decision:'cancel'};};
  const flow=new GithubAuth({api,openBrowser:async()=>{},confirmAccount:async()=>{throw Error('unexpected');},wait:async()=>{}});
  await assert.rejects(flow.connect(),/취소/);assert(!calls.some(c=>c.body?.confirm));assert(calls.some(c=>c.path.endsWith('desktop-cancel')));
+});
+test('successful authentication reports installation so the desktop does not cover its browser',async()=>{
+ const installUrl='https://github.com/apps/bridgain/installations/new',opened=[];
+ const api=async(path,body)=>{
+  if(path.endsWith('desktop-connect'))return {url,state,claimSecret:'secret'};
+  if(path.endsWith('desktop-complete'))return body.confirm?{connected:true,installUrl}:{ready:true,decision:'connect'};
+  throw Error('completed authentication must not be cancelled');
+ };
+ const flow=new GithubAuth({api,openBrowser:async value=>opened.push(value),wait:async()=>{}});
+ assert.deepEqual(await flow.connect(),{connected:true,installUrl});
+ assert.deepEqual(opened,[url,installUrl]);
 });

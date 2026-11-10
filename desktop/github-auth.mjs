@@ -60,7 +60,7 @@ export class GithubAuth {
         flow.credentials = null;
         if (!flow.cancelled && complete.installUrl)
           await this.openBrowser(githubInstallationUrl(complete.installUrl));
-        return;
+        return flow.cancelled ? undefined : complete;
       }
       if (!flow.cancelled) throw Error("GitHub 연결 시간이 만료됐어요. 다시 연결해주세요.");
     } finally {

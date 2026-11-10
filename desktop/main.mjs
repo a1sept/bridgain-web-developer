@@ -173,7 +173,16 @@ async function main() {
     },
   });
   handle("connect-server", connectServer, true);
-  handle("connect-github", () => githubAuth.connect());
+  handle("connect-github", async () => {
+    const result = await githubAuth.connect();
+    // Keep installation in the browser when needed; otherwise return the user
+    // to the desktop that is about to refresh its repository list.
+    if (result?.connected && !result.installUrl && !window.isDestroyed()) {
+      if (window.isMinimized()) window.restore();
+      window.show();
+      window.focus();
+    }
+  });
   handle("cancel-github", () => githubAuth.cancel());
   handle("task-workspace", (pid, id, action, options) => runtime.taskWorkspace(pid, id, action, options));
   handle("terminal", (pid, action, options) => runtime.terminal(pid, action, options));
