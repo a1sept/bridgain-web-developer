@@ -7,8 +7,8 @@ on:
 permissions:
   contents: read
 concurrency:
-  group: desktop-release-${{ github.ref }}
-  cancel-in-progress: false
+  group: desktop-release
+  cancel-in-progress: true
 jobs:
   test:
     runs-on: ubuntu-latest

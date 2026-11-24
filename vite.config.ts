@@ -19,7 +19,9 @@ export default defineConfig({
   server: {
     port,
     strictPort: true,
-    allowedHosts: ["bridgain-dev.nxithub.com", ...(allowedHost ? [allowedHost] : [])],
+    allowedHosts: allowedHost
+      ? [allowedHost]
+      : [],
     proxy: {
       "/api": {
         target: apiTarget,

@@ -6,7 +6,7 @@
 
 1. GitHub Releases에서 Apple Silicon용 `Bridgain-<버전>-mac-arm64.dmg`를 받는다.
 2. 기존 앱을 종료하고 DMG의 Bridgain을 응용 프로그램 폴더에 복사한다.
-3. 앱을 열면 `https://bridgain-dev.nxithub.com`으로 바로 연결된다. 서버 주소를 입력하지 않는다.
+3. 앱을 열면 기존 프론트 `http://nexusnas.iptime.org:15174`로 바로 연결된다. 서버 주소를 입력하지 않는다.
 4. 왼쪽 업데이트 아이콘 또는 앱 메뉴의 **업데이트 확인 / 화면 새로고침**을 누른다.
 
 - 새 데스크톱 버전이 없으면 저장 여부를 확인한 뒤 서버 화면을 새로 불러온다.
@@ -65,6 +65,6 @@ npm run desktop:pack
 
 0.1.1은 Developer ID 인증서가 없는 CI에서 서명이 생략됐다. 인증서가 없으면 `mac.identity: "-"`로 임시 서명을 명시한다. Hardened Runtime은 유지하고 임시 서명 전용 entitlement에만 `disable-library-validation`을 추가한다. Developer ID 빌드는 기존 entitlement를 유지한다. 새 DMG의 무결성·서명·실행 검증이 통과해야 업로드와 공개 배포가 진행된다. Apple 공증이나 Gatekeeper의 자동 승인을 의미하지 않는다.
 
-## 0.1.4 고정 서버 연결
+## 0.1.5 고정 연결
 
-설치 앱은 환경변수나 예전에 저장한 서버 주소와 무관하게 `https://bridgain-dev.nxithub.com`만 사용한다. 주소 변경 메뉴 대신 같은 서버에 다시 연결하는 메뉴를 제공하며 네트워크 실패 시 주소 입력 없이 다시 시도한다. 소스 실행의 개발 서버 선택 기능은 유지한다. 서버 역방향 프록시는 developer 웹 포트 15174로 연결하고, 프론트의 API upstream은 내부 `http://api:3000`을 사용해 순환 프록시를 막는다. API는 이 HTTPS Origin을 허용해야 한다. 기존 서버별 폴더 설정을 다른 서버로 복사하지 않는다.
+설치 앱은 환경변수나 예전에 저장한 서버 주소와 무관하게 기존 프론트 `http://nexusnas.iptime.org:15174`를 바로 연다. 이 프론트의 API_PROXY_TARGET은 `https://bridgain-dev.nxithub.com`이다. API 전용 도메인의 역방향 프록시 대상 15175와 프론트 포트 15174를 유지한다. 주소 변경 메뉴 대신 다시 연결 메뉴를 제공하며 네트워크 실패 시 주소 입력 없이 재시도한다. 소스 실행의 개발 서버 선택 기능은 유지한다. 기존 서버별 폴더 설정을 다른 서버로 복사하지 않는다.

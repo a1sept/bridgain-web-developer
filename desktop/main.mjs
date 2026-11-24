@@ -8,7 +8,7 @@ import { GithubAuth } from "./github-auth.mjs";
 import electronUpdater from "electron-updater";
 import { DesktopUpdates } from "./updates.mjs";
 // Complete ESM evaluation before waiting for Electron to emit ready.
-const FIXED_SERVER = "https://bridgain-dev.nxithub.com";
+const FIXED_SERVER = "http://nexusnas.iptime.org:15174";
 async function main() {
   // Keep the original source-run profile when productName changes in the installer.
   if (app.isPackaged && !app.commandLine.hasSwitch("user-data-dir")) {
