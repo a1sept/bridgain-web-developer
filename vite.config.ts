@@ -19,9 +19,12 @@ export default defineConfig({
   server: {
     port,
     strictPort: true,
-    allowedHosts: allowedHost
-      ? [allowedHost]
-      : [],
+    allowedHosts: ["bridgain-dev-tool.nxithub.com", ...(allowedHost ? [allowedHost] : [])],
+    hmr: {
+      host: "bridgain-dev-tool.nxithub.com",
+      protocol: "wss",
+      clientPort: 443,
+    },
     proxy: {
       "/api": {
         target: apiTarget,

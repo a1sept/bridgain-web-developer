@@ -33,9 +33,10 @@ try {
     args: [`--user-data-dir=${profile}`], env, timeout: 60000,
   });
   const window = await app.firstWindow({timeout: 30000});
-  await window.waitForURL(url => url.origin === 'http://nexusnas.iptime.org:15174', {timeout: 60000});
+  await window.waitForURL(url => url.origin === 'https://bridgain-dev-tool.nxithub.com', {timeout: 60000});
   await window.waitForLoadState('domcontentloaded');
   assert.equal(await window.locator('#server-form').count(), 0);
+  await window.getByRole('button', {name: '로그인', exact: true}).waitFor();
   const menuLabels = await app.evaluate(({Menu}) => Menu.getApplicationMenu().items[0].submenu.items.map(item => item.label));
   assert(menuLabels.includes('서버 다시 연결'));
   assert(!menuLabels.includes('서버 연결 변경'));
@@ -63,17 +64,17 @@ try {
     window.waitForEvent('domcontentloaded'),
     window.evaluate(() => { void window.bridgainDesktop.connectServer('https://other-server.invalid').catch(() => {}); }),
   ]);
-  await window.waitForURL(url => url.origin === 'http://nexusnas.iptime.org:15174');
+  await window.waitForURL(url => url.origin === 'https://bridgain-dev-tool.nxithub.com');
   await window.waitForLoadState('domcontentloaded');
   await app.evaluate(({BrowserWindow}) => BrowserWindow.getAllWindows()[0].webContents.session.webRequest.onBeforeRequest(
-    {urls: ['http://nexusnas.iptime.org:15174/*']}, (_details, callback) => callback({cancel: true}),
+    {urls: ['https://bridgain-dev-tool.nxithub.com/*']}, (_details, callback) => callback({cancel: true}),
   ));
   await window.evaluate(() => { void window.bridgainDesktop.connectServer().catch(() => {}); });
   await window.getByRole('heading', {name: '서버에 연결하지 못했어요'}).waitFor();
   assert.equal(await window.locator('input').count(), 0);
   await app.evaluate(({BrowserWindow}) => BrowserWindow.getAllWindows()[0].webContents.session.webRequest.onBeforeRequest(null));
   await window.getByRole('button', {name: '다시 연결'}).click();
-  await window.waitForURL(url => url.origin === 'http://nexusnas.iptime.org:15174');
+  await window.waitForURL(url => url.origin === 'https://bridgain-dev-tool.nxithub.com');
   console.log(`PASS ${version}: DMG integrity, copied app signature, Apple Silicon launch, fixed server navigation, preload and native PTY. Download quarantine / Gatekeeper approval still requires an end-user Mac check.`);
 } finally {
   await app?.close();

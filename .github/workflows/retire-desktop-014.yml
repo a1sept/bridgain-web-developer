@@ -1,4 +1,4 @@
-name: Retire incorrect desktop 0.1.4
+name: Retire unsafe desktop releases
 on:
   push:
     branches: ['codex/plan-0011-development-space']
@@ -27,4 +27,7 @@ jobs:
           fi
           if gh release view v0.1.4 >/dev/null 2>&1; then
             gh release edit v0.1.4 --draft=true
+          fi
+          if gh release view v0.1.5 >/dev/null 2>&1; then
+            gh release edit v0.1.5 --draft=true
           fi

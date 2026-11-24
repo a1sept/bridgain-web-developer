@@ -8,7 +8,7 @@ import { GithubAuth } from "./github-auth.mjs";
 import electronUpdater from "electron-updater";
 import { DesktopUpdates } from "./updates.mjs";
 // Complete ESM evaluation before waiting for Electron to emit ready.
-const FIXED_SERVER = "http://nexusnas.iptime.org:15174";
+const FIXED_SERVER = "https://bridgain-dev-tool.nxithub.com";
 async function main() {
   // Keep the original source-run profile when productName changes in the installer.
   if (app.isPackaged && !app.commandLine.hasSwitch("user-data-dir")) {
@@ -85,7 +85,7 @@ async function main() {
     });
   }
   async function connectServer(url) {
-    const next = app.isPackaged ? FIXED_SERVER : serverOrigin(url);
+    const next = serverOrigin(app.isPackaged ? FIXED_SERVER : url);
     await githubAuth.cancel();
     runtime.release();
     origin = next;
@@ -263,6 +263,9 @@ async function main() {
     child.webContents.setWindowOpenHandler(() => ({ action: "deny" }));
   });
   window.webContents.on("will-navigate", (event, url) => {
+    if (origin && new URL(url).origin !== origin) event.preventDefault();
+  });
+  window.webContents.on("will-redirect", (event, url) => {
     if (origin && new URL(url).origin !== origin) event.preventDefault();
   });
   window.webContents.on("will-attach-webview", (event) => event.preventDefault());
