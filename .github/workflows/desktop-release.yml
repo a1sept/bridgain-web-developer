@@ -1,0 +1,90 @@
+name: Desktop installers
+on:
+  workflow_dispatch:
+  push:
+    tags: ['desktop-v*']
+permissions:
+  contents: read
+concurrency:
+  group: desktop-release-${{ github.ref }}
+  cancel-in-progress: false
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - run: npm ci
+      - run: npm ci
+        working-directory: desktop
+      - run: npm run desktop:test
+      - run: npm run build
+  build:
+    needs: test
+    runs-on: macos-latest
+    env:
+      DESKTOP_RELEASE_REPOSITORY: ${{ vars.DESKTOP_RELEASE_REPOSITORY || github.repository }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: desktop/package-lock.json
+      - name: Validate release configuration
+        run: |
+          node -e "require('./desktop/electron-builder.cjs')"
+          if [[ "$GITHUB_REF" == refs/tags/* ]]; then
+            node -e "const v=require('./desktop/package.json').version; if(process.env.GITHUB_REF_NAME!=='desktop-v'+v) throw Error('Tag must match desktop/package.json version')"
+          fi
+      - run: npm ci
+        working-directory: desktop
+      - name: Build Apple Silicon installer
+        working-directory: desktop
+        env:
+          CSC_LINK: ${{ secrets.DESKTOP_CSC_LINK }}
+          CSC_KEY_PASSWORD: ${{ secrets.DESKTOP_CSC_KEY_PASSWORD }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: npm run dist -- --mac --arm64
+      - uses: actions/upload-artifact@v4
+        with:
+          name: desktop-mac-arm64
+          if-no-files-found: error
+          path: |
+            desktop/release/*.dmg
+            desktop/release/*.zip
+            desktop/release/*.blockmap
+            desktop/release/latest*.yml
+  publish:
+    permissions:
+      contents: write
+    if: startsWith(github.ref, 'refs/tags/desktop-v')
+    needs: build
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ secrets.DESKTOP_RELEASE_TOKEN || github.token }}
+      RELEASE_REPOSITORY: ${{ vars.DESKTOP_RELEASE_REPOSITORY || github.repository }}
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: desktop-mac-arm64
+          path: release
+      - name: Publish complete release
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$GH_TOKEN"
+          # The feed must be public; never embed a private repository token in the app.
+          test "$(gh repo view "$RELEASE_REPOSITORY" --json visibility --jq .visibility)" = PUBLIC
+          release_tag="v${GITHUB_REF_NAME#desktop-v}"
+          target_args=()
+          if [[ "$RELEASE_REPOSITORY" == "$GITHUB_REPOSITORY" ]]; then
+            target_args=(--target "$GITHUB_SHA")
+          fi
+          gh release create "$release_tag" "${target_args[@]}" --repo "$RELEASE_REPOSITORY" --draft --title "Bridgain $release_tag" --notes "Apple Silicon용 Bridgain 설치 파일입니다. 앱을 종료하고 DMG의 Bridgain을 응용 프로그램 폴더로 복사하세요. 서명 없는 빌드는 수동 교체 방식으로 업데이트합니다."
+          gh release upload "$release_tag" release/* --repo "$RELEASE_REPOSITORY"
+          gh release edit "$release_tag" --repo "$RELEASE_REPOSITORY" --draft=false

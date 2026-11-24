@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
+import DesktopUpdateButton from "./components/DesktopUpdateButton";
 import { useAi } from "./ai/AiWorkspace";
 import "./developer-shell.css";
 import "./project-controls.css";
@@ -215,6 +216,7 @@ export default function DeveloperShell(p: Props) {
               </button>
             ))}
         </nav>
+        <DesktopUpdateButton />
         <div className="ds-account" ref={accountRef}>
           <button
             className="ds-account-trigger"

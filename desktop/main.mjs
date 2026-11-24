@@ -5,8 +5,14 @@ import { readFile, writeFile, mkdir } from "node:fs/promises";
 import { DesktopRuntime } from "./runtime.mjs";
 import { serverOrigin, providerName, authUrl } from "./security.mjs";
 import { GithubAuth } from "./github-auth.mjs";
+import electronUpdater from "electron-updater";
+import { DesktopUpdates } from "./updates.mjs";
 // Complete ESM evaluation before waiting for Electron to emit ready.
 async function main() {
+  // Keep the original source-run profile when productName changes in the installer.
+  if (app.isPackaged && !app.commandLine.hasSwitch("user-data-dir")) {
+    app.setPath("userData", join(app.getPath("appData"), "@bridgain/desktop"));
+  }
   if (!app.requestSingleInstanceLock()) {
     app.quit();
     process.exit(0);
@@ -110,6 +116,25 @@ async function main() {
       window.focus();
     }
   });
+  const packageInfo = JSON.parse(await readFile(join(app.getAppPath(), "package.json"), "utf8"));
+  const updates = new DesktopUpdates({
+    manualInstall: packageInfo.desktopUpdateMode !== "automatic",
+    openDownload: version => {
+      const repo = packageInfo.desktopReleaseRepository;
+      if (!/^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/.test(repo || "")) throw Error("업데이트 배포 주소가 없습니다.");
+      return shell.openExternal(`https://github.com/${repo}/releases/tag/v${encodeURIComponent(version)}`);
+    },
+    updater: electronUpdater.autoUpdater,
+    version: app.getVersion(), packaged: app.isPackaged,
+    confirm: async (title, message, action) => {
+      const { response } = await dialog.showMessageBox(window, {
+        type: "question", title, message, buttons: ["나중에", action], defaultId: 0, cancelId: 0,
+      });
+      return response === 1;
+    },
+    reload: () => window.webContents.reloadIgnoringCache(),
+    emit: state => { if (!window.isDestroyed()) window.webContents.send("bridgain:update", state); },
+  });
   Menu.setApplicationMenu(
     Menu.buildFromTemplate([
       {
@@ -124,6 +149,7 @@ async function main() {
               void window.loadFile(landing);
             },
           },
+          { label: "업데이트 확인 / 화면 새로고침", click: () => { void updates.run(); } },
           { role: "quit" },
         ],
       },
@@ -173,6 +199,8 @@ async function main() {
     },
   });
   handle("connect-server", connectServer, true);
+  handle("update-state", () => updates.snapshot(), true);
+  handle("update-app", () => updates.run(), true);
   handle("connect-github", async () => {
     const result = await githubAuth.connect();
     // Keep installation in the browser when needed; otherwise return the user

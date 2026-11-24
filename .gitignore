@@ -10,3 +10,5 @@ secrets/
 *.log
 *.tsbuildinfo
 .DS_Store
+
+desktop/release/

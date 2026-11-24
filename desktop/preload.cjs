@@ -7,6 +7,13 @@ const call = (name, ...args) =>
 contextBridge.exposeInMainWorld(
   "bridgainDesktop",
   Object.freeze({
+    updateState: () => call("update-state"),
+    updateApp: () => call("update-app"),
+    onUpdate: (listener) => {
+      const handle = (_, state) => listener(state);
+      ipcRenderer.on("bridgain:update", handle);
+      return () => ipcRenderer.removeListener("bridgain:update", handle);
+    },
     connectGithub: () => call("connect-github"),
     cancelGithub: () => call("cancel-github"),
     connectServer: (url) => call("connect-server", url),

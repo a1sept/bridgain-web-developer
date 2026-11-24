@@ -37,7 +37,14 @@ export type DesktopEvent = {
   message?: string;
   name?: string;
 };
+export type DesktopUpdateState = {
+  phase: "idle" | "checking" | "available" | "current" | "downloading" | "ready" | "error";
+  version: string; availableVersion: string | null; percent: number; message: string;
+};
 export type DesktopBridge = {
+  updateState?: () => Promise<DesktopUpdateState>;
+  updateApp?: () => Promise<DesktopUpdateState>;
+  onUpdate?: (listener: (state: DesktopUpdateState) => void) => () => void;
   terminal?: (pid: string, action: string, options: Record<string, unknown>) => Promise<any>;
   developmentSpace?: (pid: string, action?: string, options?: Record<string, unknown>) => Promise<any>;
   connectGithub?: () => Promise<void>;

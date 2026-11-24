@@ -13,12 +13,18 @@
     "check": "node check.mjs",
     "test": "node --test test/*.test.mjs",
     "postinstall": "node prepare-pty.mjs",
-    "prestart": "node prepare-pty.mjs"
+    "prestart": "node prepare-pty.mjs",
+    "pack": "electron-builder --config electron-builder.cjs --dir --publish never",
+    "dist": "electron-builder --config electron-builder.cjs --publish never"
   },
   "devDependencies": {
-    "electron": "^44.7.0"
+    "electron": "^44.7.0",
+    "electron-builder": "26.18.1"
   },
   "dependencies": {
+    "electron-updater": "6.8.12",
     "node-pty": "^1.1.0"
-  }
+  },
+  "description": "Bridgain desktop workspace",
+  "author": "Bridgain"
 }

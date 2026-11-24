@@ -14,7 +14,9 @@
     "desktop": "npm --prefix desktop start",
     "desktop:check": "node desktop/check.mjs",
     "desktop:test": "node --test desktop/test/*.test.mjs",
-    "desktop:install": "npm --prefix desktop ci"
+    "desktop:install": "npm --prefix desktop ci",
+    "desktop:pack": "npm --prefix desktop run pack",
+    "desktop:dist": "npm --prefix desktop run dist"
   },
   "dependencies": {
     "@blocknote/core": "^0.56.0",
