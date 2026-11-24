@@ -1,6 +1,6 @@
 // Run with a local Vite server on 15411; uses only fixture UI and an isolated desktop profile.
 import assert from 'node:assert/strict';
-import { mkdtemp, rm } from 'node:fs/promises';
+import { mkdtemp, rm, readFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 const { chromium, _electron } = await import(process.env.PLAYWRIGHT_MODULE || 'playwright');
@@ -40,7 +40,7 @@ ReactDOM.createRoot(document.getElementById('root')).render(React.createElement(
   assert.deepEqual(errors,[]);
   app = await _electron.launch({executablePath:resolve('desktop/release/linux-unpacked/@bridgaindesktop'),args:['--no-sandbox',`--user-data-dir=${profile}`],env:{...process.env,BRIDGAIN_DEVELOPER_URL:''}});
   const window = await app.firstWindow();
-  const state = await window.evaluate(() => window.bridgainDesktop.updateState()); assert.equal(state.version,'0.1.0');
+  const state = await window.evaluate(() => window.bridgainDesktop.updateState()); assert.equal(state.version,JSON.parse(await readFile(new URL('../desktop/package.json',import.meta.url),'utf8')).version);
   const native = await app.evaluate(async ({app,Menu}) => {
     const {createRequire}=process.getBuiltinModule('module'); const require=createRequire(app.getAppPath()+'/package.json');
     const pty=require('node-pty');

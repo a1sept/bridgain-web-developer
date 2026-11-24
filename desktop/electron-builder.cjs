@@ -1,3 +1,8 @@
+// GitHub supplies an empty string for an unset secret. electron-builder treats
+// an empty CSC_LINK as a certificate path (the current directory), not as absent.
+for (const key of ['CSC_LINK', 'CSC_KEY_PASSWORD']) {
+  if (process.env[key] === '') delete process.env[key];
+}
 const repository = process.env.DESKTOP_RELEASE_REPOSITORY || 'a1sept/bridgain-web-developer';
 if (!repository || !/^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/.test(repository)) {
   throw new Error('Set DESKTOP_RELEASE_REPOSITORY to the public owner/repository hosting desktop releases.');
