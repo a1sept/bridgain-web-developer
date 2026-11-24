@@ -2,7 +2,7 @@
 import assert from 'node:assert/strict';
 import { execFile } from 'node:child_process';
 import { createRequire } from 'node:module';
-import { mkdtemp, mkdir, readFile, rm } from 'node:fs/promises';
+import { mkdtemp, mkdir, readFile, realpath, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { promisify } from 'node:util';
@@ -48,7 +48,7 @@ try {
   });
   assert.equal(result.packaged, true);
   assert.equal(result.arch, 'arm64');
-  assert.equal(result.profile, profile);
+  assert.equal(await realpath(result.profile), await realpath(profile));
   assert.match(result.output, /packaged-pty-ok/);
   await window.screenshot({path: resolve('desktop/release/mac-install-smoke.png')});
   console.log(`PASS ${version}: DMG integrity, copied app signature, Apple Silicon launch, server connection screen, preload and native PTY. Download quarantine / Gatekeeper approval still requires an end-user Mac check.`);

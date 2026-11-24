@@ -61,6 +61,6 @@ npm run desktop:pack
 
 `scripts/desktop-update-ui-check.mjs`는 로컬 Vite 서버(15411), Playwright와 Chrome, 패키징한 Linux 앱을 사용해 업데이트 버튼 상태와 네이티브 PTY를 검사한다. 실제 배포 서버 다운로드·Mac 설치·업데이트는 별도 검증 대상이다.
 
-## 0.1.2 Mac 손상 경고 수정
+## 0.1.3 Mac 손상 경고 수정
 
 0.1.1은 Developer ID 인증서가 없는 CI에서 서명이 생략됐다. 인증서가 없으면 `mac.identity: "-"`로 임시 서명을 명시한다. Hardened Runtime은 유지하고 임시 서명 전용 entitlement에만 `disable-library-validation`을 추가한다. Developer ID 빌드는 기존 entitlement를 유지한다. 새 DMG의 무결성·서명·실행 검증이 통과해야 업로드와 공개 배포가 진행된다. Apple 공증이나 Gatekeeper의 자동 승인을 의미하지 않는다.
