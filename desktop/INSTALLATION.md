@@ -10,8 +10,8 @@
 4. 왼쪽 업데이트 아이콘 또는 앱 메뉴의 **업데이트 확인 / 화면 새로고침**을 누른다.
 
 - 새 데스크톱 버전이 없으면 저장 여부를 확인한 뒤 서버 화면을 새로 불러온다.
-- 서명 없는 배포: 새 버전 다운로드 페이지를 열고, 사용자가 앱을 종료한 후 새 DMG의 앱으로 교체한다. App Store 등록은 필요 없다. macOS 실행 허용 절차가 필요할 수 있다.
-- 서명된 배포: 다운로드 진행률을 표시하고 설치 시점을 확인한다. ‘나중에’를 선택하면 임의로 종료하거나 다음 종료 시 자동 설치하지 않는다.
+- Developer ID 인증서 없는 배포(임시 서명): 새 버전 다운로드 페이지를 열고, 사용자가 앱을 종료한 후 새 DMG의 앱으로 교체한다. App Store 등록은 필요 없다. macOS 실행 허용 절차가 필요할 수 있다.
+- Developer ID 인증서로 서명된 배포: 다운로드 진행률을 표시하고 설치 시점을 확인한다. ‘나중에’를 선택하면 임의로 종료하거나 다음 종료 시 자동 설치하지 않는다.
 - 업데이트 실패는 최신 버전으로 표시하지 않는다. 재시도하거나 서버 화면만 새로 불러올 수 있다.
 - 기존 앱에 업데이트 기능이 없다면 이 기능이 포함된 설치 파일을 한 번 직접 설치해야 한다.
 - 개발 중 소스 실행과 웹 브라우저에서는 앱 바이너리를 업데이트하지 않고 화면 새로고침만 제공한다.
@@ -36,7 +36,7 @@ npm run desktop:install
 npm run desktop:dist -- --mac --arm64
 ```
 
-산출물은 `desktop/release/`에 생긴다. Mac 설치 파일의 실제 설치/교체 검증은 Mac에서 해야 한다. Linux의 `npm run desktop:pack`은 패키지 실행과 포함 파일을 점검하는 용도다.
+산출물은 `desktop/release/`에 생긴다. CI는 DMG를 마운트해 앱을 복사한 뒤 codesign 무결성 검사, Apple Silicon 실행, 서버 연결 화면, preload와 네이티브 PTY를 검증한다. 인터넷 다운로드 후 Gatekeeper 승인 및 실제 사용자의 설치/교체는 별도로 확인해야 한다. Linux의 `npm run desktop:pack`은 패키지 실행과 포함 파일을 점검하는 용도다.
 
 ## 나중에 자동 설치로 전환
 
@@ -46,7 +46,7 @@ App Store 등록 없이 Developer ID 서명과 공증을 사용할 수 있다. A
 - `DESKTOP_CSC_KEY_PASSWORD`: P12 비밀번호
 - `APPLE_ID`, `APPLE_APP_SPECIFIC_PASSWORD`, `APPLE_TEAM_ID`: 공증 설정
 
-인증서를 설정하면 빌드에 `desktopUpdateMode=automatic`이 기록된다. 서명 없는 기존 앱은 서명된 새 버전을 한 번 수동 설치한 뒤부터 자동 설치를 사용한다. 인증서가 제공됐는데 서명에 실패하면 빌드를 실패시켜야 하므로 배포 로그에서 서명·공증 결과를 확인한다. 인증서·비밀번호는 저장소나 채팅에 넣지 않는다.
+인증서를 설정하면 빌드에 `desktopUpdateMode=automatic`이 기록된다. Developer ID 인증서 없는 기존 앱은 서명된 새 버전을 한 번 수동 설치한 뒤부터 자동 설치를 사용한다. 인증서가 제공됐는데 서명에 실패하면 빌드를 실패시켜야 하므로 배포 로그에서 서명·공증 결과를 확인한다. 인증서·비밀번호는 저장소나 채팅에 넣지 않는다.
 
 ## 검증
 
@@ -60,3 +60,7 @@ npm run desktop:pack
 `desktop/test/updates.test.mjs`는 최신 버전·업데이트 취소·진행률·설치 보류·재시도·다운로드 실패·동시 클릭·서명 없는 다운로드 경로를 검사한다.
 
 `scripts/desktop-update-ui-check.mjs`는 로컬 Vite 서버(15411), Playwright와 Chrome, 패키징한 Linux 앱을 사용해 업데이트 버튼 상태와 네이티브 PTY를 검사한다. 실제 배포 서버 다운로드·Mac 설치·업데이트는 별도 검증 대상이다.
+
+## 0.1.2 Mac 손상 경고 수정
+
+0.1.1은 Developer ID 인증서가 없는 CI에서 서명이 생략됐다. 인증서가 없으면 `mac.identity: "-"`로 임시 서명을 명시한다. Hardened Runtime은 유지하고 임시 서명 전용 entitlement에만 `disable-library-validation`을 추가한다. Developer ID 빌드는 기존 entitlement를 유지한다. 새 DMG의 무결성·서명·실행 검증이 통과해야 업로드와 공개 배포가 진행된다. Apple 공증이나 Gatekeeper의 자동 승인을 의미하지 않는다.

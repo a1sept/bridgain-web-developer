@@ -24,8 +24,10 @@ module.exports = {
   publish: [{ provider: 'github', owner, repo, releaseType: 'release' }],
   mac: {
     target: ['dmg', 'zip'], category: 'public.app-category.developer-tools',
+    identity: process.env.CSC_LINK ? undefined : '-',
     hardenedRuntime: true,
-    entitlements: 'entitlements.mac.plist', entitlementsInherit: 'entitlements.mac.plist',
+    entitlements: process.env.CSC_LINK ? 'entitlements.mac.plist' : 'entitlements.mac-adhoc.plist',
+    entitlementsInherit: process.env.CSC_LINK ? 'entitlements.mac.plist' : 'entitlements.mac-adhoc.plist',
     notarize: Boolean(process.env.APPLE_ID && process.env.APPLE_TEAM_ID && process.env.APPLE_APP_SPECIFIC_PASSWORD),
   },
   win: { target: ['nsis'] },
