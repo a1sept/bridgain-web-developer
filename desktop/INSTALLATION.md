@@ -24,7 +24,7 @@
 
 `.github/workflows/desktop-release.yml`이 Apple Silicon DMG와 ZIP 및 업데이트 메타데이터를 만든다.
 
-- `workflow_dispatch`: 테스트와 빌드 후 Actions artifact로만 저장. 공개 배포하지 않는다.
+- `workflow_dispatch` 또는 `codex/desktop-release` 브랜치 push: 테스트와 빌드 후 Actions artifact로만 저장. 공개 배포하지 않는다.
 - `desktop-v0.1.0` 형태의 태그 push: `desktop/package.json` 버전과 일치하는지 확인하고 테스트·빌드 후 `v0.1.0` Release를 게시한다. 모든 파일 업로드가 끝난 뒤 draft를 해제한다.
 - 새 버전에서는 `desktop` 디렉토리에서 `npm version <버전> --no-git-tag-version`으로 package.json과 lockfile을 같이 갱신한다. 검토한 코드를 커밋한 후 일치하는 `desktop-v<버전>` 태그를 push한다.
 - 동일 버전의 공개 파일을 바꾸지 않는다. 새 버전으로 배포한다. 업로드 실패로 draft가 남았다면 draft를 정리하고 재실행한다.
