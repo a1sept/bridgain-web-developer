@@ -8,6 +8,7 @@ import { GithubAuth } from "./github-auth.mjs";
 import electronUpdater from "electron-updater";
 import { DesktopUpdates } from "./updates.mjs";
 // Complete ESM evaluation before waiting for Electron to emit ready.
+const FIXED_SERVER = "https://bridgain-dev.nxithub.com";
 async function main() {
   // Keep the original source-run profile when productName changes in the installer.
   if (app.isPackaged && !app.commandLine.hasSwitch("user-data-dir")) {
@@ -28,7 +29,7 @@ async function main() {
     }
   });
   const root = join(app.getPath("userData"), "bridgain");
-  const landing = join(import.meta.dirname, "welcome.html");
+  const landing = join(import.meta.dirname, app.isPackaged ? "connection-error.html" : "welcome.html");
   async function api(path, body, method = "POST") {
     const requestOrigin = origin;
     if (!requestOrigin || !path.startsWith("/api/") || path.includes(".."))
@@ -84,7 +85,7 @@ async function main() {
     });
   }
   async function connectServer(url) {
-    const next = serverOrigin(url);
+    const next = app.isPackaged ? FIXED_SERVER : serverOrigin(url);
     await githubAuth.cancel();
     runtime.release();
     origin = next;
@@ -93,7 +94,12 @@ async function main() {
     await writeFile(join(root, "server.json"), JSON.stringify({ origin }), {
       mode: 0o600,
     });
-    await window.loadURL(origin);
+    try {
+      await window.loadURL(origin);
+    } catch (error) {
+      if (app.isPackaged) await window.loadFile(landing);
+      throw error;
+    }
   }
   await app.whenReady();
   window = new BrowserWindow({
@@ -141,8 +147,12 @@ async function main() {
         label: "Bridgain",
         submenu: [
           {
-            label: "서버 연결 변경",
+            label: app.isPackaged ? "서버 다시 연결" : "서버 연결 변경",
             click: async () => {
+              if (app.isPackaged) {
+                await connectServer(FIXED_SERVER).catch(() => {});
+                return;
+              }
               await githubAuth.cancel();
               runtime.release();
               origin = "";
@@ -266,7 +276,7 @@ async function main() {
   window.webContents.on("render-process-gone", () => runtime.release());
   app.on("before-quit", () => { void githubAuth.cancel(); runtime.release(); });
   app.on("window-all-closed", () => app.quit());
-  const configured = process.env.BRIDGAIN_DEVELOPER_URL;
+  const configured = app.isPackaged ? FIXED_SERVER : process.env.BRIDGAIN_DEVELOPER_URL;
   let saved;
   try {
     saved = JSON.parse(await readFile(join(root, "server.json"), "utf8")).origin;

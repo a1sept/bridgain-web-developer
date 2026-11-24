@@ -2,7 +2,7 @@
 import assert from 'node:assert/strict';
 import { execFile } from 'node:child_process';
 import { createRequire } from 'node:module';
-import { mkdtemp, mkdir, readFile, realpath, rm } from 'node:fs/promises';
+import { mkdtemp, mkdir, readFile, realpath, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { promisify } from 'node:util';
@@ -24,14 +24,21 @@ try {
   await exec('codesign', ['--verify', '--deep', '--strict', '--verbose=2', installed], {timeout: 120000});
   const signature = await exec('codesign', ['--display', '--verbose=4', installed]);
   console.log(signature.stderr.split('\n').filter(line => /^(Identifier|Signature|Authority|TeamIdentifier)=/.test(line)).join('\n'));
-  const env = {...process.env, BRIDGAIN_DEVELOPER_URL: ''};
+  await mkdir(join(profile, 'bridgain'), {recursive: true});
+  await writeFile(join(profile, 'bridgain/server.json'), JSON.stringify({origin: 'https://old-server.invalid'}));
+  const env = {...process.env, BRIDGAIN_DEVELOPER_URL: 'https://env-server.invalid'};
   delete env.ELECTRON_RUN_AS_NODE;
   app = await _electron.launch({
     executablePath: join(installed, 'Contents/MacOS/Bridgain'),
     args: [`--user-data-dir=${profile}`], env, timeout: 60000,
   });
   const window = await app.firstWindow({timeout: 30000});
-  await window.getByRole('heading', {name: '작업할 서버에 연결하세요'}).waitFor();
+  await window.waitForURL(url => url.origin === 'https://bridgain-dev.nxithub.com', {timeout: 60000});
+  await window.waitForLoadState('domcontentloaded');
+  assert.equal(await window.locator('#server-form').count(), 0);
+  const menuLabels = await app.evaluate(({Menu}) => Menu.getApplicationMenu().items[0].submenu.items.map(item => item.label));
+  assert(menuLabels.includes('서버 다시 연결'));
+  assert(!menuLabels.includes('서버 연결 변경'));
   assert.equal((await window.evaluate(() => window.bridgainDesktop.updateState())).version, version);
   const result = await app.evaluate(async ({app}) => {
     const {createRequire} = process.getBuiltinModule('module');
@@ -51,7 +58,23 @@ try {
   assert.equal(await realpath(result.profile), await realpath(profile));
   assert.match(result.output, /packaged-pty-ok/);
   await window.screenshot({path: resolve('desktop/release/mac-install-smoke.png')});
-  console.log(`PASS ${version}: DMG integrity, copied app signature, Apple Silicon launch, server connection screen, preload and native PTY. Download quarantine / Gatekeeper approval still requires an end-user Mac check.`);
+  // An old saved address, environment override and IPC URL cannot change the packaged server.
+  await Promise.all([
+    window.waitForEvent('domcontentloaded'),
+    window.evaluate(() => { void window.bridgainDesktop.connectServer('https://other-server.invalid').catch(() => {}); }),
+  ]);
+  await window.waitForURL(url => url.origin === 'https://bridgain-dev.nxithub.com');
+  await window.waitForLoadState('domcontentloaded');
+  await app.evaluate(({BrowserWindow}) => BrowserWindow.getAllWindows()[0].webContents.session.webRequest.onBeforeRequest(
+    {urls: ['https://bridgain-dev.nxithub.com/*']}, (_details, callback) => callback({cancel: true}),
+  ));
+  await window.evaluate(() => { void window.bridgainDesktop.connectServer().catch(() => {}); });
+  await window.getByRole('heading', {name: '서버에 연결하지 못했어요'}).waitFor();
+  assert.equal(await window.locator('input').count(), 0);
+  await app.evaluate(({BrowserWindow}) => BrowserWindow.getAllWindows()[0].webContents.session.webRequest.onBeforeRequest(null));
+  await window.getByRole('button', {name: '다시 연결'}).click();
+  await window.waitForURL(url => url.origin === 'https://bridgain-dev.nxithub.com');
+  console.log(`PASS ${version}: DMG integrity, copied app signature, Apple Silicon launch, fixed server navigation, preload and native PTY. Download quarantine / Gatekeeper approval still requires an end-user Mac check.`);
 } finally {
   await app?.close();
   if (mounted) await exec('hdiutil', ['detach', mount], {timeout: 60000});
