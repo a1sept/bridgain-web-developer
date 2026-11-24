@@ -1,0 +1,30 @@
+name: Retire incorrect desktop 0.1.4
+on:
+  push:
+    branches: ['codex/plan-0011-development-space']
+    paths: ['.github/workflows/retire-desktop-014.yml']
+permissions:
+  actions: write
+  contents: write
+jobs:
+  retire:
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+    steps:
+      - name: Stop superseded installer and withdraw any release
+        run: |
+          status=$(gh api repos/$GH_REPO/actions/runs/45310758461 --jq .status)
+          if [ "$status" != completed ]; then
+            gh api --method POST repos/$GH_REPO/actions/runs/45310758461/cancel
+            for attempt in $(seq 1 30); do
+              status=$(gh api repos/$GH_REPO/actions/runs/45310758461 --jq .status)
+              [ "$status" = completed ] && break
+              sleep 2
+            done
+            [ "$status" = completed ]
+          fi
+          if gh release view v0.1.4 >/dev/null 2>&1; then
+            gh release edit v0.1.4 --draft=true
+          fi
